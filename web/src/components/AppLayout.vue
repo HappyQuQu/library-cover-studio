@@ -8,7 +8,7 @@
             <h2>📚 Library Cover Studio</h2>
           </router-link>
         </div>
-        
+
         <div class="header-nav">
           <router-link to="/" class="nav-item">
             <el-icon><HomeFilled /></el-icon>
@@ -27,7 +27,7 @@
             <span>设置</span>
           </router-link>
         </div>
-        
+
         <div class="header-right">
           <el-dropdown @command="handleCommand">
             <div class="user-dropdown">
@@ -50,7 +50,7 @@
           </el-dropdown>
         </div>
       </el-header>
-      
+
       <!-- 主内容区 -->
       <el-main class="app-main">
         <router-view />
@@ -60,39 +60,41 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { 
-  HomeFilled, Edit, Document, Setting, User, ArrowDown, SwitchButton 
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { useAuthStore } from '../stores/auth'
+import { useRouter } from "vue-router";
+import {
+  HomeFilled,
+  Edit,
+  Document,
+  Setting,
+  User,
+  ArrowDown,
+  SwitchButton,
+} from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useAuthStore } from "../stores/auth";
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
 const handleCommand = async (command: string) => {
-  if (command === 'profile') {
-    router.push('/settings')
-  } else if (command === 'logout') {
+  if (command === "profile") {
+    router.push("/settings");
+  } else if (command === "logout") {
     try {
-      await ElMessageBox.confirm(
-        '确定要退出登录吗?',
-        '提示',
-        {
-          confirmButtonText: '确定',
-          cancelButtonText: '取消',
-          type: 'warning'
-        }
-      )
-      
-      await authStore.logout()
-      ElMessage.success('已退出登录')
-      router.push('/login')
+      await ElMessageBox.confirm("确定要退出登录吗?", "提示", {
+        confirmButtonText: "确定",
+        cancelButtonText: "取消",
+        type: "warning",
+      });
+
+      await authStore.logout();
+      ElMessage.success("已退出登录");
+      router.push("/login");
     } catch (error) {
       // 用户取消操作
     }
   }
-}
+};
 </script>
 
 <style scoped>

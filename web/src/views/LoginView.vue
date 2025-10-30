@@ -43,7 +43,7 @@
             class="login-button"
             @click="handleLogin"
           >
-            {{ authStore.loading ? '登录中...' : '登录' }}
+            {{ authStore.loading ? "登录中..." : "登录" }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -57,47 +57,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { useAuthStore } from '../stores/auth'
+import { ref, reactive } from "vue";
+import { useRouter } from "vue-router";
+import { ElMessage, type FormInstance, type FormRules } from "element-plus";
+import { useAuthStore } from "../stores/auth";
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
-const loginFormRef = ref<FormInstance>()
+const loginFormRef = ref<FormInstance>();
 const loginForm = reactive({
-  username: '',
-  password: '',
-})
+  username: "",
+  password: "",
+});
 
 const rules: FormRules = {
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' },
+    { required: true, message: "请输入用户名", trigger: "blur" },
+    {
+      min: 3,
+      max: 20,
+      message: "用户名长度在 3 到 20 个字符",
+      trigger: "blur",
+    },
   ],
   password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少 6 个字符', trigger: 'blur' },
+    { required: true, message: "请输入密码", trigger: "blur" },
+    { min: 6, message: "密码长度至少 6 个字符", trigger: "blur" },
   ],
-}
+};
 
 const handleLogin = async () => {
-  if (!loginFormRef.value) return
+  if (!loginFormRef.value) return;
 
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
-      const result = await authStore.login(loginForm.username, loginForm.password)
+      const result = await authStore.login(
+        loginForm.username,
+        loginForm.password
+      );
 
       if (result.success) {
-        ElMessage.success('登录成功！')
-        router.push('/')
+        ElMessage.success("登录成功！");
+        router.push("/");
       } else {
-        ElMessage.error(result.message || '登录失败')
+        ElMessage.error(result.message || "登录失败");
       }
     }
-  })
-}
+  });
+};
 </script>
 
 <style scoped>

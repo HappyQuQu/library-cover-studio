@@ -2,32 +2,52 @@
   <div class="home-view">
     <div class="welcome-section">
       <div class="welcome-header">
-        <h1>欢迎回来, {{ authStore.isAuthenticated ? authStore.username : '游客' }}! 👋</h1>
+        <h1>
+          欢迎回来,
+          {{ authStore.isAuthenticated ? authStore.username : "游客" }}! 👋
+        </h1>
         <p v-if="authStore.isAuthenticated" class="welcome-subtitle">
           开始使用 Library Cover Studio 创建精美的媒体库海报
         </p>
         <div v-else class="login-prompt">
           <p>登录后即可使用完整功能</p>
-          <el-button type="primary" size="large" @click="$router.push('/login')">
+          <el-button
+            type="primary"
+            size="large"
+            @click="$router.push('/login')"
+          >
             立即登录
           </el-button>
         </div>
       </div>
-      
+
       <el-row :gutter="24" class="feature-cards">
         <el-col :span="8">
-          <el-card class="feature-card" shadow="hover" @click="handleCardClick('/designer')">
+          <el-card
+            class="feature-card"
+            shadow="hover"
+            @click="handleCardClick('/designer')"
+          >
             <div class="card-icon">
               <el-icon size="48"><Edit /></el-icon>
             </div>
             <h3>海报设计器</h3>
             <p>使用强大的可视化编辑器设计自定义海报</p>
-            <el-tag v-if="!authStore.isAuthenticated" type="warning" size="small">需要登录</el-tag>
+            <el-tag
+              v-if="!authStore.isAuthenticated"
+              type="warning"
+              size="small"
+              >需要登录</el-tag
+            >
           </el-card>
         </el-col>
-        
+
         <el-col :span="8">
-          <el-card class="feature-card" shadow="hover" @click="$router.push('/templates')">
+          <el-card
+            class="feature-card"
+            shadow="hover"
+            @click="$router.push('/templates')"
+          >
             <div class="card-icon">
               <el-icon size="48"><Document /></el-icon>
             </div>
@@ -35,19 +55,28 @@
             <p>管理和使用预制模板，快速创建海报</p>
           </el-card>
         </el-col>
-        
+
         <el-col :span="8">
-          <el-card class="feature-card" shadow="hover" @click="handleCardClick('/settings')">
+          <el-card
+            class="feature-card"
+            shadow="hover"
+            @click="handleCardClick('/settings')"
+          >
             <div class="card-icon">
               <el-icon size="48"><Setting /></el-icon>
             </div>
             <h3>系统设置</h3>
             <p>配置媒体库连接和定时任务</p>
-            <el-tag v-if="!authStore.isAuthenticated" type="warning" size="small">需要登录</el-tag>
+            <el-tag
+              v-if="!authStore.isAuthenticated"
+              type="warning"
+              size="small"
+              >需要登录</el-tag
+            >
           </el-card>
         </el-col>
       </el-row>
-      
+
       <div v-if="authStore.isAuthenticated" class="quick-stats">
         <el-card>
           <h3>快速统计</h3>
@@ -78,26 +107,26 @@
 </template>
 
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { Edit, Document, Setting } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import { useAuthStore } from '../stores/auth'
+import { useRouter } from "vue-router";
+import { Edit, Document, Setting } from "@element-plus/icons-vue";
+import { ElMessage } from "element-plus";
+import { useAuthStore } from "../stores/auth";
 
-const router = useRouter()
-const authStore = useAuthStore()
+const router = useRouter();
+const authStore = useAuthStore();
 
 const handleCardClick = (path: string) => {
-  const routeConfig = router.getRoutes().find(route => route.path === path)
-  const requiresAuth = routeConfig?.meta?.requiresAuth
-  
+  const routeConfig = router.getRoutes().find((route) => route.path === path);
+  const requiresAuth = routeConfig?.meta?.requiresAuth;
+
   if (requiresAuth && !authStore.isAuthenticated) {
-    ElMessage.warning('请先登录后使用该功能')
-    router.push('/login')
-    return
+    ElMessage.warning("请先登录后使用该功能");
+    router.push("/login");
+    return;
   }
-  
-  router.push(path)
-}
+
+  router.push(path);
+};
 </script>
 
 <style scoped>
