@@ -5,18 +5,21 @@
 ## 🌟 核心功能
 
 ### 🎨 可视化海报设计器
+
 - **拖拽式编辑**: 基于 Fabric.js 的专业画布编辑器
 - **丰富的元素**: 文字、图片、形状、背景支持
 - **实时预览**: 所见即所得的设计体验
 - **模板系统**: 保存、复用、分享设计模板
 
 ### 🤖 智能自动化
+
 - **定时更新**: 使用 Cron 表达式灵活调度
 - **批量处理**: 一键更新整个媒体库
 - **智能过滤**: 按类型、评分、年份等条件筛选
 - **多平台支持**: Jellyfin、Emby、Plex
 
 ### 🛠️ 技术特性
+
 - **Vue.js 3**: 现代化前端框架
 - **Node.js**: 高性能后端 API
 - **PostgreSQL**: 可靠的数据存储
@@ -26,6 +29,7 @@
 ## 🚀 快速开始
 
 ### 一键启动
+
 ```bash
 # 克隆项目
 git clone https://github.com/your-username/LibraryCoverStudio.git
@@ -42,6 +46,7 @@ open http://localhost:3001
 ```
 
 ### 开发环境
+
 ```bash
 # 前端开发
 cd web && npm install && npm run dev
@@ -53,6 +58,7 @@ cd backend && npm install && npm run dev
 ## 📖 使用教程
 
 ### 1. 设计海报模板
+
 1. 🎨 打开设计器 → 选择画布尺寸
 2. 🖼️ 添加背景 → 上传图片或设置颜色
 3. ✏️ 添加文字 → 使用变量 `{{title}}` `{{year}}`
@@ -60,12 +66,14 @@ cd backend && npm install && npm run dev
 5. 💾 保存模板 → 命名并添加标签
 
 ### 2. 连接媒体库
+
 1. ⚙️ 进入设置页面
 2. 🔌 添加媒体库连接
 3. 🔑 配置 API 密钥
 4. ✅ 测试连接状态
 
 ### 3. 设置自动任务
+
 1. ⏰ 创建定时任务
 2. 📋 选择模板和媒体库
 3. 🕐 设置执行时间
@@ -120,12 +128,14 @@ library-cover-studio/
 我们欢迎所有形式的贡献！
 
 ### 贡献方式
+
 - 🐛 **报告 Bug**: [创建 Issue](../../issues/new?template=bug_report.md)
 - 💡 **功能建议**: [提交想法](../../issues/new?template=feature_request.md)
 - 📝 **改进文档**: 提交 PR 改进文档
 - 💻 **代码贡献**: Fork 项目并提交 PR
 
 ### 开发流程
+
 1. Fork 项目到你的账户
 2. 创建功能分支: `git checkout -b feature/amazing-feature`
 3. 提交更改: `git commit -m 'Add amazing feature'`
@@ -139,6 +149,7 @@ library-cover-studio/
 ## 🙏 致谢
 
 感谢所有贡献者和以下开源项目：
+
 - [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
 - [Fabric.js](https://fabricjs.com/) - 强大的 Canvas 库
 - [Element Plus](https://element-plus.org/) - Vue 3 组件库

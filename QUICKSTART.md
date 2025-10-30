@@ -3,18 +3,21 @@
 ## 🚀 一键启动
 
 ### 1. 克隆项目
+
 ```bash
 git clone https://github.com/your-username/LibraryCoverStudio.git
 cd LibraryCoverStudio
 ```
 
 ### 2. 配置环境变量
+
 ```bash
 cp .env.example .env
 # 编辑 .env 文件，设置数据库密码等配置
 ```
 
 ### 3. 启动服务
+
 ```bash
 # 使用 Docker Compose 一键启动所有服务
 docker-compose up -d
@@ -24,14 +27,16 @@ docker-compose ps
 ```
 
 ### 4. 访问应用
-- 🌐 **前端界面**: http://localhost:3001
-- 📊 **API 文档**: http://localhost:3001/health
+
+- 🌐 **前端界面**: <http://localhost:3001>
+- 📊 **API 文档**: <http://localhost:3001/health>
 - 🐘 **数据库**: localhost:5432
 - 🔄 **Redis**: localhost:6379
 
 ## 📋 开发环境启动
 
 ### 前端开发
+
 ```bash
 cd web
 npm install
@@ -40,6 +45,7 @@ npm run dev
 ```
 
 ### 后端开发
+
 ```bash
 cd backend
 npm install
@@ -50,6 +56,7 @@ npm run dev
 ## 🛠️ 功能概览
 
 ### ✨ 海报设计器功能
+
 - 📝 **文字编辑**: 字体、大小、颜色、位置调整
 - 🖼️ **图片处理**: 上传、缩放、旋转、裁剪
 - 🎨 **背景设置**: 纯色、渐变、图片背景
@@ -57,8 +64,9 @@ npm run dev
 - 💾 **模板管理**: 保存、加载、复制、导出模板
 
 ### 🔄 自动化功能
+
 - ⏰ **定时任务**: 支持 Cron 表达式的灵活调度
-- 📚 **媒体库集成**: 
+- 📚 **媒体库集成**:
   - Jellyfin 支持
   - Emby 支持
   - Plex 支持（计划中）
@@ -69,6 +77,7 @@ npm run dev
 ## 📖 使用教程
 
 ### 1. 创建第一个海报模板
+
 1. 访问设计器页面
 2. 添加背景色或背景图片
 3. 添加文字元素（支持变量如 {{title}}、{{year}}）
@@ -76,6 +85,7 @@ npm run dev
 5. 保存模板
 
 ### 2. 配置媒体库连接
+
 1. 进入设置页面
 2. 添加媒体库配置：
    - 选择类型（Jellyfin/Emby）
@@ -85,6 +95,7 @@ npm run dev
 3. 激活媒体库
 
 ### 3. 设置自动化任务
+
 1. 创建新的定时任务
 2. 选择模板和媒体库
 3. 设置 Cron 表达式（如：`0 2 * * *` 每天凌晨2点）
@@ -94,6 +105,7 @@ npm run dev
 ## 🔧 配置说明
 
 ### 环境变量
+
 ```bash
 # 数据库
 POSTGRES_PASSWORD=your_password
@@ -107,6 +119,7 @@ JELLYFIN_API_KEY=your_api_key
 ```
 
 ### Cron 表达式示例
+
 ```
 0 2 * * *     # 每天凌晨 2 点
 0 */6 * * *   # 每 6 小时
@@ -117,16 +130,21 @@ JELLYFIN_API_KEY=your_api_key
 ## 🐛 常见问题
 
 ### Q: Docker 启动失败？
+
 A: 检查端口占用：`netstat -tlnp | grep :3001`
 
 ### Q: 无法连接媒体库？
-A: 
+
+A:
+
 1. 确认媒体库地址可访问
 2. 验证 API 密钥正确性
 3. 检查防火墙设置
 
 ### Q: 海报生成失败？
-A: 
+
+A:
+
 1. 检查模板变量是否正确
 2. 确认图片文件权限
 3. 查看错误日志
