@@ -1,0 +1,20 @@
+{
+  "name": "Example Template",
+  "background": "#000000",
+  "font": "Arial",
+  "elements": [
+    {
+      "type": "image",
+      "x": 50,
+      "y": 50,
+      "width": 300,
+      "height": 450
+    },
+    {
+      "type": "text",
+      "x": 50,
+      "y": 520,
+      "text": "Movie Title"
+    }
+  ]
+}
