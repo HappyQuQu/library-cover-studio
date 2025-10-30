@@ -7,6 +7,10 @@
           mode="vertical"
           @select="handleMenuSelect"
         >
+          <el-menu-item index="account">
+            <el-icon><User /></el-icon>
+            <span>账户设置</span>
+          </el-menu-item>
           <el-menu-item index="media-libs">
             <el-icon><Connection /></el-icon>
             <span>媒体库连接</span>
@@ -23,6 +27,98 @@
       </el-aside>
       
       <el-main class="settings-content">
+        <!-- 账户设置 -->
+        <div v-show="activeMenu === 'account'" class="settings-section">
+          <div class="section-header">
+            <h3>账户设置</h3>
+          </div>
+          
+          <el-card class="account-card">
+            <div class="account-info">
+              <div class="info-item">
+                <label>当前用户名:</label>
+                <span>{{ authStore.username }}</span>
+              </div>
+            </div>
+            
+            <el-divider />
+            
+            <el-form
+              ref="usernameFormRef"
+              :model="usernameForm"
+              :rules="usernameRules"
+              label-width="120px"
+              class="account-form"
+            >
+              <h4>修改用户名</h4>
+              <el-form-item label="新用户名" prop="username">
+                <el-input
+                  v-model="usernameForm.username"
+                  placeholder="请输入新用户名"
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  :loading="usernameLoading"
+                  @click="handleUpdateUsername"
+                >
+                  更新用户名
+                </el-button>
+              </el-form-item>
+            </el-form>
+            
+            <el-divider />
+            
+            <el-form
+              ref="passwordFormRef"
+              :model="passwordForm"
+              :rules="passwordRules"
+              label-width="120px"
+              class="account-form"
+            >
+              <h4>修改密码</h4>
+              <el-form-item label="当前密码" prop="currentPassword">
+                <el-input
+                  v-model="passwordForm.currentPassword"
+                  type="password"
+                  placeholder="请输入当前密码"
+                  show-password
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item label="新密码" prop="newPassword">
+                <el-input
+                  v-model="passwordForm.newPassword"
+                  type="password"
+                  placeholder="请输入新密码"
+                  show-password
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item label="确认新密码" prop="confirmPassword">
+                <el-input
+                  v-model="passwordForm.confirmPassword"
+                  type="password"
+                  placeholder="请再次输入新密码"
+                  show-password
+                  clearable
+                />
+              </el-form-item>
+              <el-form-item>
+                <el-button
+                  type="primary"
+                  :loading="passwordLoading"
+                  @click="handleUpdatePassword"
+                >
+                  更新密码
+                </el-button>
+              </el-form-item>
+            </el-form>
+          </el-card>
+        </div>
+        
         <!-- 媒体库连接 -->
         <div v-show="activeMenu === 'media-libs'" class="settings-section">
           <div class="section-header">
@@ -200,16 +296,67 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { 
-  Connection, Timer, Setting, Plus 
+  Connection, Timer, Setting, Plus, User 
 } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { useAuthStore } from '../stores/auth'
+
+// Store
+const authStore = useAuthStore()
 
 // 响应式数据
-const activeMenu = ref('media-libs')
+const activeMenu = ref('account')
 const mediaLibraries = ref([])
 const scheduleTasks = ref([])
 const showAddMediaLibDialog = ref(false)
 const showAddTaskDialog = ref(false)
+
+// 账户设置表单
+const usernameFormRef = ref<FormInstance>()
+const passwordFormRef = ref<FormInstance>()
+const usernameLoading = ref(false)
+const passwordLoading = ref(false)
+
+const usernameForm = ref({
+  username: ''
+})
+
+const passwordForm = ref({
+  currentPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
+// 表单验证规则
+const usernameRules: FormRules = {
+  username: [
+    { required: true, message: '请输入新用户名', trigger: 'blur' },
+    { min: 3, max: 20, message: '用户名长度在 3 到 20 个字符', trigger: 'blur' }
+  ]
+}
+
+const passwordRules: FormRules = {
+  currentPassword: [
+    { required: true, message: '请输入当前密码', trigger: 'blur' }
+  ],
+  newPassword: [
+    { required: true, message: '请输入新密码', trigger: 'blur' },
+    { min: 6, message: '密码长度不能少于 6 个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入新密码', trigger: 'blur' },
+    {
+      validator: (rule: any, value: string, callback: any) => {
+        if (value !== passwordForm.value.newPassword) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
+  ]
+}
 
 const newMediaLib = ref({
   name: '',
@@ -253,6 +400,54 @@ onMounted(() => {
 // 方法
 const handleMenuSelect = (key: string) => {
   activeMenu.value = key
+}
+
+// 账户设置方法
+const handleUpdateUsername = async () => {
+  if (!usernameFormRef.value) return
+  
+  await usernameFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    
+    usernameLoading.value = true
+    try {
+      await authStore.updateUsername(usernameForm.value.username)
+      ElMessage.success('用户名更新成功')
+      usernameForm.value.username = ''
+      usernameFormRef.value?.resetFields()
+    } catch (error: any) {
+      ElMessage.error(error.response?.data?.error || '更新用户名失败')
+    } finally {
+      usernameLoading.value = false
+    }
+  })
+}
+
+const handleUpdatePassword = async () => {
+  if (!passwordFormRef.value) return
+  
+  await passwordFormRef.value.validate(async (valid) => {
+    if (!valid) return
+    
+    passwordLoading.value = true
+    try {
+      await authStore.updatePassword(
+        passwordForm.value.currentPassword,
+        passwordForm.value.newPassword
+      )
+      ElMessage.success('密码更新成功')
+      passwordForm.value = {
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
+      }
+      passwordFormRef.value?.resetFields()
+    } catch (error: any) {
+      ElMessage.error(error.response?.data?.error || '更新密码失败')
+    } finally {
+      passwordLoading.value = false
+    }
+  })
 }
 
 const loadMediaLibraries = async () => {
@@ -436,5 +631,36 @@ const formatDate = (dateString: string | null) => {
 .media-lib-actions {
   display: flex;
   gap: 10px;
+}
+
+/* 账户设置样式 */
+.account-card {
+  max-width: 600px;
+}
+
+.account-info {
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 0;
+}
+
+.info-item label {
+  font-weight: bold;
+  margin-right: 10px;
+  color: #666;
+}
+
+.info-item span {
+  color: #333;
+  font-size: 16px;
+}
+
+.account-form h4 {
+  margin-bottom: 20px;
+  color: #333;
 }
 </style>

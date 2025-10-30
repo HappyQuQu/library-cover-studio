@@ -5,7 +5,11 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const path = require("path");
 
+// 数据库初始化
+const database = require("./services/database");
+
 // 路由导入
+const authRoutes = require("./routes/auth");
 const templateRoutes = require("./routes/templates");
 const posterRoutes = require("./routes/posters");
 const mediaLibRoutes = require("./routes/mediaLibs");
@@ -37,6 +41,7 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 // API路由
+app.use("/api/auth", authRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/posters", posterRoutes);
 app.use("/api/media-libs", mediaLibRoutes);
@@ -62,16 +67,38 @@ app.use("*", (req, res) => {
 // 错误处理中间件
 app.use(errorHandler);
 
-// 服务器启动
-app.listen(PORT, () => {
-  console.log(`🚀 LibraryCoverStudio Backend running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-});
+// 初始化数据库并启动服务器
+const startServer = async () => {
+  try {
+    // 初始化数据库
+    await database.initialize();
+
+    // 服务器启动
+    app.listen(PORT, () => {
+      console.log(`🚀 LibraryCoverStudio Backend running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/health`);
+      console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
+    });
+  } catch (error) {
+    console.error("❌ Failed to start server:", error);
+    process.exit(1);
+  }
+};
 
 // 优雅关闭
-process.on("SIGTERM", () => {
+process.on("SIGTERM", async () => {
   console.log("👋 SIGTERM received, shutting down gracefully");
+  await database.close();
   process.exit(0);
 });
+
+process.on("SIGINT", async () => {
+  console.log("👋 SIGINT received, shutting down gracefully");
+  await database.close();
+  process.exit(0);
+});
+
+// 启动服务器
+startServer();
 
 module.exports = app;
