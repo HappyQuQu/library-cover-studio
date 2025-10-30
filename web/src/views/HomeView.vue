@@ -60,13 +60,13 @@
           <el-card
             class="feature-card"
             shadow="hover"
-            @click="handleCardClick('/settings')"
+            @click="$router.push('/schedule')"
           >
             <div class="card-icon">
-              <el-icon size="48"><Setting /></el-icon>
+              <el-icon size="48"><Clock /></el-icon>
             </div>
-            <h3>系统设置</h3>
-            <p>配置媒体库连接和定时任务</p>
+            <h3>定时任务管理</h3>
+            <p>定时生成、自动化任务调度</p>
             <el-tag
               v-if="!authStore.isAuthenticated"
               type="warning"
@@ -108,7 +108,7 @@
 
 <script setup lang="ts">
 import { useRouter } from "vue-router";
-import { Edit, Document, Setting } from "@element-plus/icons-vue";
+import { Edit, Document, Setting, Clock } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
 

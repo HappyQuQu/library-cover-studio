@@ -22,6 +22,10 @@
             <el-icon><Document /></el-icon>
             <span>模板</span>
           </router-link>
+          <router-link to="/schedule" class="nav-item">
+            <el-icon><Document /></el-icon>
+            <span>定时任务</span>
+          </router-link>
           <router-link to="/settings" class="nav-item">
             <el-icon><Setting /></el-icon>
             <span>设置</span>

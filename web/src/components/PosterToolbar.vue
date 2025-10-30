@@ -4,18 +4,98 @@
       <div class="toolbar-section">
         <h4>背景设置</h4>
         <div class="background-controls">
-          <el-color-picker 
-            v-model="backgroundColor" 
-            @change="handleBackgroundColorChange"
-            show-alpha
-          />
-          <el-button size="small" @click="showImageUpload = true">
+          <el-radio-group v-model="backgroundType" size="small">
+            <el-radio label="color">纯色</el-radio>
+            <el-radio label="gradient">渐变</el-radio>
+            <el-radio label="random">随机渐变</el-radio>
+          </el-radio-group>
+          <div v-if="backgroundType === 'color'" style="margin-top: 10px">
+            <el-color-picker
+              v-model="backgroundColor"
+              @change="handleBackgroundColorChange"
+              show-alpha
+            />
+          </div>
+          <div
+            v-if="backgroundType === 'gradient'"
+            class="gradient-controls"
+            style="margin-top: 10px"
+          >
+            <div>
+              <el-color-picker v-model="gradientColor1" show-alpha />
+              <span>→</span>
+              <el-color-picker v-model="gradientColor2" show-alpha />
+            </div>
+            <el-select
+              v-model="gradientDirection"
+              style="margin-top: 10px; width: 120px"
+            >
+              <el-option label="左→右" value="leftToRight" />
+              <el-option label="上→下" value="topToBottom" />
+              <el-option label="左上→右下" value="leftTopToRightBottom" />
+              <el-option label="右上→左下" value="rightTopToLeftBottom" />
+            </el-select>
+            <div style="margin-top: 10px">
+              <span>渐变比例</span>
+              <el-slider
+                v-model="gradientRatio"
+                :min="0"
+                :max="1"
+                :step="0.01"
+                style="width: 120px"
+              />
+            </div>
+            <el-button
+              size="small"
+              type="primary"
+              style="margin-top: 10px"
+              @click="emitGradientBackground"
+            >
+              应用渐变
+            </el-button>
+          </div>
+          <div
+            v-if="backgroundType === 'random'"
+            class="gradient-controls"
+            style="margin-top: 10px"
+          >
+            <div style="margin-bottom: 8px">
+              <el-select v-model="gradientDirection" style="width: 120px">
+                <el-option label="左→右" value="leftToRight" />
+                <el-option label="上→下" value="topToBottom" />
+                <el-option label="左上→右下" value="leftTopToRightBottom" />
+                <el-option label="右上→左下" value="rightTopToLeftBottom" />
+              </el-select>
+            </div>
+            <div style="margin-bottom: 8px">
+              <span>渐变比例</span>
+              <el-slider
+                v-model="gradientRatio"
+                :min="0"
+                :max="1"
+                :step="0.01"
+                style="width: 120px"
+              />
+            </div>
+            <el-button
+              size="small"
+              type="warning"
+              @click="emitRandomBackground"
+            >
+              随机渐变背景
+            </el-button>
+          </div>
+          <el-button
+            size="small"
+            @click="showImageUpload = true"
+            style="margin-top: 10px"
+          >
             <el-icon><Picture /></el-icon>
             背景图片
           </el-button>
         </div>
       </div>
-      
+
       <div class="toolbar-section">
         <h4>添加元素</h4>
         <div class="element-buttons">
@@ -37,7 +117,7 @@
           </el-button>
         </div>
       </div>
-      
+
       <div class="toolbar-section">
         <h4>模板操作</h4>
         <div class="template-buttons">
@@ -56,7 +136,7 @@
         </div>
       </div>
     </el-scrollbar>
-    
+
     <!-- 图片上传对话框 -->
     <el-dialog v-model="showImageUpload" title="上传图片" width="500px">
       <el-upload
@@ -67,84 +147,126 @@
         :on-change="handleImageUpload"
       >
         <el-icon class="el-icon--upload"><Upload /></el-icon>
-        <div class="el-upload__text">
-          将图片拖拽到此处，或<em>点击上传</em>
-        </div>
+        <div class="el-upload__text">将图片拖拽到此处，或<em>点击上传</em></div>
       </el-upload>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { 
-  Edit, Picture, Grid, CirclePlus, Check, 
-  Folder, Download, Upload 
-} from '@element-plus/icons-vue'
+import { ref } from "vue";
+import {
+  Edit,
+  Picture,
+  Grid,
+  CirclePlus,
+  Check,
+  Folder,
+  Download,
+  Upload,
+} from "@element-plus/icons-vue";
 
 // 事件定义
 const emit = defineEmits([
-  'add-text',
-  'add-image', 
-  'change-background',
-  'save-template'
-])
+  "add-text",
+  "add-image",
+  "change-background",
+  "save-template",
+  "load-template",
+  "add-shape",
+  "export-poster",
+]);
 
 // 响应式数据
-const backgroundColor = ref('#ffffff')
-const showImageUpload = ref(false)
+const backgroundType = ref<"color" | "gradient" | "random">("color");
+const backgroundColor = ref("#ffffff");
+const gradientColor1 = ref("#667eea");
+const gradientColor2 = ref("#764ba2");
+const gradientDirection = ref<
+  | "leftToRight"
+  | "topToBottom"
+  | "leftTopToRightBottom"
+  | "rightTopToLeftBottom"
+>("leftToRight");
+const gradientRatio = ref(0.5);
+const showImageUpload = ref(false);
 
 // 背景颜色改变
 const handleBackgroundColorChange = (color: string) => {
-  emit('change-background', color)
-}
+  emit("change-background", {
+    type: "color",
+    color,
+  });
+};
+
+// 应用渐变背景
+const emitGradientBackground = () => {
+  emit("change-background", {
+    type: "gradient",
+    color1: gradientColor1.value,
+    color2: gradientColor2.value,
+    direction: gradientDirection.value,
+    ratio: gradientRatio.value,
+  });
+};
+
+// 随机渐变背景色
+const emitRandomBackground = () => {
+  emit("change-background", {
+    type: "random-gradient",
+    direction: gradientDirection.value,
+    ratio: gradientRatio.value,
+  });
+};
 
 // 添加文字
 const handleAddText = () => {
-  emit('add-text', '双击编辑文字')
-}
+  emit("add-text", "双击编辑文字");
+};
 
 // 图片上传
 const handleImageUpload = (file: any) => {
-  const reader = new FileReader()
+  const reader = new FileReader();
   reader.onload = (e) => {
     if (e.target?.result) {
-      emit('add-image', e.target.result as string)
-      showImageUpload.value = false
+      emit("add-image", e.target.result as string);
+      showImageUpload.value = false;
     }
-  }
-  reader.readAsDataURL(file.raw)
-}
+  };
+  reader.readAsDataURL(file.raw);
+};
 
 // 添加形状
 const addShape = (type: string) => {
-  // 这里可以扩展形状类型
-  console.log('添加形状:', type)
-}
+  emit("add-shape", type);
+};
 
 // 加载模板
 const loadTemplate = () => {
-  // 实现模板加载逻辑
-  console.log('加载模板')
-}
+  emit("load-template");
+};
 
 // 导出海报
 const exportPoster = () => {
-  // 实现海报导出逻辑
-  console.log('导出海报')
-}
+  emit("export-poster");
+};
 </script>
 
 <style scoped>
 .poster-toolbar {
   height: 100%;
-  padding: 20px;
+  padding: 16px 8px 16px 8px;
+  background: transparent;
 }
 
 .toolbar-section {
-  margin-bottom: 30px;
-  padding-bottom: 20px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
   border-bottom: 1px solid #e9ecef;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.04);
+  padding: 16px;
 }
 
 .toolbar-section:last-child {
@@ -152,31 +274,54 @@ const exportPoster = () => {
 }
 
 .toolbar-section h4 {
-  margin: 0 0 15px 0;
+  margin: 0 0 12px 0;
   color: #333;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .background-controls {
   display: flex;
+  flex-direction: column;
   gap: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.gradient-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.gradient-controls > div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
   align-items: center;
 }
 
-.element-buttons,
-.template-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.el-radio-group {
+  flex-wrap: wrap;
 }
 
-.element-buttons .el-button,
-.template-buttons .el-button {
-  justify-content: flex-start;
+.el-button {
+  min-width: 90px;
+  margin-right: 8px;
+  margin-bottom: 4px;
 }
 
 .upload-demo {
   width: 100%;
+}
+
+@media (max-width: 900px) {
+  .toolbar-section {
+    padding: 8px;
+    margin-bottom: 12px;
+  }
 }
 </style>
