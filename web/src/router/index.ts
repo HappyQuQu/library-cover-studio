@@ -42,6 +42,18 @@ const routes = [
         component: () => import("../views/ScheduleView.vue"),
         meta: { requiresAuth: true },
       },
+      {
+        path: "/media-sources",
+        name: "MediaSources",
+        component: () => import("../views/MediaSourcesView.vue"),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: "/scheduled-tasks",
+        name: "ScheduledTasks",
+        component: () => import("../views/ScheduledTasksView.vue"),
+        meta: { requiresAuth: true },
+      },
     ],
   },
 ];

@@ -10,7 +10,7 @@
           </el-button>
         </div>
       </el-header>
-      
+
       <el-main>
         <!-- 搜索和过滤 -->
         <div class="search-bar">
@@ -46,7 +46,7 @@
             </el-col>
           </el-row>
         </div>
-        
+
         <!-- 模板网格 -->
         <div class="templates-grid" v-loading="loading">
           <div
@@ -56,9 +56,9 @@
             @click="selectTemplate(template)"
           >
             <div class="template-preview">
-              <img 
-                v-if="template.preview_url" 
-                :src="template.preview_url" 
+              <img
+                v-if="template.preview_url"
+                :src="template.preview_url"
                 :alt="template.name"
                 @error="handleImageError"
               />
@@ -67,12 +67,17 @@
                 <p>无预览</p>
               </div>
             </div>
-            
+
             <div class="template-info">
               <h3>{{ template.name }}</h3>
-              <p class="description">{{ template.description || '暂无描述' }}</p>
-              
-              <div class="template-tags" v-if="template.tags && template.tags.length">
+              <p class="description">
+                {{ template.description || "暂无描述" }}
+              </p>
+
+              <div
+                class="template-tags"
+                v-if="template.tags && template.tags.length"
+              >
                 <el-tag
                   v-for="tag in template.tags"
                   :key="tag"
@@ -82,25 +87,28 @@
                   {{ tag }}
                 </el-tag>
               </div>
-              
+
               <div class="template-meta">
                 <span class="create-time">
                   {{ formatDate(template.created_at) }}
                 </span>
               </div>
             </div>
-            
+
             <div class="template-actions">
               <el-button-group>
                 <el-button size="small" @click.stop="editTemplate(template)">
                   <el-icon><Edit /></el-icon>
                 </el-button>
-                <el-button size="small" @click.stop="duplicateTemplate(template)">
+                <el-button
+                  size="small"
+                  @click.stop="duplicateTemplate(template)"
+                >
                   <el-icon><CopyDocument /></el-icon>
                 </el-button>
-                <el-button 
-                  size="small" 
-                  type="danger" 
+                <el-button
+                  size="small"
+                  type="danger"
                   @click.stop="deleteTemplate(template)"
                 >
                   <el-icon><Delete /></el-icon>
@@ -109,7 +117,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 分页 -->
         <div class="pagination-wrapper">
           <el-pagination
@@ -124,7 +132,7 @@
         </div>
       </el-main>
     </el-container>
-    
+
     <!-- 创建模板对话框 -->
     <el-dialog v-model="showCreateDialog" title="创建新模板" width="500px">
       <el-form :model="newTemplate" :rules="templateRules" ref="templateForm">
@@ -132,7 +140,11 @@
           <el-input v-model="newTemplate.name" />
         </el-form-item>
         <el-form-item label="描述" prop="description">
-          <el-input v-model="newTemplate.description" type="textarea" :rows="3" />
+          <el-input
+            v-model="newTemplate.description"
+            type="textarea"
+            :rows="3"
+          />
         </el-form-item>
         <el-form-item label="标签">
           <el-input
@@ -152,7 +164,7 @@
           </div>
         </el-form-item>
       </el-form>
-      
+
       <template #footer>
         <el-button @click="showCreateDialog = false">取消</el-button>
         <el-button type="primary" @click="createTemplate">创建并设计</el-button>
@@ -162,186 +174,231 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { 
-  Plus, Search, Picture, Edit, CopyDocument, Delete 
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, onMounted, computed } from "vue";
+import { useRouter } from "vue-router";
+import {
+  Plus,
+  Search,
+  Picture,
+  Edit,
+  CopyDocument,
+  Delete,
+} from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { API_ENDPOINTS } from "../config/api";
 
-const router = useRouter()
+// 模板类型定义
+interface Template {
+  id: string;
+  name: string;
+  description?: string;
+  preview_url?: string;
+  tags?: string[];
+  created_at: string;
+  updated_at?: string;
+}
+
+const router = useRouter();
 
 // 响应式数据
-const loading = ref(false)
-const templates = ref([])
-const searchQuery = ref('')
-const filterTag = ref('')
-const sortBy = ref('updated_at')
-const currentPage = ref(1)
-const pageSize = ref(12)
-const total = ref(0)
+const loading = ref(false);
+const templates = ref<Template[]>([]);
+const searchQuery = ref("");
+const filterTag = ref("");
+const sortBy = ref("updated_at");
+const currentPage = ref(1);
+const pageSize = ref(12);
+const total = ref(0);
 
-const showCreateDialog = ref(false)
+const showCreateDialog = ref(false);
 const newTemplate = ref({
-  name: '',
-  description: '',
-  tags: []
-})
-const tagInput = ref('')
+  name: "",
+  description: "",
+  tags: [] as string[],
+});
+const tagInput = ref("");
 
 // 表单规则
 const templateRules = {
-  name: [
-    { required: true, message: '请输入模板名称', trigger: 'blur' }
-  ]
-}
+  name: [{ required: true, message: "请输入模板名称", trigger: "blur" }],
+};
 
 // 计算属性
 const availableTags = computed(() => {
-  const tags = new Set()
-  templates.value.forEach(template => {
+  const tags = new Set<string>();
+  templates.value.forEach((template) => {
     if (template.tags) {
-      template.tags.forEach(tag => tags.add(tag))
+      template.tags.forEach((tag) => tags.add(tag));
     }
-  })
-  return Array.from(tags)
-})
+  });
+  return Array.from(tags);
+});
 
 // 生命周期
 onMounted(() => {
-  loadTemplates()
-})
+  loadTemplates();
+});
 
 // 方法
 const loadTemplates = async () => {
   try {
-    loading.value = true
-    
+    loading.value = true;
+
     const params = {
       page: currentPage.value,
       limit: pageSize.value,
-      search: searchQuery.value,
-      tag: filterTag.value,
-      sortBy: sortBy.value
+      search: searchQuery.value || undefined,
+      tag: filterTag.value || undefined,
+      sortBy: sortBy.value || undefined,
+    };
+
+    // 构建查询字符串
+    const queryString = new URLSearchParams(
+      Object.entries(params)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, String(v)])
+    ).toString();
+
+    // 调用API
+    const response = await fetch(
+      `${API_ENDPOINTS.templates.base}?${queryString}`
+    );
+    if (!response.ok) throw new Error("加载模板失败");
+
+    const data = await response.json();
+
+    // 后端返回格式: { templates: [...], pagination: {...} }
+    if (data.templates) {
+      templates.value = data.templates || [];
+      total.value = data.pagination?.total || 0;
+    } else {
+      throw new Error("数据格式错误");
     }
-    
-    // 这里应该调用API
-    // const response = await api.getTemplates(params)
-    
-    // 模拟数据
-    templates.value = [
-      {
-        id: '1',
-        name: '经典电影海报',
-        description: '适合经典电影的简约设计',
-        preview_url: '/api/templates/1/preview',
-        tags: ['电影', '经典'],
-        created_at: new Date().toISOString()
-      },
-      {
-        id: '2',
-        name: '现代剧集海报',
-        description: '现代TV剧集的动感设计',
-        preview_url: null,
-        tags: ['电视剧', '现代'],
-        created_at: new Date().toISOString()
-      }
-    ]
-    total.value = templates.value.length
-    
   } catch (error) {
-    ElMessage.error('加载模板失败')
+    console.error("加载模板失败:", error);
+    ElMessage.error("加载模板失败");
   } finally {
-    loading.value = false
+    loading.value = false;
   }
-}
+};
 
 const handleSearch = () => {
-  currentPage.value = 1
-  loadTemplates()
-}
+  currentPage.value = 1;
+  loadTemplates();
+};
 
 const handleSizeChange = () => {
-  currentPage.value = 1
-  loadTemplates()
-}
+  currentPage.value = 1;
+  loadTemplates();
+};
 
 const handleCurrentChange = () => {
-  loadTemplates()
-}
+  loadTemplates();
+};
 
-const selectTemplate = (template) => {
+const selectTemplate = (template: Template) => {
   // 跳转到设计器并加载模板
-  router.push(`/designer?templateId=${template.id}`)
-}
+  router.push(`/designer?templateId=${template.id}`);
+};
 
-const editTemplate = (template) => {
+const editTemplate = (template: Template) => {
   // 跳转到设计器编辑模式
-  router.push(`/designer?templateId=${template.id}&mode=edit`)
-}
+  router.push(`/designer?templateId=${template.id}&mode=edit`);
+};
 
-const duplicateTemplate = async (template) => {
+const duplicateTemplate = async (template: Template) => {
   try {
-    // 调用复制API
-    ElMessage.success('模板复制成功')
-    loadTemplates()
+    const response = await fetch(
+      API_ENDPOINTS.templates.duplicate(template.id),
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) throw new Error("复制模板失败");
+
+    // 后端直接返回新模板对象
+    const data = await response.json();
+    if (data.id) {
+      ElMessage.success("模板复制成功");
+      loadTemplates();
+    } else {
+      throw new Error("复制模板失败");
+    }
   } catch (error) {
-    ElMessage.error('模板复制失败')
+    console.error("复制模板失败:", error);
+    ElMessage.error("模板复制失败");
   }
-}
+};
 
-const deleteTemplate = async (template) => {
+const deleteTemplate = async (template: Template) => {
   try {
-    await ElMessageBox.confirm(`确定删除模板"${template.name}"吗？`, '确认删除', {
-      type: 'warning'
-    })
-    
-    // 调用删除API
-    ElMessage.success('模板删除成功')
-    loadTemplates()
+    await ElMessageBox.confirm(
+      `确定删除模板"${template.name}"吗？`,
+      "确认删除",
+      {
+        type: "warning",
+      }
+    );
+
+    const response = await fetch(API_ENDPOINTS.templates.byId(template.id), {
+      method: "DELETE",
+    });
+
+    if (!response.ok) throw new Error("删除模板失败");
+
+    // 后端返回 { message: "模板已删除" }
+    const data = await response.json();
+    if (data.message) {
+      ElMessage.success("模板删除成功");
+      loadTemplates();
+    } else {
+      throw new Error("删除模板失败");
+    }
+    loadTemplates();
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('模板删除失败')
+    if (error !== "cancel") {
+      ElMessage.error("模板删除失败");
     }
   }
-}
+};
 
 const createTemplate = async () => {
   try {
     // 验证表单
     // await templateForm.value.validate()
-    
+
     // 创建模板并跳转到设计器
-    router.push('/designer?mode=new')
-    showCreateDialog.value = false
-    
+    router.push("/designer?mode=new");
+    showCreateDialog.value = false;
   } catch (error) {
-    ElMessage.error('创建模板失败')
+    ElMessage.error("创建模板失败");
   }
-}
+};
 
 const addTag = () => {
-  const tag = tagInput.value.trim()
+  const tag = tagInput.value.trim();
   if (tag && !newTemplate.value.tags.includes(tag)) {
-    newTemplate.value.tags.push(tag)
-    tagInput.value = ''
+    newTemplate.value.tags.push(tag);
+    tagInput.value = "";
   }
-}
+};
 
-const removeTag = (tag) => {
-  const index = newTemplate.value.tags.indexOf(tag)
+const removeTag = (tag: string) => {
+  const index = newTemplate.value.tags.indexOf(tag);
   if (index > -1) {
-    newTemplate.value.tags.splice(index, 1)
+    newTemplate.value.tags.splice(index, 1);
   }
-}
+};
 
-const handleImageError = (event) => {
-  event.target.style.display = 'none'
-}
+const handleImageError = (event: Event) => {
+  const target = event.target as HTMLImageElement;
+  target.style.display = "none";
+};
 
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString('zh-CN')
-}
+const formatDate = (dateString: string) => {
+  return new Date(dateString).toLocaleDateString("zh-CN");
+};
 </script>
 
 <style scoped>

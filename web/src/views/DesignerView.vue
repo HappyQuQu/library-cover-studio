@@ -16,16 +16,27 @@
         <!-- 顶部工具栏 -->
         <div class="top-toolbar">
           <div class="toolbar-left">
-            <span class="toolbar-title">海报设计器</span>
+            <el-button
+              size="small"
+              text
+              @click="router.push('/templates')"
+              style="margin-right: 12px"
+            >
+              <el-icon><ArrowLeft /></el-icon>
+              返回模板列表
+            </el-button>
+            <span class="toolbar-title">{{
+              templateInfo.name || "新建模板"
+            }}</span>
           </div>
           <div class="toolbar-actions">
+            <el-button size="small" @click="showTemplateInfoDialog = true">
+              <el-icon><Edit /></el-icon>
+              模板信息
+            </el-button>
             <el-button size="small" type="success" @click="saveTemplate">
               <el-icon><Check /></el-icon>
               保存模板
-            </el-button>
-            <el-button size="small" @click="loadTemplate">
-              <el-icon><Folder /></el-icon>
-              加载模板
             </el-button>
             <el-button size="small" type="primary" @click="exportPoster">
               <el-icon><Download /></el-icon>
@@ -63,6 +74,53 @@
         />
       </el-aside>
     </el-container>
+
+    <!-- 模板信息编辑对话框 -->
+    <el-dialog v-model="showTemplateInfoDialog" title="模板信息" width="500px">
+      <el-form :model="templateInfo" label-width="80px">
+        <el-form-item label="模板名称" required>
+          <el-input
+            v-model="templateInfo.name"
+            placeholder="请输入模板名称"
+            maxlength="100"
+          />
+        </el-form-item>
+        <el-form-item label="模板描述">
+          <el-input
+            v-model="templateInfo.description"
+            type="textarea"
+            :rows="3"
+            placeholder="请输入模板描述"
+            maxlength="500"
+          />
+        </el-form-item>
+        <el-form-item label="标签">
+          <div class="tags-input">
+            <el-tag
+              v-for="tag in templateInfo.tags"
+              :key="tag"
+              closable
+              @close="removeTag(tag)"
+              style="margin-right: 8px; margin-bottom: 8px"
+            >
+              {{ tag }}
+            </el-tag>
+            <el-input
+              v-model="newTag"
+              size="small"
+              placeholder="输入标签后按回车"
+              style="width: 150px"
+              @keyup.enter="addTag"
+            />
+          </div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showTemplateInfoDialog = false">取消</el-button>
+        <el-button type="primary" @click="saveTemplateInfo">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 图案编辑弹窗（双击元素打开） -->
     <el-dialog
       v-model="patternEditorVisible"
@@ -193,11 +251,34 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { fabric } from "fabric";
-import PosterToolbar from "@/components/PosterToolbar.vue";
-import PosterProperties from "@/components/PosterProperties.vue";
-import { ElMessage } from "element-plus";
-import { Check, Folder, Download } from "@element-plus/icons-vue";
+import PosterToolbar from "../components/PosterToolbar.vue";
+import PosterProperties from "../components/PosterProperties.vue";
+import { ElMessage, ElMessageBox } from "element-plus";
+import {
+  Check,
+  Folder,
+  Download,
+  ArrowLeft,
+  Edit,
+} from "@element-plus/icons-vue";
+import { API_ENDPOINTS } from "../config/api";
+
+// 路由
+const route = useRoute();
+const router = useRouter();
+
+// 模板信息
+const templateId = ref<string | null>(null);
+const templateInfo = ref({
+  name: "",
+  description: "",
+  tags: [] as string[],
+});
+const isEditMode = ref(false);
+const showTemplateInfoDialog = ref(false);
+const newTag = ref("");
 
 // Canvas 配置
 const canvasRef = ref<HTMLCanvasElement>();
@@ -542,6 +623,19 @@ onMounted(() => {
     onUnmounted(() => {
       document.removeEventListener("keydown", handleKeyDown);
     });
+
+    // 检查 URL 参数,如果有模板 ID 则加载
+    const queryTemplateId = route.query.templateId as string;
+    const mode = route.query.mode as string;
+
+    if (queryTemplateId) {
+      templateId.value = queryTemplateId;
+      isEditMode.value = mode === "edit";
+      loadTemplateFromServer(queryTemplateId);
+    } else {
+      // 新建模板
+      templateInfo.value.name = "新建模板";
+    }
   }
 });
 
@@ -1343,34 +1437,129 @@ const cancelPatternEditor = () => {
   patternEditorVisible.value = false;
 };
 
+// 标签管理
+const addTag = () => {
+  const tag = newTag.value.trim();
+  if (tag && !templateInfo.value.tags.includes(tag)) {
+    templateInfo.value.tags.push(tag);
+    newTag.value = "";
+  }
+};
+
+const removeTag = (tag: string) => {
+  const index = templateInfo.value.tags.indexOf(tag);
+  if (index > -1) {
+    templateInfo.value.tags.splice(index, 1);
+  }
+};
+
+// 保存模板信息
+const saveTemplateInfo = () => {
+  if (!templateInfo.value.name.trim()) {
+    ElMessage.warning("请输入模板名称");
+    return;
+  }
+  showTemplateInfoDialog.value = false;
+  ElMessage.success("模板信息已更新");
+};
+
+// 从服务器加载模板
+const loadTemplateFromServer = async (id: string) => {
+  try {
+    const response = await fetch(API_ENDPOINTS.templates.byId(id));
+    if (!response.ok) throw new Error("加载模板失败");
+
+    const template = await response.json();
+
+    // 加载模板信息
+    templateInfo.value.name = template.name || "";
+    templateInfo.value.description = template.description || "";
+    templateInfo.value.tags = template.tags
+      ? typeof template.tags === "string"
+        ? template.tags.split(",").filter(Boolean)
+        : template.tags
+      : [];
+
+    // 加载画布数据
+    if (template.canvas_data && fabricCanvas) {
+      const canvasData =
+        typeof template.canvas_data === "string"
+          ? JSON.parse(template.canvas_data)
+          : template.canvas_data;
+
+      fabricCanvas.loadFromJSON(canvasData, () => {
+        fabricCanvas?.renderAll();
+        ElMessage.success("模板加载成功");
+      });
+    }
+  } catch (error) {
+    console.error("加载模板失败:", error);
+    ElMessage.error("加载模板失败");
+  }
+};
+
 // 保存模板
 const saveTemplate = async () => {
   if (!fabricCanvas) return;
-  const templateData = {
-    canvas: fabricCanvas.toJSON(),
-    preview: fabricCanvas.toDataURL({ format: "png", multiplier: 0.5 }),
-  };
-  localStorage.setItem("poster_template", JSON.stringify(templateData));
-  ElMessage.success("模板已保存到本地");
-};
 
-// 加载模板
-const loadTemplate = () => {
-  if (!fabricCanvas) return;
-  const data = localStorage.getItem("poster_template");
-  if (!data) {
-    ElMessage.warning("没有可用的模板");
+  // 如果没有模板名称,提示用户输入
+  if (!templateInfo.value.name.trim()) {
+    showTemplateInfoDialog.value = true;
+    ElMessage.warning("请先填写模板信息");
     return;
   }
+
   try {
-    const template = JSON.parse(data);
-    fabricCanvas.loadFromJSON(template.canvas, () => {
-      fabricCanvas.renderAll();
-      ElMessage.success("模板已加载");
+    const canvasData = fabricCanvas.toJSON();
+    const previewDataUrl = fabricCanvas.toDataURL({
+      format: "png",
+      multiplier: 0.5,
     });
-  } catch (e) {
-    ElMessage.error("模板数据解析失败");
+
+    const requestData = {
+      name: templateInfo.value.name,
+      description: templateInfo.value.description,
+      canvasData: canvasData,
+      tags: templateInfo.value.tags,
+    };
+
+    let response;
+    if (templateId.value) {
+      // 更新现有模板
+      response = await fetch(API_ENDPOINTS.templates.byId(templateId.value), {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestData),
+      });
+    } else {
+      // 创建新模板
+      response = await fetch(API_ENDPOINTS.templates.base, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(requestData),
+      });
+    }
+
+    if (!response.ok) throw new Error("保存模板失败");
+
+    const result = await response.json();
+
+    // 如果是新建,保存返回的 ID
+    if (!templateId.value && result.id) {
+      templateId.value = result.id;
+      isEditMode.value = true;
+    }
+
+    ElMessage.success("模板保存成功");
+  } catch (error) {
+    console.error("保存模板失败:", error);
+    ElMessage.error("保存模板失败");
   }
+};
+
+// 加载模板(废弃,仅用于兼容)
+const loadTemplate = () => {
+  ElMessage.info("请从模板列表中选择模板进行编辑");
 };
 
 // 导出海报
@@ -1599,5 +1788,12 @@ const handlePropertiesAction = (action: string) => {
   top: 0;
   will-change: transform;
   transform-origin: top left;
+}
+
+.tags-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 </style>

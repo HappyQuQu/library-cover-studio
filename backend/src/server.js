@@ -14,6 +14,8 @@ const templateRoutes = require("./routes/templates");
 const posterRoutes = require("./routes/posters");
 const mediaLibRoutes = require("./routes/mediaLibs");
 const scheduleRoutes = require("./routes/schedules");
+const mediaSourcesRoutes = require("./routes/mediaSources");
+const scheduledTasksRoutes = require("./routes/scheduledTasks");
 
 // 中间件导入
 const errorHandler = require("./middleware/errorHandler");
@@ -51,6 +53,8 @@ app.use("/api/templates", templateRoutes);
 app.use("/api/posters", posterRoutes);
 app.use("/api/media-libs", mediaLibRoutes);
 app.use("/api/schedules", scheduleRoutes);
+app.use("/api/media-sources", mediaSourcesRoutes);
+app.use("/api/scheduled-tasks", scheduledTasksRoutes);
 
 // 健康检查
 app.get("/health", (req, res) => {
@@ -78,11 +82,21 @@ const startServer = async () => {
     // 初始化数据库
     await database.initialize();
 
+    // 加载定时任务配置
+    const { loadSchedulerConfig } = require("./config/loadScheduler");
+    await loadSchedulerConfig();
+
     // 服务器启动
     app.listen(PORT, () => {
       console.log(`🚀 LibraryCoverStudio Backend running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
+      console.log(
+        `📅 Media Sources: http://localhost:${PORT}/api/media-sources`
+      );
+      console.log(
+        `⏰ Scheduled Tasks: http://localhost:${PORT}/api/scheduled-tasks`
+      );
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
@@ -93,12 +107,16 @@ const startServer = async () => {
 // 优雅关闭
 process.on("SIGTERM", async () => {
   console.log("👋 SIGTERM received, shutting down gracefully");
+  const { getInstance: getScheduler } = require("./services/schedulerService");
+  getScheduler().stopAll();
   await database.close();
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("👋 SIGINT received, shutting down gracefully");
+  const { getInstance: getScheduler } = require("./services/schedulerService");
+  getScheduler().stopAll();
   await database.close();
   process.exit(0);
 });

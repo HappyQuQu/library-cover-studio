@@ -14,16 +14,16 @@
             <el-icon><HomeFilled /></el-icon>
             <span>首页</span>
           </router-link>
-          <router-link to="/designer" class="nav-item">
-            <el-icon><Edit /></el-icon>
-            <span>设计器</span>
-          </router-link>
           <router-link to="/templates" class="nav-item">
             <el-icon><Document /></el-icon>
             <span>模板</span>
           </router-link>
-          <router-link to="/schedule" class="nav-item">
-            <el-icon><Document /></el-icon>
+          <router-link to="/media-sources" class="nav-item">
+            <el-icon><Connection /></el-icon>
+            <span>媒体源</span>
+          </router-link>
+          <router-link to="/scheduled-tasks" class="nav-item">
+            <el-icon><Clock /></el-icon>
             <span>定时任务</span>
           </router-link>
           <router-link to="/settings" class="nav-item">
@@ -73,6 +73,8 @@ import {
   User,
   ArrowDown,
   SwitchButton,
+  Connection,
+  Clock,
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAuthStore } from "../stores/auth";

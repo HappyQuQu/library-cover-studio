@@ -1,7 +1,8 @@
 const Bull = require("bull");
 const cron = require("node-cron");
 const redis = require("redis");
-const { Pool } = require("pg");
+// const { Pool } = require("pg"); // 不需要PostgreSQL，使用SQLite
+const database = require("./database");
 const PosterGenerator = require("./posterGenerator");
 const MediaLibraryService = require("./mediaLibraryService");
 
@@ -21,14 +22,8 @@ class ScheduleService {
       },
     });
 
-    // 数据库连接
-    this.pool = new Pool({
-      host: process.env.DB_HOST || "localhost",
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || "library_cover_studio",
-      user: process.env.DB_USER || "postgres",
-      password: process.env.DB_PASSWORD || "password",
-    });
+    // 使用SQLite database服务
+    this.getDb = () => database.getDb();
 
     this.init();
   }

@@ -2,20 +2,18 @@ const sharp = require("sharp");
 const { createCanvas, loadImage, registerFont } = require("canvas");
 const path = require("path");
 const fs = require("fs").promises;
-const { Pool } = require("pg");
+const database = require("./database");
 
 class PosterGenerator {
   constructor() {
-    this.pool = new Pool({
-      host: process.env.DB_HOST || "localhost",
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || "library_cover_studio",
-      user: process.env.DB_USER || "postgres",
-      password: process.env.DB_PASSWORD || "password",
-    });
-
+    // 使用SQLite database服务
     // 注册字体
     this.initFonts();
+  }
+
+  // 获取数据库实例
+  getDb() {
+    return database.getDb();
   }
 
   // 初始化字体
@@ -62,10 +60,13 @@ class PosterGenerator {
   // 获取模板
   async getTemplate(templateId) {
     try {
-      const query = `SELECT * FROM templates WHERE id = $1 AND deleted_at IS NULL`;
-      const result = await this.pool.query(query, [templateId]);
+      const db = this.getDb();
+      const result = await db.get(
+        `SELECT * FROM templates WHERE id = ? AND deleted_at IS NULL`,
+        [templateId]
+      );
 
-      return result.rows[0] || null;
+      return result || null;
     } catch (error) {
       console.error("获取模板失败:", error);
       throw error;
@@ -91,6 +92,157 @@ class PosterGenerator {
     });
 
     return JSON.parse(dataStr);
+  }
+
+  /**
+   * 替换元素占位符 (poster1-poster10)
+   * 支持图片元素和文本元素的占位符替换
+   * @param {Object} canvasData - 画布数据
+   * @param {Object} placeholders - 占位符到值的映射
+   * @example
+   * replacePlaceholders(canvasData, {
+   *   poster1: '/path/to/cover.jpg',  // 图片路径,用于替换图片元素
+   *   poster2: '书籍标题',            // 文本内容,用于替换文字元素
+   *   poster3: '作者名字'
+   * })
+   */
+  replacePlaceholders(canvasData, placeholders = {}) {
+    try {
+      // 深度克隆以避免修改原数据
+      const clonedData = JSON.parse(JSON.stringify(canvasData));
+
+      // 遍历所有对象
+      if (clonedData.objects && Array.isArray(clonedData.objects)) {
+        clonedData.objects.forEach((obj) => {
+          // 检查对象是否有占位符且占位符值存在
+          if (obj.placeholder && placeholders[obj.placeholder]) {
+            const placeholderValue = placeholders[obj.placeholder];
+
+            // 根据对象类型进行不同的替换
+            if (obj.type === "image") {
+              // 图片类型: 替换图片源
+              obj.src = placeholderValue;
+              console.log(
+                `🖼️  替换图片占位符: ${obj.placeholder} -> ${obj.src}`
+              );
+            } else if (
+              obj.type === "text" ||
+              obj.type === "i-text" ||
+              obj.type === "textbox"
+            ) {
+              // 文本类型: 替换文本内容
+              obj.text = placeholderValue;
+              console.log(
+                `📝 替换文本占位符: ${obj.placeholder} -> ${obj.text}`
+              );
+            } else if (
+              ["rect", "circle", "triangle", "polygon", "path"].includes(
+                obj.type
+              )
+            ) {
+              // 形状类型: 如果提供的是图片路径,可以设置为图案填充
+              // 这里暂时只记录日志,具体实现取决于需求
+              console.log(
+                `🎨 形状元素占位符 ${obj.placeholder}:`,
+                placeholderValue
+              );
+              // 未来可扩展: 将形状填充设置为图案
+            }
+          }
+        });
+      }
+
+      return clonedData;
+    } catch (error) {
+      console.error("替换占位符失败:", error);
+      return canvasData; // 失败时返回原数据
+    }
+  }
+
+  /**
+   * 使用占位符生成海报
+   * @param {number} templateId - 模板ID
+   * @param {Object} placeholders - 占位符映射 (支持图片路径和文本内容)
+   * @param {string} outputPath - 输出路径
+   * @example
+   * await generateWithPlaceholders(1, {
+   *   poster1: 'https://example.com/cover.jpg',  // 图片
+   *   poster2: '红楼梦',                          // 文本
+   *   poster3: '曹雪芹'                           // 文本
+   * }, 'output/poster.png')
+   */
+  async generateWithPlaceholders({ templateId, placeholders, outputPath }) {
+    try {
+      // 获取模板数据
+      const template = await this.getTemplate(templateId);
+
+      if (!template) {
+        throw new Error("模板不存在");
+      }
+
+      // 解析模板数据
+      let canvasData = template.canvas_data;
+
+      // 替换占位符
+      canvasData = this.replacePlaceholders(canvasData, placeholders);
+
+      // 渲染海报
+      const posterBuffer = await this.renderCanvas(canvasData);
+
+      // 保存文件
+      const fullOutputPath = path.join(__dirname, "../../uploads", outputPath);
+      await fs.mkdir(path.dirname(fullOutputPath), { recursive: true });
+      await fs.writeFile(fullOutputPath, posterBuffer);
+
+      return outputPath;
+    } catch (error) {
+      console.error("生成海报失败:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * 批量生成带占位符的海报
+   * @param {number} templateId - 模板ID
+   * @param {Array} batch - 批次数据数组
+   * @example
+   * await batchGenerateWithPlaceholders(1, [
+   *   {
+   *     outputPath: 'posters/book1.png',
+   *     placeholders: { poster1: '/covers/book1.jpg' }
+   *   },
+   *   {
+   *     outputPath: 'posters/book2.png',
+   *     placeholders: { poster1: '/covers/book2.jpg' }
+   *   }
+   * ])
+   */
+  async batchGenerateWithPlaceholders(templateId, batch) {
+    const results = [];
+
+    for (const item of batch) {
+      try {
+        const outputPath = await this.generateWithPlaceholders({
+          templateId,
+          placeholderImages: item.placeholders || {},
+          outputPath: item.outputPath,
+        });
+
+        results.push({
+          success: true,
+          outputPath,
+          input: item,
+        });
+      } catch (error) {
+        results.push({
+          success: false,
+          error: error.message,
+          input: item,
+        });
+      }
+    }
+
+    return results;
   }
 
   // 渲染Canvas
@@ -314,4 +466,4 @@ class PosterGenerator {
   }
 }
 
-module.exports = new PosterGenerator();
+module.exports = PosterGenerator;

@@ -1,0 +1,44 @@
+{
+  "jellyfin": {
+    "enabled": false,
+    "servers": [
+      {
+        "name": "My Jellyfin Server",
+        "baseURL": "http://localhost:8096",
+        "apiKey": "your_api_key_here",
+        "userId": "your_user_id_here"
+      }
+    ],
+    "schedule": {
+      "enabled": false,
+      "cronExpression": "0 0 * * *",
+      "runImmediately": false
+    },
+    "options": {
+      "excludeLibraries": ["Music", "Photos"],
+      "templateMapping": {
+        "Movies": 1,
+        "TV Shows": 2
+      },
+      "defaultTemplateId": null,
+      "posterCount": 9,
+      "uploadEnabled": true
+    }
+  },
+  "emby": {
+    "enabled": false,
+    "servers": [],
+    "schedule": {
+      "enabled": false,
+      "cronExpression": "0 0 * * *",
+      "runImmediately": false
+    },
+    "options": {
+      "excludeLibraries": [],
+      "templateMapping": {},
+      "defaultTemplateId": null,
+      "posterCount": 9,
+      "uploadEnabled": true
+    }
+  }
+}

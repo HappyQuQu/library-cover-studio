@@ -196,6 +196,29 @@
                   style="margin-top: 8px"
                 />
               </el-form-item>
+              <el-form-item label="占位符">
+                <el-select
+                  v-model="objectProperties.placeholder"
+                  @change="updateProperties"
+                  placeholder="选择占位参数"
+                  clearable
+                  class="full-width-select"
+                >
+                  <el-option label="无占位" :value="null" />
+                  <el-option
+                    v-for="i in 10"
+                    :key="i"
+                    :label="`{{poster${i}}}`"
+                    :value="`poster${i}`"
+                  />
+                </el-select>
+                <div style="margin-top: 4px">
+                  <el-text size="small" type="info">
+                    图片元素: 替换图片源<br />
+                    文字元素: 替换文本内容
+                  </el-text>
+                </div>
+              </el-form-item>
             </el-form>
           </el-collapse-item>
         </el-collapse>
@@ -279,7 +302,7 @@
             <template #title>
               <h4 class="collapse-title">图片属性</h4>
             </template>
-            <el-form label-width="60px" size="small" label-position="left">
+            <el-form label-width="70px" size="small" label-position="left">
               <el-form-item label="透明度">
                 <el-slider
                   v-model="objectProperties.opacity"
@@ -468,6 +491,7 @@ const objectProperties = ref({
   strokeWidth: 0,
   rx: 0,
   ry: 0,
+  placeholder: null as string | null, // 占位参数 poster1-poster10
   // Shadow - 默认启用
   shadowEnabled: true,
   shadowAngle: 45,
@@ -525,6 +549,7 @@ const updateObjectProps = (obj: any) => {
       strokeWidth: obj.strokeWidth ?? 0,
       rx: obj.rx ?? 0,
       ry: obj.ry ?? 0,
+      placeholder: obj.placeholder || null, // 占位参数
       // Shadow - 默认开启,即使对象没有阴影属性
       shadowEnabled: obj.shadow ? true : true, // 默认开启
       shadowAngle: (() => {
@@ -586,6 +611,7 @@ const updateObjectProps = (obj: any) => {
       strokeWidth: 0,
       rx: 0,
       ry: 0,
+      placeholder: null,
       shadowEnabled: true,
       shadowAngle: 45,
       shadowDistance: 10,

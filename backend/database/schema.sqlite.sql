@@ -33,6 +33,7 @@ CREATE TABLE
         type TEXT NOT NULL CHECK (type IN ('jellyfin', 'emby', 'plex')),
         base_url TEXT NOT NULL,
         api_key TEXT NOT NULL,
+        user_id TEXT, -- Jellyfin/Emby用户ID
         username TEXT,
         password TEXT,
         is_active INTEGER DEFAULT 1,
@@ -67,10 +68,13 @@ CREATE TABLE
     IF NOT EXISTS scheduled_tasks (
         id TEXT PRIMARY KEY DEFAULT (lower(hex (randomblob (16)))),
         name TEXT NOT NULL,
-        template_id TEXT REFERENCES templates (id) ON DELETE CASCADE,
-        media_library_id TEXT REFERENCES media_libraries (id) ON DELETE CASCADE,
+        media_source_id TEXT REFERENCES media_libraries (id) ON DELETE CASCADE, -- 关联的媒体源
+        library_template_mapping TEXT DEFAULT '{}', -- 媒体库ID到模板ID的映射 (JSON string)
+        exclude_libraries TEXT DEFAULT '[]', -- 要排除的媒体库ID列表 (JSON array)
         cron_expression TEXT NOT NULL, -- Cron 表达式
-        filters TEXT DEFAULT '{}', -- 过滤条件（如类型、年份等） (JSON string)
+        poster_count INTEGER DEFAULT 9, -- 每个媒体库下载的封面数量
+        upload_enabled INTEGER DEFAULT 1, -- 是否上传回媒体服务器 (0=false, 1=true)
+        sort_by TEXT DEFAULT 'DateCreated', -- 排序方式
         is_active INTEGER DEFAULT 1,
         last_run TEXT NULL,
         next_run TEXT NULL,
@@ -123,6 +127,8 @@ CREATE INDEX IF NOT EXISTS idx_poster_generations_created_at ON poster_generatio
 CREATE INDEX IF NOT EXISTS idx_poster_generations_status ON poster_generations (status);
 
 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_is_active ON scheduled_tasks (is_active);
+
+CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_media_source ON scheduled_tasks (media_source_id);
 
 CREATE INDEX IF NOT EXISTS idx_scheduled_tasks_next_run ON scheduled_tasks (next_run)
 WHERE

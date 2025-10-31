@@ -1,29 +1,26 @@
 const axios = require("axios");
-const { Pool } = require("pg");
+// const { Pool } = require("pg"); // 不需要PostgreSQL，使用SQLite
+const database = require("./database");
 
 class MediaLibraryService {
   constructor() {
-    this.pool = new Pool({
-      host: process.env.DB_HOST || "localhost",
-      port: process.env.DB_PORT || 5432,
-      database: process.env.DB_NAME || "library_cover_studio",
-      user: process.env.DB_USER || "postgres",
-      password: process.env.DB_PASSWORD || "password",
-    });
+    // 使用SQLite database服务
+    this.getDb = () => database.getDb();
   }
 
   // 获取媒体项目
   async getMediaItems(mediaLibraryId, filters = {}) {
     try {
       // 获取媒体库配置
-      const query = `SELECT * FROM media_libraries WHERE id = $1 AND is_active = true`;
-      const result = await this.pool.query(query, [mediaLibraryId]);
+      const db = this.getDb();
+      const mediaLib = await db.get(
+        `SELECT * FROM media_libraries WHERE id = ? AND is_active = 1`,
+        [mediaLibraryId]
+      );
 
-      if (result.rows.length === 0) {
+      if (!mediaLib) {
         throw new Error("媒体库不存在或未激活");
       }
-
-      const mediaLib = result.rows[0];
 
       // 根据类型获取媒体项目
       switch (mediaLib.type) {
@@ -163,14 +160,15 @@ class MediaLibraryService {
   async uploadPoster(mediaLibraryId, mediaItemId, posterUrl) {
     try {
       // 获取媒体库配置
-      const query = `SELECT * FROM media_libraries WHERE id = $1`;
-      const result = await this.pool.query(query, [mediaLibraryId]);
+      const db = this.getDb();
+      const mediaLib = await db.get(
+        `SELECT * FROM media_libraries WHERE id = ?`,
+        [mediaLibraryId]
+      );
 
-      if (result.rows.length === 0) {
+      if (!mediaLib) {
         throw new Error("媒体库不存在");
       }
-
-      const mediaLib = result.rows[0];
 
       // 根据类型上传海报
       switch (mediaLib.type) {
