@@ -4,8 +4,19 @@ const Joi = require("joi");
 const templateSchema = Joi.object({
   name: Joi.string().min(1).max(255).required(),
   description: Joi.string().max(1000).allow(""),
-  canvasData: Joi.object().required(),
-  tags: Joi.array().items(Joi.string()).optional(),
+  // canvasData 可以是对象（JSON格式）或字符串（FormData格式）
+  canvasData: Joi.alternatives().try(Joi.object(), Joi.string()).required(),
+  // tags 可以是数组（JSON格式）或字符串（FormData格式）
+  tags: Joi.alternatives()
+    .try(Joi.array().items(Joi.string()), Joi.string())
+    .optional(),
+  // matchTags 可以是数组（JSON格式）或字符串（FormData格式）
+  matchTags: Joi.alternatives()
+    .try(Joi.array().items(Joi.string()), Joi.string())
+    .optional(),
+  match_tags: Joi.alternatives()
+    .try(Joi.array().items(Joi.string()), Joi.string())
+    .optional(),
 });
 
 // 海报生成验证规则

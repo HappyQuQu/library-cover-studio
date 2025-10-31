@@ -19,7 +19,7 @@
             <el-button
               size="small"
               text
-              @click="router.push('/templates')"
+              @click="router.push('/app/templates')"
               style="margin-right: 12px"
             >
               <el-icon><ArrowLeft /></el-icon>
@@ -112,6 +112,30 @@
               style="width: 150px"
               @keyup.enter="addTag"
             />
+          </div>
+        </el-form-item>
+        <el-form-item label="匹配字符">
+          <div class="tags-input">
+            <el-tag
+              v-for="matchTag in templateInfo.matchTags"
+              :key="matchTag"
+              closable
+              @close="removeMatchTag(matchTag)"
+              type="success"
+              style="margin-right: 8px; margin-bottom: 8px"
+            >
+              {{ matchTag }}
+            </el-tag>
+            <el-input
+              v-model="newMatchTag"
+              size="small"
+              placeholder="输入匹配字符后按回车"
+              style="width: 150px"
+              @keyup.enter="addMatchTag"
+            />
+          </div>
+          <div style="color: #909399; font-size: 12px; margin-top: 4px">
+            用于自动匹配媒体库，支持模糊匹配（例如：电影、Movies）
           </div>
         </el-form-item>
       </el-form>
@@ -275,10 +299,12 @@ const templateInfo = ref({
   name: "",
   description: "",
   tags: [] as string[],
+  matchTags: [] as string[],
 });
 const isEditMode = ref(false);
 const showTemplateInfoDialog = ref(false);
 const newTag = ref("");
+const newMatchTag = ref("");
 
 // Canvas 配置
 const canvasRef = ref<HTMLCanvasElement>();
@@ -1453,6 +1479,21 @@ const removeTag = (tag: string) => {
   }
 };
 
+const addMatchTag = () => {
+  const matchTag = newMatchTag.value.trim();
+  if (matchTag && !templateInfo.value.matchTags.includes(matchTag)) {
+    templateInfo.value.matchTags.push(matchTag);
+    newMatchTag.value = "";
+  }
+};
+
+const removeMatchTag = (matchTag: string) => {
+  const index = templateInfo.value.matchTags.indexOf(matchTag);
+  if (index > -1) {
+    templateInfo.value.matchTags.splice(index, 1);
+  }
+};
+
 // 保存模板信息
 const saveTemplateInfo = () => {
   if (!templateInfo.value.name.trim()) {
@@ -1478,6 +1519,11 @@ const loadTemplateFromServer = async (id: string) => {
       ? typeof template.tags === "string"
         ? template.tags.split(",").filter(Boolean)
         : template.tags
+      : [];
+    templateInfo.value.matchTags = template.match_tags
+      ? typeof template.match_tags === "string"
+        ? JSON.parse(template.match_tags)
+        : template.match_tags
       : [];
 
     // 加载画布数据
@@ -1516,27 +1562,33 @@ const saveTemplate = async () => {
       multiplier: 0.5,
     });
 
-    const requestData = {
-      name: templateInfo.value.name,
-      description: templateInfo.value.description,
-      canvasData: canvasData,
-      tags: templateInfo.value.tags,
-    };
+    // 将预览图 DataURL 转换为 Blob
+    const previewBlob = await (await fetch(previewDataUrl)).blob();
+
+    // 使用 FormData 上传
+    const formData = new FormData();
+    formData.append("name", templateInfo.value.name);
+    formData.append("description", templateInfo.value.description || "");
+    formData.append("canvasData", JSON.stringify(canvasData));
+    formData.append("tags", JSON.stringify(templateInfo.value.tags || []));
+    formData.append(
+      "matchTags",
+      JSON.stringify(templateInfo.value.matchTags || [])
+    );
+    formData.append("preview", previewBlob, "preview.png");
 
     let response;
     if (templateId.value) {
       // 更新现有模板
       response = await fetch(API_ENDPOINTS.templates.byId(templateId.value), {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestData),
+        body: formData,
       });
     } else {
       // 创建新模板
       response = await fetch(API_ENDPOINTS.templates.base, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(requestData),
+        body: formData,
       });
     }
 

@@ -60,6 +60,10 @@ class JellyfinService {
               id: item.Id,
               name: item.Name,
               type: item.CollectionType || "unknown",
+              // 添加图片相关信息
+              primaryImageTag: item.ImageTags?.Primary || null,
+              backdropImageTags: item.BackdropImageTags || [],
+              imageBlurHashes: item.ImageBlurHashes || {},
             });
           } else if (excludeLibraries.includes(item.Name)) {
             console.log(`⏭️  已排除媒体库: ${item.Name}`);

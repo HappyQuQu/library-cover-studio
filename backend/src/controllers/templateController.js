@@ -69,15 +69,56 @@ class TemplateController {
   async createTemplate(req, res) {
     try {
       const db = database.getDb();
-      const { name, description, canvasData } = req.body;
+      const { name, description } = req.body;
+
+      // 解析 JSON 字段（FormData 会将它们作为字符串传递）
+      let canvasData = req.body.canvasData;
+      if (typeof canvasData === "string") {
+        try {
+          canvasData = JSON.parse(canvasData);
+        } catch (e) {
+          console.error("解析 canvasData 失败:", e);
+        }
+      }
+
+      let tags = req.body.tags;
+      if (typeof tags === "string") {
+        try {
+          tags = JSON.parse(tags);
+        } catch (e) {
+          console.error("解析 tags 失败:", e);
+          tags = [];
+        }
+      }
+
+      let matchTags = req.body.matchTags || req.body.match_tags;
+      if (typeof matchTags === "string") {
+        try {
+          matchTags = JSON.parse(matchTags);
+        } catch (e) {
+          console.error("解析 matchTags 失败:", e);
+          matchTags = [];
+        }
+      }
+      if (!matchTags) {
+        matchTags = [];
+      }
+
       const id = crypto.randomBytes(16).toString("hex");
       const previewUrl = req.file
         ? `/uploads/previews/${req.file.filename}`
         : null;
 
       await db.run(
-        "INSERT INTO templates (id, name, description, preview_url, canvas_data) VALUES (?, ?, ?, ?, ?)",
-        [id, name, description || null, previewUrl, JSON.stringify(canvasData)]
+        "INSERT INTO templates (id, name, description, preview_url, canvas_data, match_tags) VALUES (?, ?, ?, ?, ?, ?)",
+        [
+          id,
+          name,
+          description || null,
+          previewUrl,
+          JSON.stringify(canvasData),
+          JSON.stringify(matchTags),
+        ]
       );
 
       const newTemplate = await db.get("SELECT * FROM templates WHERE id = ?", [
@@ -94,7 +135,40 @@ class TemplateController {
     try {
       const db = database.getDb();
       const { id } = req.params;
-      const { name, description, canvasData } = req.body;
+      const { name, description } = req.body;
+
+      // 解析 JSON 字段（FormData 会将它们作为字符串传递）
+      let canvasData = req.body.canvasData;
+      if (typeof canvasData === "string") {
+        try {
+          canvasData = JSON.parse(canvasData);
+        } catch (e) {
+          console.error("解析 canvasData 失败:", e);
+        }
+      }
+
+      let tags = req.body.tags;
+      if (typeof tags === "string") {
+        try {
+          tags = JSON.parse(tags);
+        } catch (e) {
+          console.error("解析 tags 失败:", e);
+          tags = [];
+        }
+      }
+
+      let matchTags = req.body.matchTags || req.body.match_tags;
+      if (typeof matchTags === "string") {
+        try {
+          matchTags = JSON.parse(matchTags);
+        } catch (e) {
+          console.error("解析 matchTags 失败:", e);
+          matchTags = [];
+        }
+      }
+      if (!matchTags) {
+        matchTags = [];
+      }
 
       const existing = await db.get(
         "SELECT * FROM templates WHERE id = ? AND deleted_at IS NULL",
@@ -110,8 +184,16 @@ class TemplateController {
         : existing.preview_url;
 
       await db.run(
-        "UPDATE templates SET name = ?, description = ?, preview_url = ?, canvas_data = ? WHERE id = ?",
-        [name, description || null, previewUrl, JSON.stringify(canvasData), id]
+        "UPDATE templates SET name = ?, description = ?, preview_url = ?, canvas_data = ?, tags = ?, match_tags = ? WHERE id = ?",
+        [
+          name,
+          description || null,
+          previewUrl,
+          JSON.stringify(canvasData),
+          JSON.stringify(tags),
+          JSON.stringify(matchTags),
+          id,
+        ]
       );
 
       const updatedTemplate = await db.get(

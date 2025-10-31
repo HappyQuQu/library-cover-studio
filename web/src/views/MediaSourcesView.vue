@@ -8,7 +8,74 @@
       </el-button>
     </div>
 
-    <el-table :data="mediaSources" v-loading="loading" style="width: 100%">
+    <el-table
+      :data="mediaSources"
+      v-loading="loading"
+      style="width: 100%"
+      @expand-change="handleExpandChange"
+      :expand-row-keys="expandedRows"
+      row-key="id"
+    >
+      <el-table-column type="expand">
+        <template #default="{ row }">
+          <div class="libraries-expand">
+            <div class="libraries-header">
+              <h3>媒体库列表</h3>
+              <el-button
+                size="small"
+                @click="refreshLibraries(row)"
+                :loading="librariesLoading[row.id]"
+              >
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+            </div>
+
+            <div
+              v-if="librariesData[row.id] && librariesData[row.id].length > 0"
+              class="libraries-grid"
+            >
+              <div
+                v-for="lib in librariesData[row.id]"
+                :key="lib.id"
+                class="library-card"
+              >
+                <div class="library-cover">
+                  <img
+                    v-if="lib.coverUrl"
+                    :src="lib.coverUrl"
+                    :alt="lib.name"
+                    @error="handleImageError"
+                  />
+                  <div v-else class="no-cover">
+                    <el-icon><Picture /></el-icon>
+                    <span>暂无封面</span>
+                  </div>
+                </div>
+                <div class="library-info">
+                  <h4>{{ lib.name }}</h4>
+                  <div class="library-meta">
+                    <el-tag size="small">{{ lib.type }}</el-tag>
+                    <span class="library-count"
+                      >{{ lib.itemCount || 0 }} 项</span
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <el-empty
+              v-else-if="!librariesLoading[row.id]"
+              description="暂无媒体库数据"
+            />
+
+            <div v-if="librariesLoading[row.id]" class="libraries-loading">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              <span>加载中...</span>
+            </div>
+          </div>
+        </template>
+      </el-table-column>
       <el-table-column prop="name" label="名称" width="200" />
       <el-table-column prop="type" label="类型" width="120">
         <template #default="{ row }">
@@ -30,10 +97,9 @@
           {{ formatDate(row.last_sync) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="testConnection(row)">测试</el-button>
-          <el-button size="small" @click="viewLibraries(row)">媒体库</el-button>
           <el-button size="small" @click="editSource(row)">编辑</el-button>
           <el-button size="small" type="danger" @click="deleteSource(row)"
             >删除</el-button
@@ -100,37 +166,49 @@
         </el-button>
       </template>
     </el-dialog>
-
-    <!-- 媒体库列表对话框 -->
-    <el-dialog
-      v-model="librariesDialogVisible"
-      title="媒体库列表"
-      width="600px"
-    >
-      <el-table :data="libraries" v-loading="librariesLoading">
-        <el-table-column prop="name" label="名称" />
-        <el-table-column prop="type" label="类型" />
-        <el-table-column prop="id" label="ID" />
-      </el-table>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus } from "@element-plus/icons-vue";
+import { Plus, Refresh, Picture, Loading } from "@element-plus/icons-vue";
 import axios from "axios";
-import { API_ENDPOINTS } from "@/config/api";
+import { API_ENDPOINTS } from "../config/api";
+
+// 类型定义
+interface MediaSource {
+  id: string;
+  name: string;
+  type: string;
+  base_url: string;
+  api_key: string;
+  user_id?: string;
+  is_active: boolean;
+  last_sync?: string;
+}
+
+interface Library {
+  id: string;
+  name: string;
+  type: string;
+  itemCount?: number;
+  coverUrl?: string;
+}
 
 // 数据
 const loading = ref(false);
 const submitting = ref(false);
-const mediaSources = ref([]);
+const mediaSources = ref<MediaSource[]>([]);
 const dialogVisible = ref(false);
 const dialogTitle = ref("添加媒体源");
-const editingId = ref(null);
-const formRef = ref(null);
+const editingId = ref<string | null>(null);
+const formRef = ref<any>(null);
+
+// 展开行相关
+const expandedRows = ref<string[]>([]);
+const librariesData = ref<Record<string, Library[]>>({});
+const librariesLoading = ref<Record<string, boolean>>({});
 
 // 表单
 const form = reactive({
@@ -150,11 +228,6 @@ const rules = {
   apiKey: [{ required: true, message: "请输入API密钥", trigger: "blur" }],
 };
 
-// 媒体库列表
-const librariesDialogVisible = ref(false);
-const librariesLoading = ref(false);
-const libraries = ref([]);
-
 // 加载媒体源列表
 const loadSources = async () => {
   loading.value = true;
@@ -168,6 +241,62 @@ const loadSources = async () => {
   }
 };
 
+// 处理表格展开
+const handleExpandChange = (
+  row: MediaSource,
+  expandedRowsList: MediaSource[]
+) => {
+  if (expandedRowsList.find((r) => r.id === row.id)) {
+    // 展开了,加载媒体库数据
+    loadLibraries(row);
+  }
+};
+
+// 加载媒体库列表
+const loadLibraries = async (source: MediaSource) => {
+  librariesLoading.value[source.id] = true;
+  try {
+    const response = await axios.get(
+      API_ENDPOINTS.mediaSources.libraries(source.id)
+    );
+    const libs = response.data.data || response.data.libraries || [];
+
+    // 处理封面URL
+    librariesData.value[source.id] = libs.map((lib: any) => {
+      let coverUrl = null;
+      if (lib.primaryImageTag) {
+        // Jellyfin/Emby 封面 URL (需要 API Key)
+        coverUrl = `${source.base_url}/Items/${lib.id}/Images/Primary?tag=${lib.primaryImageTag}&maxWidth=400&api_key=${source.api_key}`;
+      }
+
+      return {
+        id: lib.id,
+        name: lib.name,
+        type: lib.type || lib.collectionType || "未知",
+        itemCount: lib.itemCount || lib.totalItemCount || 0,
+        coverUrl: coverUrl,
+      };
+    });
+  } catch (error: any) {
+    ElMessage.error("加载媒体库失败: " + error.message);
+    librariesData.value[source.id] = [];
+  } finally {
+    librariesLoading.value[source.id] = false;
+  }
+};
+
+// 刷新媒体库
+const refreshLibraries = async (source: MediaSource) => {
+  await loadLibraries(source);
+  ElMessage.success("刷新成功");
+};
+
+// 图片加载失败处理
+const handleImageError = (e: Event) => {
+  const target = e.target as HTMLImageElement;
+  target.style.display = "none";
+};
+
 // 显示添加对话框
 const showAddDialog = () => {
   dialogTitle.value = "添加媒体源";
@@ -177,7 +306,7 @@ const showAddDialog = () => {
 };
 
 // 编辑媒体源
-const editSource = async (row) => {
+const editSource = async (row: MediaSource) => {
   try {
     const response = await axios.get(API_ENDPOINTS.mediaSources.byId(row.id));
     const data = response.data.data;
@@ -191,7 +320,7 @@ const editSource = async (row) => {
     form.userId = data.user_id || "";
     form.isActive = data.is_active;
     dialogVisible.value = true;
-  } catch (error) {
+  } catch (error: any) {
     ElMessage.error("加载媒体源详情失败: " + error.message);
   }
 };
@@ -223,7 +352,7 @@ const submitForm = async () => {
 
     dialogVisible.value = false;
     loadSources();
-  } catch (error) {
+  } catch (error: any) {
     if (error.response) {
       ElMessage.error(error.response.data.message || "操作失败");
     } else if (error.message) {
@@ -237,7 +366,7 @@ const submitForm = async () => {
 };
 
 // 测试连接
-const testConnection = async (row) => {
+const testConnection = async (row: MediaSource) => {
   const loading = ElMessage.info({
     message: "正在测试连接...",
     duration: 0,
@@ -257,7 +386,7 @@ const testConnection = async (row) => {
         type: "success",
       }
     );
-  } catch (error) {
+  } catch (error: any) {
     loading.close();
     ElMessage.error(
       "连接失败: " + (error.response?.data?.message || error.message)
@@ -265,26 +394,8 @@ const testConnection = async (row) => {
   }
 };
 
-// 查看媒体库
-const viewLibraries = async (row) => {
-  librariesDialogVisible.value = true;
-  librariesLoading.value = true;
-  libraries.value = [];
-
-  try {
-    const response = await axios.get(
-      API_ENDPOINTS.mediaSources.libraries(row.id)
-    );
-    libraries.value = response.data.data || [];
-  } catch (error) {
-    ElMessage.error("加载媒体库失败: " + error.message);
-  } finally {
-    librariesLoading.value = false;
-  }
-};
-
 // 删除媒体源
-const deleteSource = async (row) => {
+const deleteSource = async (row: MediaSource) => {
   try {
     await ElMessageBox.confirm(
       `确定要删除媒体源 "${row.name}" 吗?`,
@@ -297,7 +408,7 @@ const deleteSource = async (row) => {
     await axios.delete(API_ENDPOINTS.mediaSources.byId(row.id));
     ElMessage.success("删除成功");
     loadSources();
-  } catch (error) {
+  } catch (error: any) {
     if (error !== "cancel") {
       ElMessage.error("删除失败: " + error.message);
     }
@@ -316,8 +427,8 @@ const resetForm = () => {
 };
 
 // 获取类型颜色
-const getTypeColor = (type) => {
-  const colors = {
+const getTypeColor = (type: string) => {
+  const colors: Record<string, string> = {
     jellyfin: "primary",
     emby: "success",
     plex: "warning",
@@ -326,7 +437,7 @@ const getTypeColor = (type) => {
 };
 
 // 格式化日期
-const formatDate = (date) => {
+const formatDate = (date: string) => {
   if (!date) return "-";
   return new Date(date).toLocaleString("zh-CN");
 };
@@ -353,5 +464,114 @@ onMounted(() => {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
+}
+
+/* 媒体库展开区域样式 */
+.libraries-expand {
+  padding: 20px;
+  background-color: #f5f7fa;
+}
+
+.libraries-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.libraries-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.libraries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.library-card {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+}
+
+.library-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.library-cover {
+  width: 100%;
+  aspect-ratio: 16 / 9; /* 横向比例，适合媒体库封面 */
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.library-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.no-cover {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: white;
+}
+
+.no-cover .el-icon {
+  font-size: 48px;
+}
+
+.library-info {
+  padding: 12px;
+}
+
+.library-info h4 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.library-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.library-count {
+  font-size: 12px;
+  color: #909399;
+}
+
+.libraries-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px;
+  color: #909399;
+}
+
+.libraries-loading .el-icon {
+  font-size: 24px;
 }
 </style>

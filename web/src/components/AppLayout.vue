@@ -14,19 +14,19 @@
             <el-icon><HomeFilled /></el-icon>
             <span>首页</span>
           </router-link>
-          <router-link to="/templates" class="nav-item">
+          <router-link to="/app/templates" class="nav-item">
             <el-icon><Document /></el-icon>
             <span>模板</span>
           </router-link>
-          <router-link to="/media-sources" class="nav-item">
+          <router-link to="/app/media-sources" class="nav-item">
             <el-icon><Connection /></el-icon>
             <span>媒体源</span>
           </router-link>
-          <router-link to="/scheduled-tasks" class="nav-item">
+          <router-link to="/app/scheduled-tasks" class="nav-item">
             <el-icon><Clock /></el-icon>
             <span>定时任务</span>
           </router-link>
-          <router-link to="/settings" class="nav-item">
+          <router-link to="/app/settings" class="nav-item">
             <el-icon><Setting /></el-icon>
             <span>设置</span>
           </router-link>
@@ -84,7 +84,7 @@ const authStore = useAuthStore();
 
 const handleCommand = async (command: string) => {
   if (command === "profile") {
-    router.push("/settings");
+    router.push("/app/settings");
   } else if (command === "logout") {
     try {
       await ElMessageBox.confirm("确定要退出登录吗?", "提示", {

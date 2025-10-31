@@ -26,7 +26,7 @@
           <el-card
             class="feature-card"
             shadow="hover"
-            @click="handleCardClick('/designer')"
+            @click="handleCardClick('/app/designer')"
           >
             <div class="card-icon">
               <el-icon size="48"><Edit /></el-icon>
@@ -46,7 +46,7 @@
           <el-card
             class="feature-card"
             shadow="hover"
-            @click="$router.push('/templates')"
+            @click="$router.push('/app/templates')"
           >
             <div class="card-icon">
               <el-icon size="48"><Document /></el-icon>
@@ -60,7 +60,7 @@
           <el-card
             class="feature-card"
             shadow="hover"
-            @click="$router.push('/schedule')"
+            @click="$router.push('/app/schedule')"
           >
             <div class="card-icon">
               <el-icon size="48"><Clock /></el-icon>

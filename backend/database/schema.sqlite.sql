@@ -19,6 +19,7 @@ CREATE TABLE
         preview_url TEXT,
         canvas_data TEXT NOT NULL, -- 存储 Fabric.js Canvas 数据 (JSON string)
         tags TEXT, -- 标签，逗号分隔
+        match_tags TEXT DEFAULT '[]', -- 匹配字符串数组，用于自动匹配媒体库 (JSON array)
         is_public INTEGER DEFAULT 0,
         created_at TEXT DEFAULT (datetime ('now')),
         updated_at TEXT DEFAULT (datetime ('now')),

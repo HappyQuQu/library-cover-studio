@@ -58,7 +58,7 @@
             <div class="template-preview">
               <img
                 v-if="template.preview_url"
-                :src="template.preview_url"
+                :src="getPreviewUrl(template.preview_url)"
                 :alt="template.name"
                 @error="handleImageError"
               />
@@ -76,15 +76,38 @@
 
               <div
                 class="template-tags"
-                v-if="template.tags && template.tags.length"
+                v-if="parseTags(template.tags).length > 0"
               >
                 <el-tag
-                  v-for="tag in template.tags"
+                  v-for="tag in parseTags(template.tags)"
                   :key="tag"
                   size="small"
                   type="info"
                 >
                   {{ tag }}
+                </el-tag>
+              </div>
+              <div
+                class="template-match-tags"
+                v-if="
+                  template.match_tags &&
+                  (Array.isArray(template.match_tags)
+                    ? template.match_tags.length
+                    : true)
+                "
+              >
+                <span style="font-size: 12px; color: #909399; margin-right: 4px"
+                  >匹配字符:</span
+                >
+                <el-tag
+                  v-for="mtag in parseMatchTags(template.match_tags)"
+                  :key="mtag"
+                  size="small"
+                  type="success"
+                  effect="dark"
+                  style="margin-right: 4px"
+                >
+                  {{ mtag }}
                 </el-tag>
               </div>
 
@@ -185,7 +208,7 @@ import {
   Delete,
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { API_ENDPOINTS } from "../config/api";
+import { API_ENDPOINTS, API_BASE_URL } from "../config/api";
 
 // 模板类型定义
 interface Template {
@@ -196,6 +219,37 @@ interface Template {
   tags?: string[];
   created_at: string;
   updated_at?: string;
+}
+
+// 解析 match_tags 字段（兼容字符串/数组）
+function parseMatchTags(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const arr = JSON.parse(val);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+// 解析 tags 字段（兼容字符串/数组）
+function parseTags(val: any): string[] {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") {
+    try {
+      const arr = JSON.parse(val);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      // 如果 JSON 解析失败，尝试按逗号分割
+      return val.split(",").filter(Boolean);
+    }
+  }
+  return [];
 }
 
 const router = useRouter();
@@ -228,7 +282,19 @@ const availableTags = computed(() => {
   const tags = new Set<string>();
   templates.value.forEach((template) => {
     if (template.tags) {
-      template.tags.forEach((tag) => tags.add(tag));
+      // 解析 tags（可能是字符串或数组）
+      let tagList: string[] = [];
+      if (typeof template.tags === "string") {
+        try {
+          tagList = JSON.parse(template.tags);
+        } catch {
+          // 如果解析失败，尝试按逗号分割
+          tagList = (template.tags as string).split(",").filter(Boolean);
+        }
+      } else if (Array.isArray(template.tags)) {
+        tagList = template.tags;
+      }
+      tagList.forEach((tag) => tags.add(tag));
     }
   });
   return Array.from(tags);
@@ -240,6 +306,19 @@ onMounted(() => {
 });
 
 // 方法
+// 构建预览图完整URL
+const getPreviewUrl = (previewUrl: string) => {
+  if (!previewUrl) return "";
+  // 如果已经是完整URL（http/https开头），直接返回
+  if (previewUrl.startsWith("http://") || previewUrl.startsWith("https://")) {
+    return previewUrl;
+  }
+  // 否则拼接API基础URL
+  // 开发环境下，由于使用了Vite代理，直接使用相对路径即可
+  // 生产环境下，需要拼接完整的API基础URL
+  return `${API_BASE_URL}${previewUrl}`;
+};
+
 const loadTemplates = async () => {
   try {
     loading.value = true;
@@ -298,12 +377,12 @@ const handleCurrentChange = () => {
 
 const selectTemplate = (template: Template) => {
   // 跳转到设计器并加载模板
-  router.push(`/designer?templateId=${template.id}`);
+  router.push(`/app/designer?templateId=${template.id}`);
 };
 
 const editTemplate = (template: Template) => {
   // 跳转到设计器编辑模式
-  router.push(`/designer?templateId=${template.id}&mode=edit`);
+  router.push(`/app/designer?templateId=${template.id}&mode=edit`);
 };
 
 const duplicateTemplate = async (template: Template) => {
@@ -369,7 +448,7 @@ const createTemplate = async () => {
     // await templateForm.value.validate()
 
     // 创建模板并跳转到设计器
-    router.push("/designer?mode=new");
+    router.push("/app/designer?mode=new");
     showCreateDialog.value = false;
   } catch (error) {
     ElMessage.error("创建模板失败");
@@ -497,6 +576,14 @@ const formatDate = (dateString: string) => {
 }
 
 .template-tags .el-tag {
+  margin-right: 5px;
+}
+
+.template-match-tags {
+  margin: 8px 0;
+}
+
+.template-match-tags .el-tag {
   margin-right: 5px;
 }
 
