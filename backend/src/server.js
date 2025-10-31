@@ -16,9 +16,12 @@ const mediaLibRoutes = require("./routes/mediaLibs");
 const scheduleRoutes = require("./routes/schedules");
 const mediaSourcesRoutes = require("./routes/mediaSources");
 const scheduledTasksRoutes = require("./routes/scheduledTasks");
+const logsRoutes = require("./routes/logs");
+const sysLogger = require("./services/logger").system;
 
 // 中间件导入
 const errorHandler = require("./middleware/errorHandler");
+const requestLogger = require("./middleware/requestLogger");
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,6 +37,9 @@ app.use(
 
 // 日志中间件
 app.use(morgan("combined"));
+
+// 请求日志中间件（记录到文件）
+app.use(requestLogger);
 
 // 解析JSON
 app.use(express.json({ limit: "50mb" }));
@@ -55,6 +61,7 @@ app.use("/api/media-libs", mediaLibRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/media-sources", mediaSourcesRoutes);
 app.use("/api/scheduled-tasks", scheduledTasksRoutes);
+app.use("/api/logs", logsRoutes);
 
 // 健康检查
 app.get("/health", (req, res) => {
@@ -79,27 +86,50 @@ app.use(errorHandler);
 // 初始化数据库并启动服务器
 const startServer = async () => {
   try {
+    await sysLogger.info('========================================');
+    await sysLogger.info('服务器启动中...', {
+      nodeVersion: process.version,
+      platform: process.platform,
+      pid: process.pid,
+      port: PORT,
+    });
+
     // 初始化数据库
+    await sysLogger.info('正在初始化数据库...');
     await database.initialize();
+    await sysLogger.info('数据库初始化成功');
 
     // 加载定时任务配置
+    await sysLogger.info('正在加载定时任务配置...');
     const { loadSchedulerConfig } = require("./config/loadScheduler");
-    await loadSchedulerConfig();
+    const taskCount = await loadSchedulerConfig();
+    await sysLogger.info(`定时任务配置加载完成，共 ${taskCount || 0} 个任务`);
 
     // 服务器启动
-    app.listen(PORT, () => {
-      console.log(`🚀 LibraryCoverStudio Backend running on port ${PORT}`);
-      console.log(`📊 Health check: http://localhost:${PORT}/health`);
-      console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
-      console.log(
-        `📅 Media Sources: http://localhost:${PORT}/api/media-sources`
-      );
-      console.log(
-        `⏰ Scheduled Tasks: http://localhost:${PORT}/api/scheduled-tasks`
-      );
+    app.listen(PORT, async () => {
+      const lines = [
+        `🚀 LibraryCoverStudio Backend running on port ${PORT}`,
+        `📊 Health check: http://localhost:${PORT}/health`,
+        `🔐 Auth endpoints: http://localhost:${PORT}/api/auth`,
+        `📅 Media Sources: http://localhost:${PORT}/api/media-sources`,
+        `⏰ Scheduled Tasks: http://localhost:${PORT}/api/scheduled-tasks`,
+        `🧾 Logs API: http://localhost:${PORT}/api/logs/{system|tasks}`,
+      ];
+      for (const l of lines) {
+        console.log(l);
+      }
+      await sysLogger.info('服务器启动成功', {
+        port: PORT,
+        env: process.env.NODE_ENV || 'development',
+        endpoints: ['/api/auth', '/api/templates', '/api/posters', '/api/media-sources', '/api/scheduled-tasks', '/api/logs'],
+      });
     });
   } catch (error) {
     console.error("❌ Failed to start server:", error);
+    await sysLogger.error(`服务器启动失败: ${error.message}`, {
+      error: error.message,
+      stack: error.stack,
+    });
     process.exit(1);
   }
 };
@@ -107,18 +137,40 @@ const startServer = async () => {
 // 优雅关闭
 process.on("SIGTERM", async () => {
   console.log("👋 SIGTERM received, shutting down gracefully");
+  await sysLogger.warn("收到 SIGTERM 信号，正在优雅关闭服务器...");
   const { getInstance: getScheduler } = require("./services/schedulerService");
   getScheduler().stopAll();
   await database.close();
+  await sysLogger.info("服务器已关闭");
   process.exit(0);
 });
 
 process.on("SIGINT", async () => {
   console.log("👋 SIGINT received, shutting down gracefully");
+  await sysLogger.warn("收到 SIGINT 信号，正在优雅关闭服务器...");
   const { getInstance: getScheduler } = require("./services/schedulerService");
   getScheduler().stopAll();
   await database.close();
+  await sysLogger.info("服务器已关闭");
   process.exit(0);
+});
+
+// 未捕获异常处理
+process.on('uncaughtException', async (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  await sysLogger.error('未捕获的异常', {
+    error: error.message,
+    stack: error.stack,
+  });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', async (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  await sysLogger.error('未处理的 Promise 拒绝', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
 });
 
 // 启动服务器

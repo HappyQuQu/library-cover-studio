@@ -3,20 +3,20 @@
     <div class="welcome-section">
       <div class="welcome-header">
         <h1>
-          欢迎回来,
-          {{ authStore.isAuthenticated ? authStore.username : "游客" }}! 👋
+          {{ t('home.welcomeBack') }},
+          {{ authStore.isAuthenticated ? authStore.username : t('home.guest') }}! 👋
         </h1>
         <p v-if="authStore.isAuthenticated" class="welcome-subtitle">
-          开始使用 Library Cover Studio 创建精美的媒体库海报
+          {{ t('home.subtitle') }}
         </p>
         <div v-else class="login-prompt">
-          <p>登录后即可使用完整功能</p>
+          <p>{{ t('home.loginPrompt') }}</p>
           <el-button
             type="primary"
             size="large"
             @click="$router.push('/login')"
           >
-            立即登录
+            {{ t('home.loginNow') }}
           </el-button>
         </div>
       </div>
@@ -31,13 +31,13 @@
             <div class="card-icon">
               <el-icon size="48"><Edit /></el-icon>
             </div>
-            <h3>海报设计器</h3>
-            <p>使用强大的可视化编辑器设计自定义海报</p>
+            <h3>{{ t('home.posterDesigner') }}</h3>
+            <p>{{ t('home.posterDesignerDesc') }}</p>
             <el-tag
               v-if="!authStore.isAuthenticated"
               type="warning"
               size="small"
-              >需要登录</el-tag
+              >{{ t('home.loginRequired') }}</el-tag
             >
           </el-card>
         </el-col>
@@ -51,8 +51,8 @@
             <div class="card-icon">
               <el-icon size="48"><Document /></el-icon>
             </div>
-            <h3>模板管理</h3>
-            <p>管理和使用预制模板，快速创建海报</p>
+            <h3>{{ t('home.templateManagement') }}</h3>
+            <p>{{ t('home.templateManagementDesc') }}</p>
           </el-card>
         </el-col>
 
@@ -65,13 +65,13 @@
             <div class="card-icon">
               <el-icon size="48"><Clock /></el-icon>
             </div>
-            <h3>定时任务管理</h3>
-            <p>定时生成、自动化任务调度</p>
+            <h3>{{ t('home.scheduledTasks') }}</h3>
+            <p>{{ t('home.scheduledTasksDesc') }}</p>
             <el-tag
               v-if="!authStore.isAuthenticated"
               type="warning"
               size="small"
-              >需要登录</el-tag
+              >{{ t('home.loginRequired') }}</el-tag
             >
           </el-card>
         </el-col>
@@ -79,24 +79,24 @@
 
       <div v-if="authStore.isAuthenticated" class="quick-stats">
         <el-card>
-          <h3>快速统计</h3>
+          <h3>{{ t('home.quickStats') }}</h3>
           <el-row :gutter="20">
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-value">0</div>
-                <div class="stat-label">模板数量</div>
+                <div class="stat-label">{{ t('home.templateCount') }}</div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-value">0</div>
-                <div class="stat-label">已生成海报</div>
+                <div class="stat-label">{{ t('home.generatedPosters') }}</div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
                 <div class="stat-value">0</div>
-                <div class="stat-label">定时任务</div>
+                <div class="stat-label">{{ t('home.scheduledTasksCount') }}</div>
               </div>
             </el-col>
           </el-row>
@@ -111,16 +111,18 @@ import { useRouter } from "vue-router";
 import { Edit, Document, Setting, Clock } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { useLocale } from "../composables/useLocale";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { t } = useLocale();
 
 const handleCardClick = (path: string) => {
   const routeConfig = router.getRoutes().find((route) => route.path === path);
   const requiresAuth = routeConfig?.meta?.requiresAuth;
 
   if (requiresAuth && !authStore.isAuthenticated) {
-    ElMessage.warning("请先登录后使用该功能");
+    ElMessage.warning(t('home.loginRequired'));
     router.push("/login");
     return;
   }

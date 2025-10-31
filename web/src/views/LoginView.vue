@@ -3,7 +3,7 @@
     <div class="login-box">
       <div class="login-header">
         <h1>LibraryCoverStudio</h1>
-        <p>图书馆封面工作室</p>
+        <p>{{ t('login.subtitle') }}</p>
       </div>
 
       <el-form
@@ -16,7 +16,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="loginForm.username"
-            placeholder="用户名"
+            :placeholder="t('login.usernamePlaceholder')"
             prefix-icon="User"
             size="large"
             clearable
@@ -27,7 +27,7 @@
           <el-input
             v-model="loginForm.password"
             type="password"
-            placeholder="密码"
+            :placeholder="t('login.passwordPlaceholder')"
             prefix-icon="Lock"
             size="large"
             show-password
@@ -43,14 +43,14 @@
             class="login-button"
             @click="handleLogin"
           >
-            {{ authStore.loading ? "登录中..." : "登录" }}
+            {{ authStore.loading ? t('login.loggingIn') : t('login.login') }}
           </el-button>
         </el-form-item>
       </el-form>
 
       <div class="login-footer">
-        <p>默认账户: admin / admin123</p>
-        <p class="tip">⚠️ 首次登录后请修改密码</p>
+        <p>{{ t('login.defaultAccount') }}</p>
+        <p class="tip">{{ t('login.changePasswordTip') }}</p>
       </div>
     </div>
   </div>
@@ -61,9 +61,11 @@ import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { ElMessage, type FormInstance, type FormRules } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { useLocale } from "../composables/useLocale";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { t } = useLocale();
 
 const loginFormRef = ref<FormInstance>();
 const loginForm = reactive({
@@ -73,17 +75,17 @@ const loginForm = reactive({
 
 const rules: FormRules = {
   username: [
-    { required: true, message: "请输入用户名", trigger: "blur" },
+    { required: true, message: () => t('login.usernameRequired'), trigger: "blur" },
     {
       min: 3,
       max: 20,
-      message: "用户名长度在 3 到 20 个字符",
+      message: () => t('login.usernameLength'),
       trigger: "blur",
     },
   ],
   password: [
-    { required: true, message: "请输入密码", trigger: "blur" },
-    { min: 6, message: "密码长度至少 6 个字符", trigger: "blur" },
+    { required: true, message: () => t('login.passwordRequired'), trigger: "blur" },
+    { min: 6, message: () => t('login.passwordLength'), trigger: "blur" },
   ],
 };
 
@@ -98,10 +100,10 @@ const handleLogin = async () => {
       );
 
       if (result.success) {
-        ElMessage.success("登录成功！");
+        ElMessage.success(t('login.loginSuccess'));
         router.push("/");
       } else {
-        ElMessage.error(result.message || "登录失败");
+        ElMessage.error(result.message || t('login.loginFailed'));
       }
     }
   });

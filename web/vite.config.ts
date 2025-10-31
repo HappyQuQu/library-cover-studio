@@ -14,7 +14,11 @@ export default defineConfig({
       dts: true,
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [
+        ElementPlusResolver({
+          importStyle: false, // 禁用样式按需导入，因为已在 main.ts 中完整导入
+        }),
+      ],
       dts: true,
     }),
   ],
@@ -22,6 +26,19 @@ export default defineConfig({
     alias: {
       "@": resolve(__dirname, "src"),
     },
+  },
+  optimizeDeps: {
+    include: [
+      'vue',
+      'vue-router',
+      'pinia',
+      'axios',
+      'element-plus',
+      '@element-plus/icons-vue',
+      'vue-i18n',
+      '@vueuse/core',
+      'fabric',
+    ],
   },
   server: {
     port: 3000,

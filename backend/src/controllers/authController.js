@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const database = require("../services/database");
 const { generateToken } = require("../middleware/auth");
+const logger = require("../services/logger").system;
 
 /**
  * 用户登录
@@ -11,6 +12,7 @@ const login = async (req, res, next) => {
 
     // 验证输入
     if (!username || !password) {
+      await logger.warn('登录失败：缺少用户名或密码', { username });
       return res.status(400).json({
         error: "Bad Request",
         message: "Username and password are required",
@@ -25,6 +27,7 @@ const login = async (req, res, next) => {
     ]);
 
     if (!user) {
+      await logger.warn('登录失败：用户不存在', { username });
       return res.status(401).json({
         error: "Unauthorized",
         message: "Invalid username or password",
@@ -35,6 +38,7 @@ const login = async (req, res, next) => {
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
+      await logger.warn('登录失败：密码错误', { username });
       return res.status(401).json({
         error: "Unauthorized",
         message: "Invalid username or password",
@@ -43,6 +47,12 @@ const login = async (req, res, next) => {
 
     // 生成token
     const token = generateToken(user.id, user.username);
+
+    await logger.info('用户登录成功', {
+      userId: user.id,
+      username: user.username,
+      ip: req.ip || req.connection.remoteAddress,
+    });
 
     res.json({
       success: true,
@@ -56,6 +66,10 @@ const login = async (req, res, next) => {
       },
     });
   } catch (error) {
+    await logger.error('登录异常', {
+      error: error.message,
+      stack: error.stack,
+    });
     next(error);
   }
 };

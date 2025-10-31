@@ -737,18 +737,18 @@ const updatePatternTransform = () => {
 .property-section {
   margin-bottom: 12px;
   padding: 16px;
-  background: #fff;
+  background: var(--bg-primary);
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .property-section h4 {
   margin: 0 0 12px 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
   padding-bottom: 8px;
-  border-bottom: 1px solid #e9ecef;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .action-buttons {
@@ -760,28 +760,28 @@ const updatePatternTransform = () => {
 .property-collapse {
   margin-bottom: 12px;
   border: none;
-  background: #fff;
+  background: var(--bg-primary);
   border-radius: 8px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .collapse-title {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
   font-weight: 600;
 }
 
 :deep(.el-collapse-item__header) {
   padding: 12px 16px;
-  background: #fff;
+  background: var(--bg-primary);
   border: none;
   font-weight: 600;
 }
 
 :deep(.el-collapse-item__wrap) {
   border: none;
-  background: #fff;
+  background: var(--bg-primary);
 }
 
 :deep(.el-collapse-item__content) {

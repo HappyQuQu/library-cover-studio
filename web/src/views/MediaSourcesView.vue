@@ -469,7 +469,7 @@ onMounted(() => {
 /* 媒体库展开区域样式 */
 .libraries-expand {
   padding: 20px;
-  background-color: #f5f7fa;
+  background-color: var(--bg-secondary);
 }
 
 .libraries-header {
@@ -483,7 +483,7 @@ onMounted(() => {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #303133;
+  color: var(--text-primary);
 }
 
 .libraries-grid {
@@ -493,7 +493,7 @@ onMounted(() => {
 }
 
 .library-card {
-  background: white;
+  background: var(--bg-primary);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);

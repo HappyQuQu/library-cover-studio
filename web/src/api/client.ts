@@ -1,4 +1,5 @@
 import axios from "axios";
+import router from "../router";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -36,7 +37,8 @@ apiClient.interceptors.response.use(
       // Token 过期或无效，清除本地存储并跳转到登录页
       localStorage.removeItem("token");
       localStorage.removeItem("user");
-      window.location.href = "/login";
+      // 使用 router.push 而不是 window.location.href，避免整个页面刷新
+      router.push("/login");
     }
     return Promise.reject(error);
   }

@@ -174,7 +174,7 @@
       <div v-if="patternEditorState.fillMode === 'pattern'">
         <!-- 图片选择器 -->
         <div style="margin-bottom: 12px">
-          <div style="color: #666; font-size: 12px; margin-bottom: 8px">
+          <div class="dialog-label">
             选择图案：
           </div>
           <div
@@ -213,7 +213,7 @@
             </div>
           </div>
         </div>
-        <div style="color: #666; font-size: 12px; margin-bottom: 8px">
+        <div class="dialog-label">
           提示：按住拖动可移动图案，滚轮缩放可放大/缩小；确认后将使用原图渲染，确保清晰度。
         </div>
         <div
@@ -1695,7 +1695,7 @@ const handlePropertiesAction = (action: string) => {
 <style scoped>
 .poster-designer {
   height: 100vh;
-  background: linear-gradient(135deg, #e0e7ff 0%, #f8fafc 100%);
+  background: var(--bg-secondary);
   display: flex;
   flex-direction: column;
 }
@@ -1707,8 +1707,8 @@ const handlePropertiesAction = (action: string) => {
 }
 
 .tools-panel {
-  background: #f8f9fa;
-  border-right: 1px solid #e9ecef;
+  background: var(--bg-tertiary);
+  border-right: 1px solid var(--border-color);
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
   padding: 0;
   min-width: 300px;
@@ -1731,8 +1731,8 @@ const handlePropertiesAction = (action: string) => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: #fff;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   flex-shrink: 0;
 }
@@ -1743,14 +1743,21 @@ const handlePropertiesAction = (action: string) => {
 }
 
 .toolbar-title {
-  font-size: 16px;
+  margin: 0;
+  font-size: 18px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .toolbar-actions {
   display: flex;
   gap: 8px;
+}
+
+.dialog-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 .canvas-content {
@@ -1762,7 +1769,7 @@ const handlePropertiesAction = (action: string) => {
 }
 
 .canvas-wrapper {
-  background: #fff;
+  background: var(--bg-primary);
   border-radius: 16px;
   box-shadow:
     0 8px 32px rgba(102, 126, 234, 0.08),
@@ -1778,8 +1785,8 @@ const handlePropertiesAction = (action: string) => {
 }
 
 .properties-panel {
-  background: #f8f9fa;
-  border-left: 1px solid #e9ecef;
+  background: var(--bg-tertiary);
+  border-left: 1px solid var(--border-color);
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.04);
   min-width: 280px;
   max-width: 320px;
@@ -1819,7 +1826,7 @@ const handlePropertiesAction = (action: string) => {
 }
 .pattern-editor-viewport {
   border: 1px dashed #999;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   margin-top: 8px;
   user-select: none;
   overflow: hidden;

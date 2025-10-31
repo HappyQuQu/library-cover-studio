@@ -8,7 +8,7 @@
     "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"pnpm run dev:web\" \"pnpm run dev:backend\"",
+    "dev": "pnpm -r --parallel --filter ./web --filter ./backend dev",
     "build": "pnpm run --recursive build",
     "start": "pnpm run --recursive start",
     "clean": "pnpm run --recursive clean && rm -rf node_modules",
@@ -22,8 +22,7 @@
     "start:backend": "cd backend && pnpm start"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "concurrently": "^8.2.0"
+    "@types/node": "^20.0.0"
   },
   "engines": {
     "node": ">=16.0.0",

@@ -40,7 +40,7 @@
               </el-select>
             </div>
             <div style="margin-bottom: 8px; width: 100%">
-              <span style="font-size: 12px; color: #666">渐变比例</span>
+              <span class="label-text">渐变比例</span>
               <el-slider
                 v-model="gradientRatio"
                 :min="0"
@@ -77,7 +77,7 @@
               </el-select>
             </div>
             <div style="margin-bottom: 8px; width: 100%">
-              <span style="font-size: 12px; color: #666">渐变比例</span>
+              <span class="label-text">渐变比例</span>
               <el-slider
                 v-model="gradientRatio"
                 :min="0"
@@ -291,8 +291,8 @@ const exportPoster = () => {
 .toolbar-section {
   margin-bottom: 24px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #e9ecef;
-  background: #fff;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.04);
   padding: 16px;
@@ -304,9 +304,14 @@ const exportPoster = () => {
 
 .toolbar-section h4 {
   margin: 0 0 12px 0;
-  color: #333;
+  color: var(--text-primary);
   font-size: 15px;
   font-weight: 600;
+}
+
+.label-text {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 
 .background-controls {

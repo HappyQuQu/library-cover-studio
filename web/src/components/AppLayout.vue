@@ -12,27 +12,58 @@
         <div class="header-nav">
           <router-link to="/" class="nav-item">
             <el-icon><HomeFilled /></el-icon>
-            <span>首页</span>
+            <span>{{ t('nav.home') }}</span>
           </router-link>
           <router-link to="/app/templates" class="nav-item">
             <el-icon><Document /></el-icon>
-            <span>模板</span>
+            <span>{{ t('nav.templates') }}</span>
           </router-link>
           <router-link to="/app/media-sources" class="nav-item">
             <el-icon><Connection /></el-icon>
-            <span>媒体源</span>
+            <span>{{ t('nav.mediaSources') }}</span>
           </router-link>
           <router-link to="/app/scheduled-tasks" class="nav-item">
             <el-icon><Clock /></el-icon>
-            <span>定时任务</span>
+            <span>{{ t('nav.scheduledTasks') }}</span>
+          </router-link>
+          <router-link to="/app/logs" class="nav-item">
+            <el-icon><Document /></el-icon>
+            <span>{{ t('nav.logs') }}</span>
           </router-link>
           <router-link to="/app/settings" class="nav-item">
             <el-icon><Setting /></el-icon>
-            <span>设置</span>
+            <span>{{ t('nav.settings') }}</span>
           </router-link>
         </div>
 
         <div class="header-right">
+          <!-- 主题切换 -->
+          <el-tooltip :content="isDark ? t('theme.light') : t('theme.dark')">
+            <el-button
+              circle
+              @click="toggleDark()"
+              class="theme-toggle"
+              size="small"
+            >
+              <el-icon>
+                <Moon v-if="!isDark" />
+                <Sunny v-else />
+              </el-icon>
+            </el-button>
+          </el-tooltip>
+
+          <!-- 语言切换 -->
+          <el-tooltip :content="t('language.toggle')">
+            <el-button
+              circle
+              @click="toggleLocale"
+              class="lang-toggle"
+              size="small"
+            >
+              {{ locale === 'zh-CN' ? 'EN' : '中' }}
+            </el-button>
+          </el-tooltip>
+
           <el-dropdown @command="handleCommand">
             <div class="user-dropdown">
               <el-icon><User /></el-icon>
@@ -43,11 +74,11 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">
                   <el-icon><User /></el-icon>
-                  <span>账户设置</span>
+                  <span>{{ t('user.profile') }}</span>
                 </el-dropdown-item>
                 <el-dropdown-item divided command="logout">
                   <el-icon><SwitchButton /></el-icon>
-                  <span>退出登录</span>
+                  <span>{{ t('user.logout') }}</span>
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -75,26 +106,31 @@ import {
   SwitchButton,
   Connection,
   Clock,
+  Moon,
+  Sunny,
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAuthStore } from "../stores/auth";
+import { isDark, toggleDark } from "../composables/useDarkMode";
+import { useLocale } from "../composables/useLocale";
 
 const router = useRouter();
 const authStore = useAuthStore();
+const { locale, t, toggleLocale } = useLocale();
 
 const handleCommand = async (command: string) => {
   if (command === "profile") {
     router.push("/app/settings");
   } else if (command === "logout") {
     try {
-      await ElMessageBox.confirm("确定要退出登录吗?", "提示", {
-        confirmButtonText: "确定",
-        cancelButtonText: "取消",
+      await ElMessageBox.confirm(t('user.logoutConfirm'), t('common.confirm'), {
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel'),
         type: "warning",
       });
 
       await authStore.logout();
-      ElMessage.success("已退出登录");
+      ElMessage.success(t('user.logout'));
       router.push("/login");
     } catch (error) {
       // 用户取消操作
@@ -165,6 +201,21 @@ const handleCommand = async (command: string) => {
 .header-right {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.theme-toggle,
+.lang-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  font-weight: bold;
+}
+
+.theme-toggle:hover,
+.lang-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
 }
 
 .user-dropdown {
@@ -186,7 +237,7 @@ const handleCommand = async (command: string) => {
   height: calc(100vh - 60px);
   overflow-y: auto;
   padding: 0;
-  background: #f5f7fa;
+  background: var(--el-bg-color);
 }
 
 :deep(.el-dropdown-menu__item) {

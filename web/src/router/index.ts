@@ -54,6 +54,12 @@ const routes = [
         component: () => import("../views/ScheduledTasksView.vue"),
         meta: { requiresAuth: true },
       },
+      {
+        path: "/app/logs",
+        name: "Logs",
+        component: () => import("../views/LogsView.vue"),
+        meta: { requiresAuth: true },
+      },
     ],
   },
 ];

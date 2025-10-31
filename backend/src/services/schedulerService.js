@@ -1,5 +1,6 @@
 const cron = require("node-cron");
 const WorkflowService = require("./workflowService");
+const taskLogger = require("./logger").tasks;
 
 /**
  * 调度服务
@@ -22,15 +23,20 @@ class SchedulerService {
   addTask(taskId, cronExpression, serverConfigs, options = {}) {
     if (this.tasks.has(taskId)) {
       console.log(`⚠️  任务 ${taskId} 已存在，将先停止旧任务`);
+      taskLogger.warn(`任务 ${taskId} 已存在，将先停止旧任务`);
       this.stopTask(taskId);
     }
 
     const { runImmediately = false } = options;
 
-    console.log(`\n📅 添加定时任务: ${taskId}`);
-    console.log(`   Cron表达式: ${cronExpression}`);
-    console.log(`   服务器数量: ${serverConfigs.length}`);
-    console.log(`   立即执行: ${runImmediately ? "是" : "否"}\n`);
+  console.log(`\n📅 添加定时任务: ${taskId}`);
+  taskLogger.info(`添加定时任务: ${taskId}`);
+  console.log(`   Cron表达式: ${cronExpression}`);
+  taskLogger.info(`Cron表达式: ${cronExpression}`);
+  console.log(`   服务器数量: ${serverConfigs.length}`);
+  taskLogger.info(`服务器数量: ${serverConfigs.length}`);
+  console.log(`   立即执行: ${runImmediately ? "是" : "否"}\n`);
+  taskLogger.info(`立即执行: ${runImmediately ? "是" : "否"}`);
 
     // 验证cron表达式
     if (!cron.validate(cronExpression)) {
@@ -64,6 +70,7 @@ class SchedulerService {
     // 立即执行一次
     if (runImmediately) {
       console.log(`🚀 立即执行任务: ${taskId}\n`);
+      taskLogger.info(`立即执行任务: ${taskId}`);
       this.executeTask(taskId, serverConfigs, options);
     }
 
@@ -80,14 +87,16 @@ class SchedulerService {
     const taskInfo = this.tasks.get(taskId);
     if (!taskInfo) {
       console.error(`❌ 任务不存在: ${taskId}`);
+      taskLogger.error(`任务不存在: ${taskId}`);
       return;
     }
 
     const startTime = new Date();
-    console.log(`\n${"=".repeat(80)}`);
-    console.log(`⏰ 执行定时任务: ${taskId}`);
-    console.log(`   开始时间: ${startTime.toLocaleString("zh-CN")}`);
-    console.log(`${"=".repeat(80)}\n`);
+  console.log(`\n${"=".repeat(80)}`);
+  console.log(`⏰ 执行定时任务: ${taskId}`);
+  console.log(`   开始时间: ${startTime.toLocaleString("zh-CN")}`);
+  console.log(`${"=".repeat(80)}\n`);
+  taskLogger.info(`执行定时任务: ${taskId} 开始时间: ${startTime.toLocaleString("zh-CN")}`);
 
     try {
       taskInfo.status = "running";
@@ -101,11 +110,12 @@ class SchedulerService {
       const endTime = new Date();
       const duration = ((endTime - startTime) / 1000).toFixed(2);
 
-      console.log(`\n${"=".repeat(80)}`);
-      console.log(`✅ 任务执行完成: ${taskId}`);
-      console.log(`   结束时间: ${endTime.toLocaleString("zh-CN")}`);
-      console.log(`   执行时长: ${duration}秒`);
-      console.log(`${"=".repeat(80)}\n`);
+  console.log(`\n${"=".repeat(80)}`);
+  console.log(`✅ 任务执行完成: ${taskId}`);
+  console.log(`   结束时间: ${endTime.toLocaleString("zh-CN")}`);
+  console.log(`   执行时长: ${duration}秒`);
+  console.log(`${"=".repeat(80)}\n`);
+  taskLogger.info(`任务执行完成: ${taskId} 结束时间: ${endTime.toLocaleString("zh-CN")} 耗时: ${duration}s`);
 
       taskInfo.status = "success";
       taskInfo.lastResults = results;
@@ -113,6 +123,7 @@ class SchedulerService {
       return results;
     } catch (error) {
       console.error(`\n❌ 任务执行失败: ${taskId}`, error);
+      taskLogger.error(`任务执行失败: ${taskId} ${error.message || error}`);
       taskInfo.status = "failed";
       taskInfo.lastError = error.message;
     }
@@ -130,12 +141,14 @@ class SchedulerService {
 
     if (taskInfo.status === "running") {
       console.log(`⚠️  任务 ${taskId} 正在运行中`);
+      taskLogger.warn(`任务 ${taskId} 正在运行中`);
       return;
     }
 
     taskInfo.task.start();
     taskInfo.status = "running";
-    console.log(`▶️  任务已启动: ${taskId}`);
+  console.log(`▶️  任务已启动: ${taskId}`);
+  taskLogger.info(`任务已启动: ${taskId}`);
   }
 
   /**
@@ -150,7 +163,8 @@ class SchedulerService {
 
     taskInfo.task.stop();
     taskInfo.status = "stopped";
-    console.log(`⏸️  任务已停止: ${taskId}`);
+  console.log(`⏸️  任务已停止: ${taskId}`);
+  taskLogger.info(`任务已停止: ${taskId}`);
   }
 
   /**
@@ -165,7 +179,8 @@ class SchedulerService {
 
     taskInfo.task.stop();
     this.tasks.delete(taskId);
-    console.log(`🗑️  任务已删除: ${taskId}`);
+  console.log(`🗑️  任务已删除: ${taskId}`);
+  taskLogger.info(`任务已删除: ${taskId}`);
   }
 
   /**
@@ -212,7 +227,8 @@ class SchedulerService {
       throw new Error(`任务不存在: ${taskId}`);
     }
 
-    console.log(`🔧 手动触发任务: ${taskId}`);
+  console.log(`🔧 手动触发任务: ${taskId}`);
+  taskLogger.info(`手动触发任务: ${taskId}`);
     return await this.executeTask(
       taskId,
       taskInfo.serverConfigs,
@@ -224,26 +240,31 @@ class SchedulerService {
    * 停止所有任务
    */
   stopAll() {
-    console.log(`\n⏸️  停止所有定时任务...`);
+  console.log(`\n⏸️  停止所有定时任务...`);
+  taskLogger.warn(`停止所有定时任务...`);
     for (const [taskId] of this.tasks) {
       this.stopTask(taskId);
     }
-    console.log(`✅ 所有任务已停止\n`);
+  console.log(`✅ 所有任务已停止\n`);
+  taskLogger.info(`所有任务已停止`);
   }
 
   /**
    * 启动所有任务
    */
   startAll() {
-    console.log(`\n▶️  启动所有定时任务...`);
+  console.log(`\n▶️  启动所有定时任务...`);
+  taskLogger.info(`启动所有定时任务...`);
     for (const [taskId] of this.tasks) {
       try {
         this.startTask(taskId);
       } catch (error) {
-        console.error(`❌ 启动任务失败 ${taskId}:`, error.message);
+  console.error(`❌ 启动任务失败 ${taskId}:`, error.message);
+  taskLogger.error(`启动任务失败 ${taskId}: ${error.message}`);
       }
     }
-    console.log(`✅ 所有任务已启动\n`);
+  console.log(`✅ 所有任务已启动\n`);
+  taskLogger.info(`所有任务已启动`);
   }
 }
 

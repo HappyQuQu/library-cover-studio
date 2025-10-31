@@ -1,5 +1,5 @@
 const sharp = require("sharp");
-const { createCanvas, loadImage, registerFont } = require("canvas");
+const { createCanvas, loadImage, GlobalFonts } = require("@napi-rs/canvas");
 const path = require("path");
 const fs = require("fs").promises;
 const database = require("./database");
@@ -20,7 +20,8 @@ class PosterGenerator {
   async initFonts() {
     try {
       // 这里可以注册系统字体或自定义字体
-      // registerFont(path.join(__dirname, '../fonts/arial.ttf'), { family: 'Arial' });
+      // @napi-rs/canvas 使用 GlobalFonts.registerFromPath()
+      // GlobalFonts.registerFromPath(path.join(__dirname, '../fonts/arial.ttf'), 'Arial');
     } catch (error) {
       console.warn("字体初始化失败:", error.message);
     }

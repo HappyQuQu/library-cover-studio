@@ -486,8 +486,8 @@ const formatDate = (dateString: string) => {
 }
 
 .page-header {
-  background: white;
-  border-bottom: 1px solid #e9ecef;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
 }
@@ -501,7 +501,7 @@ const formatDate = (dateString: string) => {
 
 .header-content h2 {
   margin: 0;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .search-bar {
@@ -516,7 +516,7 @@ const formatDate = (dateString: string) => {
 }
 
 .template-card {
-  background: white;
+  background: var(--bg-primary);
   border-radius: 12px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   cursor: pointer;
@@ -532,7 +532,7 @@ const formatDate = (dateString: string) => {
 
 .template-preview {
   height: 200px;
-  background: #f5f5f5;
+  background: var(--bg-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -547,7 +547,7 @@ const formatDate = (dateString: string) => {
 
 .no-preview {
   text-align: center;
-  color: #999;
+  color: var(--text-tertiary);
 }
 
 .template-info {
@@ -557,16 +557,17 @@ const formatDate = (dateString: string) => {
 .template-info h3 {
   margin: 0 0 8px 0;
   font-size: 16px;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .description {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.4;
   margin: 0 0 12px 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -589,7 +590,7 @@ const formatDate = (dateString: string) => {
 
 .template-meta {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   margin-top: 10px;
 }
 
