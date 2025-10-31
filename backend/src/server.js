@@ -39,6 +39,11 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // 静态文件服务
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use(
+  "/template/poster",
+  express.static(path.join(__dirname, "../template/poster"))
+);
+app.use("/test", express.static(path.join(__dirname, "../public")));
 
 // API路由
 app.use("/api/auth", authRoutes);

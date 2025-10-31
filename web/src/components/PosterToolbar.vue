@@ -21,34 +21,38 @@
             class="gradient-controls"
             style="margin-top: 10px"
           >
-            <div>
+            <div style="margin-bottom: 8px">
               <el-color-picker v-model="gradientColor1" show-alpha />
-              <span>→</span>
+              <span style="margin: 0 4px">→</span>
               <el-color-picker v-model="gradientColor2" show-alpha />
             </div>
-            <el-select
-              v-model="gradientDirection"
-              style="margin-top: 10px; width: 120px"
-            >
-              <el-option label="左→右" value="leftToRight" />
-              <el-option label="上→下" value="topToBottom" />
-              <el-option label="左上→右下" value="leftTopToRightBottom" />
-              <el-option label="右上→左下" value="rightTopToLeftBottom" />
-            </el-select>
-            <div style="margin-top: 10px">
-              <span>渐变比例</span>
+            <div style="margin-bottom: 8px; width: 100%">
+              <el-select
+                v-model="gradientDirection"
+                placeholder="选择渐变方向"
+                class="wide-select"
+                :teleported="true"
+              >
+                <el-option label="左→右" value="leftToRight" />
+                <el-option label="上→下" value="topToBottom" />
+                <el-option label="左上→右下" value="leftTopToRightBottom" />
+                <el-option label="右上→左下" value="rightTopToLeftBottom" />
+              </el-select>
+            </div>
+            <div style="margin-bottom: 8px; width: 100%">
+              <span style="font-size: 12px; color: #666">渐变比例</span>
               <el-slider
                 v-model="gradientRatio"
                 :min="0"
                 :max="1"
                 :step="0.01"
-                style="width: 120px"
+                style="margin-top: 4px"
               />
             </div>
             <el-button
               size="small"
               type="primary"
-              style="margin-top: 10px"
+              style="width: 100%"
               @click="emitGradientBackground"
             >
               应用渐变
@@ -59,27 +63,33 @@
             class="gradient-controls"
             style="margin-top: 10px"
           >
-            <div style="margin-bottom: 8px">
-              <el-select v-model="gradientDirection" style="width: 120px">
+            <div style="margin-bottom: 8px; width: 100%">
+              <el-select
+                v-model="gradientDirection"
+                placeholder="选择渐变方向"
+                class="wide-select"
+                :teleported="true"
+              >
                 <el-option label="左→右" value="leftToRight" />
                 <el-option label="上→下" value="topToBottom" />
                 <el-option label="左上→右下" value="leftTopToRightBottom" />
                 <el-option label="右上→左下" value="rightTopToLeftBottom" />
               </el-select>
             </div>
-            <div style="margin-bottom: 8px">
-              <span>渐变比例</span>
+            <div style="margin-bottom: 8px; width: 100%">
+              <span style="font-size: 12px; color: #666">渐变比例</span>
               <el-slider
                 v-model="gradientRatio"
                 :min="0"
                 :max="1"
                 :step="0.01"
-                style="width: 120px"
+                style="margin-top: 4px"
               />
             </div>
             <el-button
               size="small"
               type="warning"
+              style="width: 100%"
               @click="emitRandomBackground"
             >
               随机渐变背景
@@ -114,6 +124,22 @@
           <el-button @click="addShape('circle')">
             <el-icon><CirclePlus /></el-icon>
             圆形
+          </el-button>
+          <el-button @click="addShape('triangle')">
+            <el-icon><Grid /></el-icon>
+            三角形
+          </el-button>
+          <el-button @click="addShape('line')">
+            <el-icon><Minus /></el-icon>
+            直线
+          </el-button>
+          <el-button @click="addShape('star')">
+            <el-icon><Star /></el-icon>
+            五角星
+          </el-button>
+          <el-button @click="addShape('arrow')">
+            <el-icon><Right /></el-icon>
+            箭头
           </el-button>
         </div>
       </div>
@@ -160,6 +186,9 @@ import {
   Picture,
   Grid,
   CirclePlus,
+  Minus,
+  Star,
+  Right,
   Check,
   Folder,
   Download,
@@ -323,5 +352,15 @@ const exportPoster = () => {
     padding: 8px;
     margin-bottom: 12px;
   }
+}
+
+/* 放大选择框输入高度，确保文字显示完整 */
+.wide-select :deep(.el-input__wrapper) {
+  min-height: 52px;
+}
+.wide-select :deep(.el-input__inner) {
+  height: 52px;
+  line-height: 52px;
+  font-size: 14px;
 }
 </style>

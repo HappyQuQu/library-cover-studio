@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>图案预览测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .pattern-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .pattern-item {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 1;
+        }
+
+        .pattern-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .pattern-item.error {
+            border-color: red;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #fee;
+            color: red;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            background: #e8f4fd;
+            border-left: 4px solid #2196F3;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>海报图案预览测试</h1>
+        <div class="status">
+            <strong>测试路径:</strong> /template/poster/{1-9}.jpg<br>
+            <strong>测试目的:</strong> 验证图片是否能正确加载
+        </div>
+        <div class="pattern-grid" id="patternGrid"></div>
+    </div>
+
+    <script>
+        const grid = document.getElementById('patternGrid');
+
+        for (let i = 1; i <= 9; i++) {
+            const item = document.createElement('div');
+            item.className = 'pattern-item';
+
+            const img = document.createElement('img');
+            img.src = `/template/poster/${i}.jpg`;
+            img.alt = `图案${i}`;
+
+            img.onerror = function () {
+                item.classList.add('error');
+                item.innerHTML = `<span>图案${i}<br>加载失败</span>`;
+                console.error(`图案${i}加载失败: ${img.src}`);
+            };
+
+            img.onload = function () {
+                console.log(`图案${i}加载成功: ${img.src}`);
+            };
+
+            item.appendChild(img);
+            grid.appendChild(item);
+        }
+    </script>
+</body>
+
+</html>
