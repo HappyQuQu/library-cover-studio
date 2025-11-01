@@ -5,9 +5,7 @@ class TemplateController {
   async getAllTemplates(req, res) {
     try {
       const db = database.getDb();
-      const { page = 1, limit = 20, search = "", tag = "", sortBy = "" } =
-        req.query;
-      const offset = (page - 1) * limit;
+      const { search = "", tag = "", sortBy = "" } = req.query;
 
       let query = "SELECT * FROM templates WHERE deleted_at IS NULL";
       const params = [];
@@ -32,8 +30,7 @@ class TemplateController {
       };
       const orderBy = sortMap[String(sortBy)] || sortMap.updated_at;
 
-      query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
-      params.push(parseInt(limit), parseInt(offset));
+      query += ` ORDER BY ${orderBy}`;
 
       const templatesRaw = await db.all(query, params);
 
@@ -91,31 +88,7 @@ class TemplateController {
         return out;
       });
 
-      let countQuery =
-        "SELECT COUNT(*) as count FROM templates WHERE deleted_at IS NULL";
-      const countParams = [];
-
-      if (search) {
-        countQuery += " AND (name LIKE ? OR description LIKE ?)";
-        countParams.push(`%${search}%`, `%${search}%`);
-      }
-
-      if (tag) {
-        countQuery += " AND (tags LIKE ?)";
-        countParams.push(`%${tag}%`);
-      }
-
-      const countResult = await db.get(countQuery, countParams);
-
-      res.json({
-        templates,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: countResult.count,
-          pages: Math.ceil(countResult.count / limit),
-        },
-      });
+      res.json({ templates });
     } catch (error) {
       console.error("获取模板列表失败:", error);
       res.status(500).json({ error: "获取模板列表失败" });

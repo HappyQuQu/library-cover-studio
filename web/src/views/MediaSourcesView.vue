@@ -1,10 +1,10 @@
 <template>
   <div class="media-sources-view">
     <div class="header">
-      <h2>媒体源管理</h2>
+      <h2>{{ t('mediaSources.title') }}</h2>
       <el-button type="primary" @click="showAddDialog">
         <el-icon><Plus /></el-icon>
-        添加媒体源
+        {{ t('mediaSources.addSource') }}
       </el-button>
     </div>
 
@@ -20,14 +20,14 @@
         <template #default="{ row }">
           <div class="libraries-expand">
             <div class="libraries-header">
-              <h3>媒体库列表</h3>
+              <h3>{{ t('mediaSources.libraries') }}</h3>
               <el-button
                 size="small"
                 @click="refreshLibraries(row)"
                 :loading="librariesLoading[row.id]"
               >
                 <el-icon><Refresh /></el-icon>
-                刷新
+                {{ t('common.refresh') }}
               </el-button>
             </div>
 
@@ -49,7 +49,7 @@
                   />
                   <div v-else class="no-cover">
                     <el-icon><Picture /></el-icon>
-                    <span>暂无封面</span>
+                    <span>{{ t('mediaSources.noCover') }}</span>
                   </div>
                 </div>
                 <div class="library-info">
@@ -57,7 +57,7 @@
                   <div class="library-meta">
                     <el-tag size="small">{{ lib.type }}</el-tag>
                     <span class="library-count"
-                      >{{ lib.itemCount || 0 }} 项</span
+                      >{{ lib.itemCount || 0 }} {{ t('mediaSources.items') }}</span
                     >
                   </div>
                 </div>
@@ -66,43 +66,43 @@
 
             <el-empty
               v-else-if="!librariesLoading[row.id]"
-              description="暂无媒体库数据"
+              :description="t('mediaSources.noLibraries')"
             />
 
             <div v-if="librariesLoading[row.id]" class="libraries-loading">
               <el-icon class="is-loading"><Loading /></el-icon>
-              <span>加载中...</span>
+              <span>{{ t('mediaSources.loadingLibraries') }}</span>
             </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="name" label="名称" width="200" />
-      <el-table-column prop="type" label="类型" width="120">
+      <el-table-column prop="name" :label="t('mediaSources.sourceName')" width="200" />
+      <el-table-column prop="type" :label="t('common.type')" width="120">
         <template #default="{ row }">
           <el-tag :type="getTypeColor(row.type)">
             {{ row.type.toUpperCase() }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="base_url" label="服务器地址" />
-      <el-table-column prop="is_active" label="状态" width="100">
+      <el-table-column prop="base_url" :label="t('mediaSources.serverUrl')" />
+      <el-table-column prop="is_active" :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
-            {{ row.is_active ? "激活" : "禁用" }}
+            {{ row.is_active ? t('mediaSources.active') : t('mediaSources.inactive') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="last_sync" label="最后同步" width="180">
+      <el-table-column prop="last_sync" :label="t('mediaSources.lastSync')" width="180">
         <template #default="{ row }">
           {{ formatDate(row.last_sync) }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
+      <el-table-column :label="t('common.actions')" width="240" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="testConnection(row)">测试</el-button>
-          <el-button size="small" @click="editSource(row)">编辑</el-button>
+          <el-button size="small" @click="testConnection(row)">{{ t('mediaSources.testConnection') }}</el-button>
+          <el-button size="small" @click="editSource(row)">{{ t('common.edit') }}</el-button>
           <el-button size="small" type="danger" @click="deleteSource(row)"
-            >删除</el-button
+            >{{ t('common.delete') }}</el-button
           >
         </template>
       </el-table-column>
@@ -116,53 +116,53 @@
       @close="resetForm"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
-        <el-form-item label="名称" prop="name">
+        <el-form-item :label="t('mediaSources.sourceName')" prop="name">
           <el-input
             v-model="form.name"
-            placeholder="例如: 我的 Jellyfin 服务器"
+            :placeholder="t('mediaSources.namePlaceholder')"
           />
         </el-form-item>
 
-        <el-form-item label="类型" prop="type">
-          <el-select v-model="form.type" placeholder="选择媒体服务器类型">
+        <el-form-item :label="t('common.type')" prop="type">
+          <el-select v-model="form.type" :placeholder="t('mediaSources.selectType')">
             <el-option label="Jellyfin" value="jellyfin" />
             <el-option label="Emby" value="emby" />
           </el-select>
         </el-form-item>
 
-        <el-form-item label="服务器地址" prop="baseURL">
+        <el-form-item :label="t('mediaSources.serverUrl')" prop="baseURL">
           <el-input
             v-model="form.baseURL"
-            placeholder="http://localhost:8096"
+            :placeholder="t('mediaSources.urlPlaceholder')"
           />
         </el-form-item>
 
-        <el-form-item label="API密钥" prop="apiKey">
+        <el-form-item :label="t('mediaSources.apiKey')" prop="apiKey">
           <el-input
             v-model="form.apiKey"
             type="password"
             show-password
-            placeholder="输入API密钥"
+            :placeholder="t('mediaSources.apiKeyPlaceholder')"
           />
         </el-form-item>
 
-        <el-form-item label="用户ID" prop="userId">
-          <el-input v-model="form.userId" placeholder="输入用户ID (可选)" />
+        <el-form-item :label="t('mediaSources.userId')" prop="userId">
+          <el-input v-model="form.userId" :placeholder="t('mediaSources.userIdPlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="状态">
+        <el-form-item :label="t('common.status')">
           <el-switch
             v-model="form.isActive"
-            active-text="激活"
-            inactive-text="禁用"
+            :active-text="t('mediaSources.active')"
+            :inactive-text="t('mediaSources.inactive')"
           />
         </el-form-item>
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="submitForm" :loading="submitting">
-          确定
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -175,6 +175,9 @@ import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, Refresh, Picture, Loading } from "@element-plus/icons-vue";
 import axios from "axios";
 import { API_ENDPOINTS } from "../config/api";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 // 类型定义
 interface MediaSource {
@@ -235,7 +238,7 @@ const loadSources = async () => {
     const response = await axios.get(API_ENDPOINTS.mediaSources.base);
     mediaSources.value = response.data.data || [];
   } catch (error: any) {
-    ElMessage.error("加载媒体源列表失败: " + error.message);
+    ElMessage.error(t('mediaSources.loadFailed') + ": " + error.message);
   } finally {
     loading.value = false;
   }
@@ -278,7 +281,7 @@ const loadLibraries = async (source: MediaSource) => {
       };
     });
   } catch (error: any) {
-    ElMessage.error("加载媒体库失败: " + error.message);
+    ElMessage.error(t('mediaSources.loadLibrariesFailed') + ": " + error.message);
     librariesData.value[source.id] = [];
   } finally {
     librariesLoading.value[source.id] = false;
@@ -288,7 +291,7 @@ const loadLibraries = async (source: MediaSource) => {
 // 刷新媒体库
 const refreshLibraries = async (source: MediaSource) => {
   await loadLibraries(source);
-  ElMessage.success("刷新成功");
+  ElMessage.success(t('mediaSources.refreshSuccess'));
 };
 
 // 图片加载失败处理
@@ -343,22 +346,22 @@ const submitForm = async () => {
     if (editingId.value) {
       // 更新
       await axios.put(API_ENDPOINTS.mediaSources.byId(editingId.value), data);
-      ElMessage.success("更新成功");
+      ElMessage.success(t('mediaSources.updateSuccess'));
     } else {
       // 创建
       await axios.post(API_ENDPOINTS.mediaSources.base, data);
-      ElMessage.success("创建成功");
+      ElMessage.success(t('mediaSources.createSuccess'));
     }
 
     dialogVisible.value = false;
     loadSources();
   } catch (error: any) {
     if (error.response) {
-      ElMessage.error(error.response.data.message || "操作失败");
+      ElMessage.error(error.response.data.message || t('common.failed'));
     } else if (error.message) {
-      ElMessage.error("表单验证失败");
+      ElMessage.error(t('mediaSources.validationFailed'));
     } else {
-      ElMessage.error("操作失败: " + error.message);
+      ElMessage.error(t('common.failed') + ": " + error.message);
     }
   } finally {
     submitting.value = false;
@@ -368,7 +371,7 @@ const submitForm = async () => {
 // 测试连接
 const testConnection = async (row: MediaSource) => {
   const loading = ElMessage.info({
-    message: "正在测试连接...",
+    message: t('mediaSources.testing'),
     duration: 0,
   });
 
@@ -382,10 +385,10 @@ const testConnection = async (row: MediaSource) => {
     const typeLabel = row.type === 'jellyfin' ? 'Jellyfin' : row.type === 'emby' ? 'Emby' : row.type || '-';
 
     ElMessageBox.alert(
-      `类型: ${typeLabel}<br>
-       服务器名称: ${server}<br>
-       版本: ${version}`,
-      "连接成功",
+      `${t('common.type')}: ${typeLabel}<br>
+       ${t('mediaSources.serverName')}: ${server}<br>
+       ${t('mediaSources.version')}: ${version}`,
+      t('mediaSources.connectionSuccess'),
       {
         dangerouslyUseHTMLString: true,
         type: "success",
@@ -394,7 +397,7 @@ const testConnection = async (row: MediaSource) => {
   } catch (error: any) {
     loading.close();
     ElMessage.error(
-      "连接失败: " + (error.response?.data?.message || error.message)
+      t('mediaSources.testFailed') + ": " + (error.response?.data?.message || error.message)
     );
   }
 };
@@ -403,19 +406,19 @@ const testConnection = async (row: MediaSource) => {
 const deleteSource = async (row: MediaSource) => {
   try {
     await ElMessageBox.confirm(
-      `确定要删除媒体源 "${row.name}" 吗?`,
-      "确认删除",
+      t('mediaSources.deleteConfirm', { name: row.name }),
+      t('common.confirmDelete'),
       {
         type: "warning",
       }
     );
 
     await axios.delete(API_ENDPOINTS.mediaSources.byId(row.id));
-    ElMessage.success("删除成功");
+    ElMessage.success(t('mediaSources.deleteSuccess'));
     loadSources();
   } catch (error: any) {
     if (error !== "cancel") {
-      ElMessage.error("删除失败: " + error.message);
+      ElMessage.error(t('mediaSources.deleteFailed') + ": " + error.message);
     }
   }
 };

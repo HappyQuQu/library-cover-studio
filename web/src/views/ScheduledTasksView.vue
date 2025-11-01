@@ -1,44 +1,44 @@
 <template>
   <div class="scheduled-tasks-view">
     <div class="header">
-      <h2>定时任务</h2>
+      <h2>{{ t('scheduledTasks.title') }}</h2>
       <el-button type="primary" @click="showAddDialog">
         <el-icon><Plus /></el-icon>
-        创建任务
+        {{ t('scheduledTasks.createTask') }}
       </el-button>
     </div>
 
     <el-table :data="tasks" v-loading="loading" style="width: 100%">
-      <el-table-column prop="name" label="任务名称" width="200" />
-      <el-table-column prop="media_source_name" label="媒体源" width="150" />
-      <el-table-column prop="cron_expression" label="执行计划" width="150" />
-      <el-table-column prop="is_active" label="状态" width="100">
+      <el-table-column prop="name" :label="t('scheduledTasks.taskName')" width="200" />
+      <el-table-column prop="media_source_name" :label="t('scheduledTasks.mediaSource')" width="150" />
+      <el-table-column prop="cron_expression" :label="t('scheduledTasks.schedule')" width="150" />
+      <el-table-column prop="is_active" :label="t('common.status')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'">
-            {{ row.is_active ? "运行中" : "已停止" }}
+            {{ row.is_active ? t('scheduledTasks.running') : t('scheduledTasks.stopped') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="last_run" label="最后执行" width="180">
+      <el-table-column prop="last_run" :label="t('scheduledTasks.lastRun')" width="180">
         <template #default="{ row }">
           {{ formatDate(row.last_run) }}
         </template>
       </el-table-column>
-      <el-table-column label="统计" width="150">
+      <el-table-column :label="t('scheduledTasks.statistics')" width="150">
         <template #default="{ row }">
           <span style="color: #67c23a">{{ row.success_count }}</span> /
           <span style="color: #f56c6c">{{ row.error_count }}</span>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="300" fixed="right">
+      <el-table-column :label="t('common.actions')" width="300" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="triggerTask(row)">执行</el-button>
+          <el-button size="small" @click="triggerTask(row)">{{ t('scheduledTasks.runNow') }}</el-button>
           <el-button size="small" @click="toggleTask(row)">
-            {{ row.is_active ? "停止" : "启动" }}
+            {{ row.is_active ? t('scheduledTasks.stop') : t('scheduledTasks.start') }}
           </el-button>
-          <el-button size="small" @click="editTask(row)">编辑</el-button>
+          <el-button size="small" @click="editTask(row)">{{ t('common.edit') }}</el-button>
           <el-button size="small" type="danger" @click="deleteTask(row)"
-            >删除</el-button
+            >{{ t('common.delete') }}</el-button
           >
         </template>
       </el-table-column>
@@ -52,14 +52,14 @@
       @close="resetForm"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
-        <el-form-item label="任务名称" prop="name">
-          <el-input v-model="form.name" placeholder="例如: 每日更新电影海报" />
+        <el-form-item :label="t('scheduledTasks.taskName')" prop="name">
+          <el-input v-model="form.name" :placeholder="t('scheduledTasks.taskNamePlaceholder')" />
         </el-form-item>
 
-        <el-form-item label="媒体源" prop="mediaSourceId">
+        <el-form-item :label="t('scheduledTasks.mediaSource')" prop="mediaSourceId">
           <el-select
             v-model="form.mediaSourceId"
-            placeholder="选择媒体源"
+            :placeholder="t('scheduledTasks.selectMediaSource')"
             @change="onMediaSourceChange"
             style="width: 100%"
           >
@@ -72,7 +72,7 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item label="媒体库配置" v-if="libraries.length > 0">
+        <el-form-item :label="t('scheduledTasks.libraryConfig')" v-if="libraries.length > 0">
           <el-card
             v-for="lib in libraries"
             :key="lib.id"
@@ -86,7 +86,7 @@
               </div>
               <el-select
                 v-model="form.libraryTemplateMapping[lib.id]"
-                placeholder="选择模板"
+                :placeholder="t('scheduledTasks.selectTemplate')"
                 clearable
                 style="width: 300px"
               >
@@ -157,9 +157,9 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button @click="dialogVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="submitForm" :loading="submitting">
-          确定
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -171,6 +171,9 @@ import { ref, reactive, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { Plus, Folder } from "@element-plus/icons-vue";
 import axios from "axios";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const API_BASE = "http://localhost:3001/api";
 
@@ -182,7 +185,7 @@ const mediaSources = ref([]);
 const templates = ref([]);
 const libraries = ref([]);
 const dialogVisible = ref(false);
-const dialogTitle = ref("创建任务");
+const dialogTitle = ref(t('scheduledTasks.createTask'));
 const editingId = ref(null);
 const formRef = ref(null);
 
@@ -265,7 +268,7 @@ const onMediaSourceChange = async (sourceId) => {
 
 // 显示添加对话框
 const showAddDialog = async () => {
-  dialogTitle.value = "创建任务";
+  dialogTitle.value = t('scheduledTasks.createTask');
   editingId.value = null;
   resetForm();
   await loadMediaSources();
@@ -282,7 +285,7 @@ const editTask = async (row) => {
     await loadMediaSources();
     await loadTemplates();
 
-    dialogTitle.value = "编辑任务";
+    dialogTitle.value = t('scheduledTasks.editTask');
     editingId.value = row.id;
     form.name = data.name;
     form.mediaSourceId = data.media_source_id;

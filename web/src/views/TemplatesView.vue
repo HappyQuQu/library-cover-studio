@@ -3,10 +3,10 @@
     <el-container>
       <el-header class="page-header">
         <div class="header-content">
-          <h2>模板管理</h2>
+          <h2>{{ t('templates.title') }}</h2>
           <el-button type="primary" @click="showCreateDialog = true">
             <el-icon><Plus /></el-icon>
-            新建模板
+            {{ t('templates.newTemplate') }}
           </el-button>
         </div>
       </el-header>
@@ -18,7 +18,7 @@
             <el-col :span="8">
               <el-input
                 v-model="searchQuery"
-                placeholder="搜索模板名称或描述"
+                :placeholder="t('templates.searchPlaceholder')"
                 @input="handleSearch"
                 clearable
               >
@@ -28,7 +28,7 @@
               </el-input>
             </el-col>
             <el-col :span="6">
-              <el-select v-model="filterTag" placeholder="按标签过滤" clearable>
+              <el-select v-model="filterTag" :placeholder="t('templates.filterByTag')" clearable>
                 <el-option
                   v-for="tag in availableTags"
                   :key="tag"
@@ -38,10 +38,10 @@
               </el-select>
             </el-col>
             <el-col :span="6">
-              <el-select v-model="sortBy" placeholder="排序方式">
-                <el-option label="最近创建" value="created_at" />
-                <el-option label="最近更新" value="updated_at" />
-                <el-option label="名称" value="name" />
+              <el-select v-model="sortBy" :placeholder="t('templates.sortBy')">
+                <el-option :label="t('templates.sortByCreated')" value="created_at" />
+                <el-option :label="t('templates.sortByUpdated')" value="updated_at" />
+                <el-option :label="t('templates.sortByName')" value="name" />
               </el-select>
             </el-col>
           </el-row>
@@ -64,14 +64,14 @@
               />
               <div v-else class="no-preview">
                 <el-icon size="40"><Picture /></el-icon>
-                <p>无预览</p>
+                <p>{{ t('templates.noPreview') }}</p>
               </div>
             </div>
 
             <div class="template-info">
               <h3>{{ template.name }}</h3>
               <p class="description">
-                {{ template.description || "暂无描述" }}
+                {{ template.description || t('templates.descriptionPlaceholder') }}
               </p>
 
               <div
@@ -97,7 +97,7 @@
                 "
               >
                 <span style="font-size: 12px; color: #909399; margin-right: 4px"
-                  >匹配字符:</span
+                  >{{ t('templates.matchTags') }}:</span
                 >
                 <el-tag
                   v-for="mtag in parseMatchTags(template.match_tags)"
@@ -140,39 +140,26 @@
             </div>
           </div>
         </div>
-
-        <!-- 分页 -->
-        <div class="pagination-wrapper">
-          <el-pagination
-            v-model:current-page="currentPage"
-            v-model:page-size="pageSize"
-            :page-sizes="[12, 24, 48]"
-            :total="total"
-            layout="total, sizes, prev, pager, next, jumper"
-            @size-change="handleSizeChange"
-            @current-change="handleCurrentChange"
-          />
-        </div>
       </el-main>
     </el-container>
 
     <!-- 创建模板对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建新模板" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="t('templates.createNew')" width="500px">
       <el-form :model="newTemplate" :rules="templateRules" ref="templateForm">
-        <el-form-item label="模板名称" prop="name">
+        <el-form-item :label="t('templates.templateName')" prop="name">
           <el-input v-model="newTemplate.name" />
         </el-form-item>
-        <el-form-item label="描述" prop="description">
+        <el-form-item :label="t('templates.description')" prop="description">
           <el-input
             v-model="newTemplate.description"
             type="textarea"
             :rows="3"
           />
         </el-form-item>
-        <el-form-item label="标签">
+        <el-form-item :label="t('templates.tags')">
           <el-input
             v-model="tagInput"
-            placeholder="输入标签，按回车添加"
+            :placeholder="t('templates.addTag')"
             @keyup.enter="addTag"
           />
           <div class="tag-list">
@@ -189,8 +176,8 @@
       </el-form>
 
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="createTemplate">创建并设计</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="createTemplate">{{ t('templates.saveAndDesign') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -199,6 +186,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
 import { useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import {
   Plus,
   Search,
@@ -209,6 +197,8 @@ import {
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { API_ENDPOINTS, API_BASE_URL } from "../config/api";
+
+const { t } = useI18n();
 
 // 模板类型定义
 interface Template {
@@ -260,10 +250,6 @@ const templates = ref<Template[]>([]);
 const searchQuery = ref("");
 const filterTag = ref("");
 const sortBy = ref("updated_at");
-const currentPage = ref(1);
-const pageSize = ref(12);
-const total = ref(0);
-
 const showCreateDialog = ref(false);
 const newTemplate = ref({
   name: "",
@@ -274,7 +260,7 @@ const tagInput = ref("");
 
 // 表单规则
 const templateRules = {
-  name: [{ required: true, message: "请输入模板名称", trigger: "blur" }],
+  name: [{ required: true, message: t('templates.templateNamePlaceholder'), trigger: "blur" }],
 };
 
 // 计算属性
@@ -324,8 +310,6 @@ const loadTemplates = async () => {
     loading.value = true;
 
     const params = {
-      page: currentPage.value,
-      limit: pageSize.value,
       search: searchQuery.value || undefined,
       tag: filterTag.value || undefined,
       sortBy: sortBy.value || undefined,
@@ -342,49 +326,36 @@ const loadTemplates = async () => {
     const response = await fetch(
       `${API_ENDPOINTS.templates.base}?${queryString}`
     );
-    if (!response.ok) throw new Error("加载模板失败");
+    if (!response.ok) throw new Error(t('templates.loadFailed'));
 
     const data = await response.json();
 
-    // 后端返回格式: { templates: [...], pagination: {...} }
+    // 后端返回格式: { templates: [...] }
     if (data.templates) {
       templates.value = data.templates || [];
-      total.value = data.pagination?.total || 0;
     } else {
-      throw new Error("数据格式错误");
+      throw new Error(t('templates.loadFailed'));
     }
   } catch (error) {
-    console.error("加载模板失败:", error);
-    ElMessage.error("加载模板失败");
+    console.error(t('templates.loadFailed'), error);
+    ElMessage.error(t('templates.loadFailed'));
   } finally {
     loading.value = false;
   }
 };
 
 const handleSearch = () => {
-  currentPage.value = 1;
   loadTemplates();
 };
 
 // 当标签过滤或排序方式变化时，重新加载数据
 watch(filterTag, () => {
-  currentPage.value = 1;
   loadTemplates();
 });
 
 watch(sortBy, () => {
-  currentPage.value = 1;
   loadTemplates();
 });
-
-const handleSizeChange = () => {
-  currentPage.value = 1;
-  loadTemplates();
-};
-
-const handleCurrentChange = () => {
-  loadTemplates();
-};
 
 const selectTemplate = (template: Template) => {
   // 跳转到设计器并加载模板
@@ -405,27 +376,27 @@ const duplicateTemplate = async (template: Template) => {
       }
     );
 
-    if (!response.ok) throw new Error("复制模板失败");
+    if (!response.ok) throw new Error(t('templates.duplicateFailed'));
 
     // 后端直接返回新模板对象
     const data = await response.json();
     if (data.id) {
-      ElMessage.success("模板复制成功");
+      ElMessage.success(t('templates.duplicateSuccess'));
       loadTemplates();
     } else {
-      throw new Error("复制模板失败");
+      throw new Error(t('templates.duplicateFailed'));
     }
   } catch (error) {
-    console.error("复制模板失败:", error);
-    ElMessage.error("模板复制失败");
+    console.error(t('templates.duplicateFailed'), error);
+    ElMessage.error(t('templates.duplicateFailed'));
   }
 };
 
 const deleteTemplate = async (template: Template) => {
   try {
     await ElMessageBox.confirm(
-      `确定删除模板"${template.name}"吗？`,
-      "确认删除",
+      t('templates.deleteConfirm', { name: template.name }),
+      t('common.confirmDelete'),
       {
         type: "warning",
       }
@@ -435,20 +406,20 @@ const deleteTemplate = async (template: Template) => {
       method: "DELETE",
     });
 
-    if (!response.ok) throw new Error("删除模板失败");
+    if (!response.ok) throw new Error(t('templates.deleteFailed'));
 
     // 后端返回 { message: "模板已删除" }
     const data = await response.json();
     if (data.message) {
-      ElMessage.success("模板删除成功");
+      ElMessage.success(t('templates.deleteSuccess'));
       loadTemplates();
     } else {
-      throw new Error("删除模板失败");
+      throw new Error(t('templates.deleteFailed'));
     }
     loadTemplates();
   } catch (error) {
     if (error !== "cancel") {
-      ElMessage.error("模板删除失败");
+      ElMessage.error(t('templates.deleteFailed'));
     }
   }
 };
@@ -462,7 +433,7 @@ const createTemplate = async () => {
     router.push("/app/designer?mode=new");
     showCreateDialog.value = false;
   } catch (error) {
-    ElMessage.error("创建模板失败");
+    ElMessage.error(t('templates.saveFailed'));
   }
 };
 

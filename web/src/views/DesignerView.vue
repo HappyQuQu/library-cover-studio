@@ -23,24 +23,24 @@
               style="margin-right: 12px"
             >
               <el-icon><ArrowLeft /></el-icon>
-              返回模板列表
+              {{ t('designer.backToList') }}
             </el-button>
             <span class="toolbar-title">{{
-              templateInfo.name || "新建模板"
+              templateInfo.name || t('designer.newTemplate')
             }}</span>
           </div>
           <div class="toolbar-actions">
             <el-button size="small" @click="showTemplateInfoDialog = true">
               <el-icon><Edit /></el-icon>
-              模板信息
+              {{ t('designer.templateInfo') }}
             </el-button>
             <el-button size="small" type="success" @click="saveTemplate">
               <el-icon><Check /></el-icon>
-              保存模板
+              {{ t('designer.saveTemplate') }}
             </el-button>
             <el-button size="small" type="primary" @click="exportPoster">
               <el-icon><Download /></el-icon>
-              导出海报
+              {{ t('designer.exportPoster') }}
             </el-button>
           </div>
         </div>
@@ -76,25 +76,25 @@
     </el-container>
 
     <!-- 模板信息编辑对话框 -->
-    <el-dialog v-model="showTemplateInfoDialog" title="模板信息" width="500px">
+    <el-dialog v-model="showTemplateInfoDialog" :title="t('designer.templateInfo')" width="500px">
       <el-form :model="templateInfo" label-width="80px">
-        <el-form-item label="模板名称" required>
+        <el-form-item :label="t('templates.templateName')" required>
           <el-input
             v-model="templateInfo.name"
-            placeholder="请输入模板名称"
+            :placeholder="t('templates.templateNamePlaceholder')"
             maxlength="100"
           />
         </el-form-item>
-        <el-form-item label="模板描述">
+        <el-form-item :label="t('templates.description')">
           <el-input
             v-model="templateInfo.description"
             type="textarea"
             :rows="3"
-            placeholder="请输入模板描述"
+            :placeholder="t('templates.descriptionPlaceholder')"
             maxlength="500"
           />
         </el-form-item>
-        <el-form-item label="标签">
+        <el-form-item :label="t('templates.tags')">
           <div class="tags-input">
             <el-tag
               v-for="tag in templateInfo.tags"
@@ -108,13 +108,13 @@
             <el-input
               v-model="newTag"
               size="small"
-              placeholder="输入标签后按回车"
+              :placeholder="t('templates.addTag')"
               style="width: 150px"
               @keyup.enter="addTag"
             />
           </div>
         </el-form-item>
-        <el-form-item label="匹配字符">
+        <el-form-item :label="t('templates.matchTags')">
           <div class="tags-input">
             <el-tag
               v-for="matchTag in templateInfo.matchTags"
@@ -129,34 +129,34 @@
             <el-input
               v-model="newMatchTag"
               size="small"
-              placeholder="输入匹配字符后按回车"
+              :placeholder="t('templates.addMatchTag')"
               style="width: 150px"
               @keyup.enter="addMatchTag"
             />
           </div>
           <div style="color: #909399; font-size: 12px; margin-top: 4px">
-            用于自动匹配媒体库，支持模糊匹配（例如：电影、Movies）
+            {{ t('templates.matchTagsHint') }}
           </div>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showTemplateInfoDialog = false">取消</el-button>
-        <el-button type="primary" @click="saveTemplateInfo">确定</el-button>
+        <el-button @click="showTemplateInfoDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="saveTemplateInfo">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 图案编辑弹窗（双击元素打开） -->
     <el-dialog
       v-model="patternEditorVisible"
-      title="编辑填充"
+      :title="t('designer.editFill')"
       class="pattern-editor-dialog"
       width="720px"
     >
       <!-- 模式切换 -->
       <div style="margin-bottom: 16px">
         <el-radio-group v-model="patternEditorState.fillMode" size="small">
-          <el-radio label="color">纯色填充</el-radio>
-          <el-radio label="pattern">图案填充</el-radio>
+          <el-radio label="color">{{ t('designer.colorFill') }}</el-radio>
+          <el-radio label="pattern">{{ t('designer.patternFill') }}</el-radio>
         </el-radio-group>
       </div>
 
@@ -165,7 +165,7 @@
         v-if="patternEditorState.fillMode === 'color'"
         style="margin-bottom: 16px"
       >
-        <el-form-item label="填充颜色" label-width="80px">
+        <el-form-item :label="t('designer.fillColor')" label-width="80px">
           <el-color-picker v-model="patternEditorState.fillColor" show-alpha />
         </el-form-item>
       </div>
@@ -175,7 +175,7 @@
         <!-- 图片选择器 -->
         <div style="margin-bottom: 12px">
           <div class="dialog-label">
-            选择图案：
+            {{ t('designer.selectPattern') }}：
           </div>
           <div
             style="
@@ -214,7 +214,7 @@
           </div>
         </div>
         <div class="dialog-label">
-          提示：按住拖动可移动图案，滚轮缩放可放大/缩小；确认后将使用原图渲染，确保清晰度。
+          {{ t('designer.patternHint') }}
         </div>
         <div
           class="pattern-editor-viewport"
@@ -258,13 +258,13 @@
             @click="resetPatternToFit"
             size="small"
           >
-            重置为适配模式
+            {{ t('designer.resetToFit') }}
           </el-button>
           <span v-else></span>
           <div>
-            <el-button @click="cancelPatternEditor">取消</el-button>
+            <el-button @click="cancelPatternEditor">{{ t('common.cancel') }}</el-button>
             <el-button type="primary" @click="applyPatternEditor"
-              >应用</el-button
+              >{{ t('designer.applyFill') }}</el-button
             >
           </div>
         </div>
@@ -276,6 +276,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { fabric } from "fabric";
 import PosterToolbar from "../components/PosterToolbar.vue";
 import PosterProperties from "../components/PosterProperties.vue";
@@ -288,6 +289,8 @@ import {
   Edit,
 } from "@element-plus/icons-vue";
 import { API_ENDPOINTS } from "../config/api";
+
+const { t } = useI18n();
 
 // 路由
 const route = useRoute();
@@ -660,7 +663,7 @@ onMounted(() => {
       loadTemplateFromServer(queryTemplateId);
     } else {
       // 新建模板
-      templateInfo.value.name = "新建模板";
+      templateInfo.value.name = t('designer.newTemplate');
     }
   }
 });
@@ -889,17 +892,17 @@ const addShapeElement = (type: string) => {
     fabricCanvas.renderAll(); // 强制重新渲染
     console.log("Canvas objects count:", fabricCanvas.size());
     const typeToMsg: Record<string, string> = {
-      rect: "已添加矩形",
-      circle: "已添加圆形",
-      triangle: "已添加三角形",
-      line: "已添加直线",
-      star: "已添加五角星",
-      arrow: "已添加箭头",
+      rect: t('designer.rectangle'),
+      circle: t('designer.circle'),
+      triangle: t('designer.triangle'),
+      line: t('designer.line'),
+      star: t('designer.star'),
+      arrow: t('designer.arrow'),
     };
-    ElMessage.success(typeToMsg[type] || "已添加形状");
+    ElMessage.success(t('designer.addedShape'));
   } else {
     console.error("Failed to create shape of type:", type);
-    ElMessage.error("添加形状失败");
+    ElMessage.error(t('common.failed'));
   }
 };
 
@@ -1092,7 +1095,7 @@ const togglePatternEditMode = (enabled: boolean) => {
     fabricCanvas.on("mouse:up", handlePatternMouseUp);
     fabricCanvas.on("mouse:wheel", handlePatternMouseWheel);
 
-    ElMessage.info("图案编辑模式已启用，可以拖动和缩放图案");
+    ElMessage.info(t('designer.patternEditEnabled'));
   } else {
     // 退出编辑模式：恢复对象的交互
     selectedObject.value.set({
@@ -1109,7 +1112,7 @@ const togglePatternEditMode = (enabled: boolean) => {
     fabricCanvas.off("mouse:up", handlePatternMouseUp);
     fabricCanvas.off("mouse:wheel", handlePatternMouseWheel);
 
-    ElMessage.info("图案编辑模式已退出");
+    ElMessage.info(t('designer.patternEditDisabled'));
   }
 
   fabricCanvas.renderAll();
@@ -1288,10 +1291,10 @@ const selectPatternImage = (imgPath: string) => {
       patternEditorState.value.panY = offsetY;
     }
 
-    ElMessage.success("图案已更换");
+    ElMessage.success(t('designer.patternChanged'));
   };
   img.onerror = () => {
-    ElMessage.error("图片加载失败");
+    ElMessage.error(t('designer.imageLoadFailed'));
   };
   img.src = imgSrc;
 };
@@ -1300,7 +1303,7 @@ const selectPatternImage = (imgPath: string) => {
 const resetPatternToFit = () => {
   const s = patternEditorState.value;
   if (!s.imgNaturalWidth || !s.imgNaturalHeight || !selectedObject.value) {
-    ElMessage.warning("无法获取图片或对象尺寸");
+    ElMessage.warning(t('designer.cannotGetImageSize'));
     return;
   }
 
@@ -1337,7 +1340,7 @@ const resetPatternToFit = () => {
     objSize: [objWidth, objHeight],
   });
 
-  ElMessage.success("已重置为适配模式");
+  ElMessage.success(t('designer.resetToFitSuccess'));
 };
 
 const applyPatternEditor = () => {
@@ -1367,7 +1370,7 @@ const applyPatternEditor = () => {
     fabricCanvas.requestRenderAll();
     updateCounter.value++;
     patternEditorVisible.value = false;
-    ElMessage.success("颜色已更新");
+    ElMessage.success(t('designer.colorUpdated'));
     return;
   }
 
@@ -1409,9 +1412,9 @@ const applyPatternEditor = () => {
           updateCounter.value++;
 
           patternEditorVisible.value = false;
-          ElMessage.success("图案已更新");
+          ElMessage.success(t('designer.patternUpdated'));
         } else {
-          ElMessage.error("图片加载失败");
+          ElMessage.error(t('designer.imageLoadFailed'));
         }
       },
       null,
@@ -1422,7 +1425,7 @@ const applyPatternEditor = () => {
 
   // 如果没有新图片,使用原有图片但更新变换参数
   if (!fill || typeof fill !== "object" || !("source" in fill)) {
-    ElMessage.error("当前对象不是图案填充");
+    ElMessage.error(t('designer.notPatternFill'));
     return;
   }
 
@@ -1456,7 +1459,7 @@ const applyPatternEditor = () => {
   updateCounter.value++;
 
   patternEditorVisible.value = false;
-  ElMessage.success("图案已更新");
+  ElMessage.success(t('designer.patternUpdated'));
 };
 
 const cancelPatternEditor = () => {
@@ -1497,11 +1500,11 @@ const removeMatchTag = (matchTag: string) => {
 // 保存模板信息
 const saveTemplateInfo = () => {
   if (!templateInfo.value.name.trim()) {
-    ElMessage.warning("请输入模板名称");
+    ElMessage.warning(t('designer.templateNameRequired'));
     return;
   }
   showTemplateInfoDialog.value = false;
-  ElMessage.success("模板信息已更新");
+  ElMessage.success(t('designer.templateInfoUpdated'));
 };
 
 // 从服务器加载模板
@@ -1535,12 +1538,12 @@ const loadTemplateFromServer = async (id: string) => {
 
       fabricCanvas.loadFromJSON(canvasData, () => {
         fabricCanvas?.renderAll();
-        ElMessage.success("模板加载成功");
+        ElMessage.success(t('designer.templateLoadSuccess'));
       });
     }
   } catch (error) {
     console.error("加载模板失败:", error);
-    ElMessage.error("加载模板失败");
+    ElMessage.error(t('designer.loadFailed'));
   }
 };
 
@@ -1551,7 +1554,7 @@ const saveTemplate = async () => {
   // 如果没有模板名称,提示用户输入
   if (!templateInfo.value.name.trim()) {
     showTemplateInfoDialog.value = true;
-    ElMessage.warning("请先填写模板信息");
+    ElMessage.warning(t('designer.fillTemplateInfoFirst'));
     return;
   }
 
@@ -1602,16 +1605,16 @@ const saveTemplate = async () => {
       isEditMode.value = true;
     }
 
-    ElMessage.success("模板保存成功");
+    ElMessage.success(t('templates.saveSuccess'));
   } catch (error) {
     console.error("保存模板失败:", error);
-    ElMessage.error("保存模板失败");
+    ElMessage.error(t('templates.saveFailed'));
   }
 };
 
 // 加载模板(废弃,仅用于兼容)
 const loadTemplate = () => {
-  ElMessage.info("请从模板列表中选择模板进行编辑");
+  ElMessage.info(t('designer.selectTemplateToEdit'));
 };
 
 // 导出海报
@@ -1622,7 +1625,7 @@ const exportPoster = () => {
   link.href = dataUrl;
   link.download = "poster.png";
   link.click();
-  ElMessage.success("海报已导出");
+  ElMessage.success(t('designer.exportSuccess'));
 };
 
 // 删除当前选中的对象
@@ -1663,29 +1666,29 @@ const handlePropertiesAction = (action: string) => {
         fabricCanvas.add(cloned);
         fabricCanvas.setActiveObject(cloned);
         fabricCanvas.renderAll();
-        ElMessage.success("已复制元素");
+        ElMessage.success(t('designer.duplicatedElement'));
       });
       break;
     }
     case "delete": {
       const success = deleteSelectedObject();
       if (success) {
-        ElMessage.success("已删除元素");
+        ElMessage.success(t('designer.deletedElement'));
       } else {
-        ElMessage.error("删除失败，请重试");
+        ElMessage.error(t('designer.deleteFailed'));
       }
       break;
     }
     case "bringToFront": {
       obj.bringToFront();
       fabricCanvas.renderAll();
-      ElMessage.success("已置顶");
+      ElMessage.success(t('designer.broughtToFront'));
       break;
     }
     case "sendToBack": {
       obj.sendToBack();
       fabricCanvas.renderAll();
-      ElMessage.success("已置底");
+      ElMessage.success(t('designer.sentToBack'));
       break;
     }
   }
