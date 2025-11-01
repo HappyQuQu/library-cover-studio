@@ -5,7 +5,8 @@ class TemplateController {
   async getAllTemplates(req, res) {
     try {
       const db = database.getDb();
-      const { page = 1, limit = 20, search = "" } = req.query;
+      const { page = 1, limit = 20, search = "", tag = "", sortBy = "" } =
+        req.query;
       const offset = (page - 1) * limit;
 
       let query = "SELECT * FROM templates WHERE deleted_at IS NULL";
@@ -16,10 +17,79 @@ class TemplateController {
         params.push(`%${search}%`, `%${search}%`);
       }
 
-      query += " ORDER BY updated_at DESC LIMIT ? OFFSET ?";
+      if (tag) {
+        // 兼容 JSON 数组字符串与逗号分隔字符串的模糊匹配
+        // 例: ["动作","科幻"] 或 "动作,科幻"
+        query += " AND (tags LIKE ?)";
+        params.push(`%${tag}%`);
+      }
+
+      // 排序: 默认按 updated_at DESC
+      const sortMap = {
+        created_at: "created_at DESC",
+        updated_at: "updated_at DESC",
+        name: "name COLLATE NOCASE ASC",
+      };
+      const orderBy = sortMap[String(sortBy)] || sortMap.updated_at;
+
+      query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
       params.push(parseInt(limit), parseInt(offset));
 
-      const templates = await db.all(query, params);
+      const templatesRaw = await db.all(query, params);
+
+      // 规范化 tags 与 match_tags，确保前端拿到的是数组，避免显示不一致
+      const templates = (templatesRaw || []).map((tpl) => {
+        const out = { ...tpl };
+        // normalize tags -> array
+        try {
+          if (!out.tags) {
+            out.tags = [];
+          } else if (Array.isArray(out.tags)) {
+            // keep as is
+          } else if (typeof out.tags === "string") {
+            try {
+              const parsed = JSON.parse(out.tags);
+              out.tags = Array.isArray(parsed)
+                ? parsed
+                : String(out.tags)
+                    .split(",")
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+            } catch {
+              out.tags = String(out.tags)
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean);
+            }
+          } else {
+            out.tags = [];
+          }
+        } catch {
+          out.tags = [];
+        }
+
+        // normalize match_tags -> array
+        try {
+          if (!out.match_tags) {
+            out.match_tags = [];
+          } else if (Array.isArray(out.match_tags)) {
+            // keep as is
+          } else if (typeof out.match_tags === "string") {
+            try {
+              const parsed = JSON.parse(out.match_tags);
+              out.match_tags = Array.isArray(parsed) ? parsed : [];
+            } catch {
+              out.match_tags = [];
+            }
+          } else {
+            out.match_tags = [];
+          }
+        } catch {
+          out.match_tags = [];
+        }
+
+        return out;
+      });
 
       let countQuery =
         "SELECT COUNT(*) as count FROM templates WHERE deleted_at IS NULL";
@@ -28,6 +98,11 @@ class TemplateController {
       if (search) {
         countQuery += " AND (name LIKE ? OR description LIKE ?)";
         countParams.push(`%${search}%`, `%${search}%`);
+      }
+
+      if (tag) {
+        countQuery += " AND (tags LIKE ?)";
+        countParams.push(`%${tag}%`);
       }
 
       const countResult = await db.get(countQuery, countParams);
@@ -50,13 +125,61 @@ class TemplateController {
   async getTemplateById(req, res) {
     try {
       const db = database.getDb();
-      const template = await db.get(
+      const raw = await db.get(
         "SELECT * FROM templates WHERE id = ? AND deleted_at IS NULL",
         [req.params.id]
       );
 
-      if (!template) {
+      if (!raw) {
         return res.status(404).json({ error: "模板不存在" });
+      }
+
+      // 规范化返回的数据，确保 tags/match_tags 为数组
+      const template = { ...raw };
+      try {
+        if (!template.tags) {
+          template.tags = [];
+        } else if (Array.isArray(template.tags)) {
+          // keep
+        } else if (typeof template.tags === "string") {
+          try {
+            const parsed = JSON.parse(template.tags);
+            template.tags = Array.isArray(parsed)
+              ? parsed
+              : String(template.tags)
+                  .split(",")
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+          } catch {
+            template.tags = String(template.tags)
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean);
+          }
+        } else {
+          template.tags = [];
+        }
+      } catch {
+        template.tags = [];
+      }
+
+      try {
+        if (!template.match_tags) {
+          template.match_tags = [];
+        } else if (Array.isArray(template.match_tags)) {
+          // keep
+        } else if (typeof template.match_tags === "string") {
+          try {
+            const parsed = JSON.parse(template.match_tags);
+            template.match_tags = Array.isArray(parsed) ? parsed : [];
+          } catch {
+            template.match_tags = [];
+          }
+        } else {
+          template.match_tags = [];
+        }
+      } catch {
+        template.match_tags = [];
       }
 
       res.json(template);
@@ -110,13 +233,14 @@ class TemplateController {
         : null;
 
       await db.run(
-        "INSERT INTO templates (id, name, description, preview_url, canvas_data, match_tags) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO templates (id, name, description, preview_url, canvas_data, tags, match_tags) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           id,
           name,
           description || null,
           previewUrl,
           JSON.stringify(canvasData),
+          JSON.stringify(tags || []),
           JSON.stringify(matchTags),
         ]
       );
@@ -184,14 +308,14 @@ class TemplateController {
         : existing.preview_url;
 
       await db.run(
-        "UPDATE templates SET name = ?, description = ?, preview_url = ?, canvas_data = ?, tags = ?, match_tags = ? WHERE id = ?",
+        "UPDATE templates SET name = ?, description = ?, preview_url = ?, canvas_data = ?, tags = ?, match_tags = ?, updated_at = datetime('now') WHERE id = ?",
         [
           name,
           description || null,
           previewUrl,
           JSON.stringify(canvasData),
-          JSON.stringify(tags),
-          JSON.stringify(matchTags),
+          JSON.stringify(tags || []),
+          JSON.stringify(matchTags || []),
           id,
         ]
       );
@@ -248,13 +372,16 @@ class TemplateController {
 
       const newId = crypto.randomBytes(16).toString("hex");
       await db.run(
-        "INSERT INTO templates (id, name, description, preview_url, canvas_data) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO templates (id, name, description, preview_url, canvas_data, tags, match_tags) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [
           newId,
           `${original.name} (副本)`,
           original.description,
           original.preview_url,
           original.canvas_data,
+          // 尽量保持原有格式，如果是字符串就直接复制
+          original.tags ?? JSON.stringify([]),
+          original.match_tags ?? JSON.stringify([]),
         ]
       );
 

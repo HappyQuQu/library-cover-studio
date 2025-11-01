@@ -376,10 +376,15 @@ const testConnection = async (row: MediaSource) => {
     const response = await axios.post(API_ENDPOINTS.mediaSources.test(row.id));
     loading.close();
 
+    const info = response.data.serverInfo || {};
+    const server = info.serverName || "-";
+    const version = info.version || "-";
+    const typeLabel = row.type === 'jellyfin' ? 'Jellyfin' : row.type === 'emby' ? 'Emby' : row.type || '-';
+
     ElMessageBox.alert(
-      `服务器名称: ${response.data.serverInfo.serverName}<br>
-       版本: ${response.data.serverInfo.version}<br>
-       系统: ${response.data.serverInfo.operatingSystem}`,
+      `类型: ${typeLabel}<br>
+       服务器名称: ${server}<br>
+       版本: ${version}`,
       "连接成功",
       {
         dangerouslyUseHTMLString: true,

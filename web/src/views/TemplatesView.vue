@@ -197,7 +197,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   Plus,
@@ -365,6 +365,17 @@ const handleSearch = () => {
   currentPage.value = 1;
   loadTemplates();
 };
+
+// 当标签过滤或排序方式变化时，重新加载数据
+watch(filterTag, () => {
+  currentPage.value = 1;
+  loadTemplates();
+});
+
+watch(sortBy, () => {
+  currentPage.value = 1;
+  loadTemplates();
+});
 
 const handleSizeChange = () => {
   currentPage.value = 1;

@@ -272,13 +272,22 @@ router.post("/:id/test", async (req, res) => {
 
     const authInfo = await mediaServer.getAuthInfo();
 
+    // 兼容不同服务或版本字段差异，尽量补全系统信息
+    const operatingSystem =
+      authInfo.OperatingSystem ||
+      authInfo.OperatingSystemName ||
+      authInfo.OS ||
+      authInfo.OsName ||
+      authInfo.System ||
+      "";
+
     res.json({
       success: true,
       message: "连接成功",
       serverInfo: {
-        serverName: authInfo.ServerName,
-        version: authInfo.Version,
-        operatingSystem: authInfo.OperatingSystem,
+        serverName: authInfo.ServerName || authInfo.ServerNameValue || "",
+        version: authInfo.Version || authInfo.ServerVersion || "",
+        operatingSystem,
       },
     });
   } catch (error) {
