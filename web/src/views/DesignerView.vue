@@ -6,10 +6,8 @@
           @add-text="addTextElement"
           @add-image="addImageElement"
           @change-background="changeBackground"
-          @save-template="saveTemplate"
-          @load-template="loadTemplate"
           @add-shape="addShapeElement"
-          @export-poster="exportPoster"
+          @add-poster="addPosterElement"
         />
       </el-aside>
       <el-main class="canvas-container">
@@ -71,6 +69,8 @@
           @send-to-back="() => handlePropertiesAction('sendToBack')"
           @toggle-pattern-edit-mode="togglePatternEditMode"
           @update-pattern-transform="updatePatternTransform"
+          @change-poster-shape="changePosterShape"
+          @change-poster-image="changePosterImage"
         />
       </el-aside>
     </el-container>
@@ -534,12 +534,8 @@ onMounted(() => {
 
     // 监听 Fabric.js 的鼠标双击事件
     fabricCanvas.on("mouse:dblclick", (options) => {
-      console.log("🖱️ Fabric mouse:dblclick event", options);
       const target = options.target;
-      if (!target) {
-        console.log("❌ No target in dblclick event");
-        return;
-      }
+      if (!target) return;
 
       // 对文本：进入编辑模式
       const t = (target as any).type;
@@ -556,96 +552,8 @@ onMounted(() => {
           } catch {}
           fabricCanvas?.requestRenderAll();
         }
-        return; // 文本双击不打开填充编辑器
       }
-
-      // 检查是否是形状对象
-      const objType = (target as any).type;
-      const isShape = [
-        "rect",
-        "circle",
-        "triangle",
-        "polygon",
-        "path",
-      ].includes(objType);
-      if (!isShape) {
-        console.log("❌ Not a shape object, type:", objType);
-        return;
-      }
-
-      selectedObject.value = target;
-
-      // 获取元素当前的实际尺寸
-      const objWidth =
-        target.getScaledWidth?.() || (target as any).width || 200;
-      const objHeight =
-        target.getScaledHeight?.() || (target as any).height || 200;
-
-      // 检查填充类型
-      const fill = (target as any).fill as any;
-      const isPatternFill =
-        fill && typeof fill === "object" && "source" in fill;
-
-      console.log("🎨 Fill type:", isPatternFill ? "pattern" : "color", fill);
-      console.log("📐 Object size:", objWidth, "x", objHeight);
-
-      if (isPatternFill) {
-        // 图案填充模式
-        const pattern = fill as fabric.Pattern;
-        const source = pattern.source as HTMLImageElement | string;
-        const imgSrc = typeof source === "string" ? source : source?.src;
-
-        if (!imgSrc) {
-          console.log("❌ No image source in pattern");
-          return;
-        }
-
-        // 获取当前的pattern transform
-        const currentTransform = (pattern.patternTransform as
-          | number[]
-          | undefined) || [1, 0, 0, 1, 0, 0];
-        const currentScale = currentTransform[0] || 1;
-
-        console.log(" Current pattern transform:", currentTransform);
-        console.log("📏 Current scale:", currentScale);
-
-        // 加载图片获取原始尺寸
-        const tmpImg = new Image();
-        tmpImg.crossOrigin = "anonymous";
-        tmpImg.onload = () => {
-          patternEditorState.value = {
-            imgSrc,
-            imgNaturalWidth: tmpImg.naturalWidth,
-            imgNaturalHeight: tmpImg.naturalHeight,
-            objWidth,
-            objHeight,
-            panX: pattern.offsetX || 0,
-            panY: pattern.offsetY || 0,
-            scale: currentScale,
-            fillMode: "pattern",
-            fillColor: "#000000",
-          };
-          patternEditorVisible.value = true;
-        };
-        tmpImg.src = imgSrc;
-      } else {
-        // 纯色填充模式
-        const currentColor = typeof fill === "string" ? fill : "#000000";
-
-        patternEditorState.value = {
-          imgSrc: "",
-          imgNaturalWidth: 0,
-          imgNaturalHeight: 0,
-          objWidth,
-          objHeight,
-          panX: 0,
-          panY: 0,
-          scale: 1,
-          fillMode: "color",
-          fillColor: currentColor,
-        };
-        patternEditorVisible.value = true;
-      }
+      // 其他元素的双击编辑功能已移除
     });
 
     // 在组件卸载时移除事件监听
@@ -672,45 +580,25 @@ onUnmounted(() => {
   fabricCanvas?.dispose();
 });
 
-// 添加文本元素（可编辑）
+// 添加文本元素
 const addTextElement = (text: string) => {
   if (!fabricCanvas) return;
-  // 设置更安全的初始位置，避免溢出
   const safeLeft = 300;
   const safeTop = 300;
 
-  // 创建默认阴影
-  const defaultShadow = new fabric.Shadow({
-    color: "rgba(0,0,0,0.4)",
-    blur: 10,
-    offsetX: 7,
-    offsetY: 7,
-  });
-
-  // 使用 IText 以支持双击/编辑/光标
+  // 使用 IText 支持文本编辑
   const textObj = new fabric.IText(text, {
     left: safeLeft,
     top: safeTop,
     fontSize: 32,
     fill: "#000000",
     fontFamily: "Arial",
-    fontWeight: "bold",
-    shadow: defaultShadow,
-    stroke: "transparent", // 文字默认无描边
-    strokeWidth: 0,
+    fontWeight: "normal",
   });
 
   fabricCanvas.add(textObj);
   fabricCanvas.setActiveObject(textObj);
-  // 新增文本后直接进入编辑，提升效率
-  try {
-    (textObj as any).enterEditing();
-    (textObj as any).hiddenTextarea &&
-      (textObj as any).hiddenTextarea.focus &&
-      (textObj as any).hiddenTextarea.focus();
-  } catch {}
   fabricCanvas.renderAll();
-  console.log("添加文字元素:", textObj);
 };
 
 // 添加图片元素
@@ -720,26 +608,16 @@ const addImageElement = (imageUrl: string) => {
   fabric.Image.fromURL(
     imageUrl,
     (img) => {
-      // 创建默认阴影
-      const defaultShadow = new fabric.Shadow({
-        color: "rgba(0,0,0,0.4)",
-        blur: 10,
-        offsetX: 7,
-        offsetY: 7,
-      });
-
       img.set({
         left: 50,
         top: 50,
         scaleX: 0.5,
         scaleY: 0.5,
-        objectCaching: false, // 禁用对象缓存以使阴影等效果正常工作
-        shadow: defaultShadow, // 添加默认阴影
       });
       fabricCanvas?.add(img);
       fabricCanvas?.setActiveObject(img);
     },
-    { crossOrigin: "anonymous" } // 设置跨域属性以支持阴影等效果
+    { crossOrigin: "anonymous" }
   );
 };
 
@@ -748,12 +626,8 @@ const addShapeElement = (type: string) => {
   if (!fabricCanvas) return;
   let shape: fabric.Object | null = null;
 
-  // 设置一个安全的初始位置，确保在画布可视区域内
-  const safeLeft = 300; // 避免太靠左边
-  const safeTop = 300; // 避免太靠上边
-
-  // 默认使用图案填充（第一个图案）
-  const defaultPatternSrc = "/template/poster/1.jpg";
+  const safeLeft = 300;
+  const safeTop = 300;
 
   if (type === "rect") {
     shape = new fabric.Rect({
@@ -761,23 +635,17 @@ const addShapeElement = (type: string) => {
       top: safeTop,
       width: 150,
       height: 220,
-      fill: "#4fd1c5", // 临时填充,稍后替换为图案
-      stroke: "transparent",
-      strokeWidth: 0,
+      fill: "#4fd1c5",
       rx: 12,
       ry: 12,
     });
-    console.log("Created rect:", shape);
   } else if (type === "circle") {
     shape = new fabric.Circle({
       left: safeLeft,
       top: safeTop,
-      radius: 75, // 直径150,接近矩形宽度
+      radius: 75,
       fill: "#667eea",
-      stroke: "transparent",
-      strokeWidth: 0,
     });
-    console.log("Created circle:", shape);
   } else if (type === "triangle") {
     shape = new fabric.Triangle({
       left: safeLeft,
@@ -785,20 +653,14 @@ const addShapeElement = (type: string) => {
       width: 150,
       height: 225,
       fill: "#f59e0b",
-      stroke: "transparent",
-      strokeWidth: 0,
     });
-    console.log("Created triangle:", shape);
   } else if (type === "line") {
-    // 通过坐标创建一条水平直线
     shape = new fabric.Line([safeLeft, safeTop, safeLeft + 150, safeTop], {
       stroke: "#111827",
       strokeWidth: 6,
       selectable: true,
     });
-    console.log("Created line:", shape);
   } else if (type === "star") {
-    // 生成五角星顶点,按照150宽度的比例
     const createStarPoints = (
       spikes: number,
       outerRadius: number,
@@ -808,100 +670,36 @@ const addShapeElement = (type: string) => {
       const step = Math.PI / spikes;
       for (let i = 0; i < 2 * spikes; i++) {
         const r = i % 2 === 0 ? outerRadius : innerRadius;
-        const a = i * step - Math.PI / 2; // 让一角朝上
+        const a = i * step - Math.PI / 2;
         points.push({ x: Math.cos(a) * r, y: Math.sin(a) * r });
       }
       return points;
     };
-    const points = createStarPoints(5, 75, 35); // 调整为接近150的尺寸
+    const points = createStarPoints(5, 75, 35);
     shape = new fabric.Polygon(points, {
       left: safeLeft,
       top: safeTop,
       fill: "#ec4899",
-      stroke: "transparent",
-      strokeWidth: 0,
       originX: "center",
       originY: "center",
     });
-    console.log("Created star:", shape);
   } else if (type === "arrow") {
-    // 使用 Path 绘制一个指向右侧的箭头,按照150宽度的比例
     const pathData = "M 0 0 L 110 0 L 110 -20 L 150 0 L 110 20 L 110 0 Z";
     shape = new fabric.Path(pathData, {
       left: safeLeft,
       top: safeTop,
       fill: "#10b981",
-      stroke: "transparent",
-      strokeWidth: 0,
       originX: "left",
       originY: "center",
     });
-    console.log("Created arrow:", shape);
   }
 
   if (shape) {
-    console.log("Adding shape to canvas:", shape);
-
-    // 添加默认阴影
-    const defaultShadow = new fabric.Shadow({
-      color: "rgba(0,0,0,0.4)",
-      blur: 10,
-      offsetX: 7,
-      offsetY: 7,
-    });
-    shape.set("shadow", defaultShadow);
-
     fabricCanvas.add(shape);
     fabricCanvas.setActiveObject(shape);
-
-    // 如果不是直线，应用默认图案填充
-    if (type !== "line") {
-      const imgSrc = `${window.location.origin}${defaultPatternSrc}`;
-      fabric.util.loadImage(
-        imgSrc,
-        (img: HTMLImageElement | null) => {
-          if (img && shape) {
-            const objWidth =
-              shape.getScaledWidth?.() || (shape as any).width || 100;
-            const objHeight =
-              shape.getScaledHeight?.() || (shape as any).height || 100;
-            const scale = Math.min(
-              objWidth / img.width,
-              objHeight / img.height
-            );
-
-            const pattern = new fabric.Pattern({
-              source: img,
-              repeat: "no-repeat",
-            });
-            pattern.patternTransform = [scale, 0, 0, scale, 0, 0];
-            const offsetX = (objWidth - img.width * scale) / 2;
-            const offsetY = (objHeight - img.height * scale) / 2;
-            pattern.offsetX = offsetX;
-            pattern.offsetY = offsetY;
-
-            shape.set("fill", pattern);
-            fabricCanvas?.renderAll();
-          }
-        },
-        null,
-        "anonymous"
-      );
-    }
-
-    fabricCanvas.renderAll(); // 强制重新渲染
-    console.log("Canvas objects count:", fabricCanvas.size());
-    const typeToMsg: Record<string, string> = {
-      rect: t('designer.rectangle'),
-      circle: t('designer.circle'),
-      triangle: t('designer.triangle'),
-      line: t('designer.line'),
-      star: t('designer.star'),
-      arrow: t('designer.arrow'),
-    };
+    fabricCanvas.renderAll();
     ElMessage.success(t('designer.addedShape'));
   } else {
-    console.error("Failed to create shape of type:", type);
     ElMessage.error(t('common.failed'));
   }
 };
@@ -981,6 +779,135 @@ const changeBackground = (bg: any) => {
       fabricCanvas.renderAll.bind(fabricCanvas)
     );
   }
+};
+
+// 添加海报元素
+const addPosterElement = (posterIndex: number = 1) => {
+  if (!fabricCanvas) return;
+  
+  const posterSrc = `/template/poster/${posterIndex}.jpg`;
+  const safeLeft = 300;
+  const safeTop = 300;
+
+  fabric.Image.fromURL(
+    posterSrc,
+    (img) => {
+      // 设置海报尺寸（与矩形元素相同）
+      const targetWidth = 150;
+      const targetHeight = 220;
+      
+      const scaleX = targetWidth / (img.width || 1);
+      const scaleY = targetHeight / (img.height || 1);
+      
+      img.set({
+        left: safeLeft,
+        top: safeTop,
+        scaleX: scaleX,
+        scaleY: scaleY,
+        // 添加自定义属性标记这是海报元素
+        posterIndex: posterIndex,
+        posterType: 'poster'
+      } as any);
+      
+      fabricCanvas?.add(img);
+      fabricCanvas?.setActiveObject(img);
+      ElMessage.success(t('designer.posterAdded'));
+    },
+    { crossOrigin: "anonymous" }
+  );
+};
+
+// 切换海报形状
+const changePosterShape = (shape: string) => {
+  if (!fabricCanvas || !selectedObject.value || selectedObject.value.posterType !== 'poster') return;
+  
+  const poster = selectedObject.value as any;
+  const width = poster.width * poster.scaleX;
+  const height = poster.height * poster.scaleY;
+  
+  let clipPath: fabric.Object | null = null;
+  
+  switch (shape) {
+    case 'circle':
+      clipPath = new fabric.Circle({
+        radius: Math.min(width, height) / 2,
+        originX: 'center',
+        originY: 'center',
+        left: width / 2,
+        top: height / 2
+      });
+      break;
+    case 'triangle':
+      clipPath = new fabric.Triangle({
+        width: width,
+        height: height,
+        originX: 'center',
+        originY: 'center',
+        left: width / 2,
+        top: height / 2
+      });
+      break;
+    case 'star':
+      // 创建星形路径
+      const points = 5;
+      const outerRadius = Math.min(width, height) / 2;
+      const innerRadius = outerRadius * 0.4;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      
+      let pathData = '';
+      for (let i = 0; i < points * 2; i++) {
+        const radius = i % 2 === 0 ? outerRadius : innerRadius;
+        const angle = (Math.PI / points) * i - Math.PI / 2;
+        const x = centerX + radius * Math.cos(angle);
+        const y = centerY + radius * Math.sin(angle);
+        pathData += `${i === 0 ? 'M' : 'L'} ${x} ${y} `;
+      }
+      pathData += 'Z';
+      
+      clipPath = new fabric.Path(pathData, {
+        originX: 'left',
+        originY: 'top',
+        left: 0,
+        top: 0
+      });
+      break;
+    default: // rect
+      clipPath = null;
+  }
+  
+  poster.set({ clipPath: clipPath as any });
+  fabricCanvas.renderAll();
+  ElMessage.success(`已切换为${shape === 'rect' ? '矩形' : shape === 'circle' ? '圆形' : shape === 'triangle' ? '三角形' : '星形'}形状`);
+};
+
+// 切换海报图片
+const changePosterImage = (index: number) => {
+  if (!fabricCanvas || !selectedObject.value || selectedObject.value.posterType !== 'poster') return;
+  
+  const poster = selectedObject.value as fabric.Image;
+  const newSrc = `/template/poster/${index}.jpg`;
+  
+  fabric.Image.fromURL(
+    newSrc,
+    (newImg) => {
+      // 保持原有的缩放比例
+      const scaleX = poster.scaleX || 1;
+      const scaleY = poster.scaleY || 1;
+      
+      // 更新图片源和属性
+      poster.setElement(newImg.getElement());
+      poster.set({
+        posterIndex: index,
+        scaleX: scaleX,
+        scaleY: scaleY
+      } as any);
+      
+      fabricCanvas?.renderAll();
+      ElMessage.success(`已切换为海报 ${index}`);
+    },
+    { crossOrigin: "anonymous" }
+  );
 };
 
 // 更新对象属性

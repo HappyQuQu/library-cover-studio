@@ -28,6 +28,34 @@
           </div>
         </div>
 
+        <!-- 海报专属设置 -->
+        <div v-if="selectedObject.posterType === 'poster'" class="property-section">
+          <h4>海报形状</h4>
+          <div class="poster-shape-selector">
+            <el-button
+              v-for="shape in posterShapes"
+              :key="shape.value"
+              :type="currentPosterShape === shape.value ? 'primary' : ''"
+              size="small"
+              @click="changePosterShape(shape.value)"
+            >
+              {{ shape.label }}
+            </el-button>
+          </div>
+
+          <h4 style="margin-top: 20px">海报图片</h4>
+          <div class="poster-image-selector">
+            <div
+              v-for="index in 9"
+              :key="index"
+              :class="['poster-thumbnail', { active: selectedObject.posterIndex === index }]"
+              @click="changePosterImage(index)"
+            >
+              <img :src="`/template/poster/${index}.jpg`" :alt="`海报 ${index}`" />
+            </div>
+          </div>
+        </div>
+
         <!-- 阴影设置 -->
         <el-collapse v-model="activeCollapse" class="property-collapse">
           <el-collapse-item name="shadow">
@@ -457,6 +485,8 @@ const emit = defineEmits([
   "send-to-back",
   "toggle-pattern-edit-mode",
   "update-pattern-transform",
+  "change-poster-shape",
+  "change-poster-image",
 ]);
 
 // 折叠面板激活项
@@ -515,6 +545,29 @@ const isShapeObject = computed(() => {
   const t = props.selectedObject?.type;
   return ["rect", "circle", "triangle", "line", "polygon", "path"].includes(t);
 });
+
+// 海报形状选项
+const posterShapes = ref([
+  { label: "矩形", value: "rect" },
+  { label: "圆形", value: "circle" },
+  { label: "三角形", value: "triangle" },
+  { label: "星形", value: "star" }
+]);
+
+// 当前海报形状
+const currentPosterShape = ref("rect");
+
+// 切换海报形状
+const changePosterShape = (shape: string) => {
+  currentPosterShape.value = shape;
+  emit("change-poster-shape", shape);
+};
+
+// 切换海报图片
+const changePosterImage = (index: number) => {
+  emit("change-poster-image", index);
+};
+
 
 // 更新对象属性的函数
 const updateObjectProps = (obj: any) => {
@@ -842,4 +895,51 @@ const updatePatternTransform = () => {
 :deep(.el-color-picker) {
   display: block;
 }
+
+/* 海报形状选择器 */
+.poster-shape-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.poster-shape-selector .el-button {
+  width: 100%;
+}
+
+/* 海报图片选择器 */
+.poster-image-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.poster-thumbnail {
+  aspect-ratio: 2/3;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.poster-thumbnail:hover {
+  border-color: var(--el-color-primary);
+  transform: scale(1.05);
+}
+
+.poster-thumbnail.active {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 8px var(--el-color-primary);
+}
+
+.poster-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 </style>

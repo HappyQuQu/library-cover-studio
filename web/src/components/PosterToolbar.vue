@@ -117,6 +117,10 @@
             <el-icon><Picture /></el-icon>
             添加图片
           </el-button>
+          <el-button type="success" @click="handleAddPoster">
+            <el-icon><Picture /></el-icon>
+            添加海报
+          </el-button>
           <el-button @click="addShape('rect')">
             <el-icon><Grid /></el-icon>
             矩形
@@ -143,24 +147,6 @@
           </el-button>
         </div>
       </div>
-
-      <div class="toolbar-section">
-        <h4>模板操作</h4>
-        <div class="template-buttons">
-          <el-button type="success" @click="$emit('save-template')">
-            <el-icon><Check /></el-icon>
-            保存模板
-          </el-button>
-          <el-button @click="loadTemplate">
-            <el-icon><Folder /></el-icon>
-            加载模板
-          </el-button>
-          <el-button @click="exportPoster">
-            <el-icon><Download /></el-icon>
-            导出海报
-          </el-button>
-        </div>
-      </div>
     </el-scrollbar>
 
     <!-- 图片上传对话框 -->
@@ -181,6 +167,7 @@
 
 <script setup lang="ts">
 import { ref } from "vue";
+import { useI18n } from "vue-i18n";
 import {
   Edit,
   Picture,
@@ -189,21 +176,18 @@ import {
   Minus,
   Star,
   Right,
-  Check,
-  Folder,
-  Download,
   Upload,
 } from "@element-plus/icons-vue";
+
+const { t } = useI18n();
 
 // 事件定义
 const emit = defineEmits([
   "add-text",
   "add-image",
   "change-background",
-  "save-template",
-  "load-template",
   "add-shape",
-  "export-poster",
+  "add-poster",
 ]);
 
 // 响应式数据
@@ -270,14 +254,9 @@ const addShape = (type: string) => {
   emit("add-shape", type);
 };
 
-// 加载模板
-const loadTemplate = () => {
-  emit("load-template");
-};
-
-// 导出海报
-const exportPoster = () => {
-  emit("export-poster");
+// 添加海报
+const handleAddPoster = () => {
+  emit("add-poster", 1); // 默认添加第1张海报
 };
 </script>
 
