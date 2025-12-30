@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const db = require("../services/database");
 const MediaServerService = require("../services/mediaServerService");
+const { authenticate } = require("../middleware/auth");
 
 /**
  * 获取所有媒体源

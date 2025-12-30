@@ -197,8 +197,19 @@ import {
 } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { API_ENDPOINTS, API_BASE_URL } from "../config/api";
+import axios from "axios";
+import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+
+// 带有认证头的 Axios 辅助函数
+const authAxios = {
+  get: (url, config = {}) => axios.get(url, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  post: (url, data, config = {}) => axios.post(url, data, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  put: (url, data, config = {}) => axios.put(url, data, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  delete: (url, config = {}) => axios.delete(url, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+};
 
 // 模板类型定义
 interface Template {
@@ -315,20 +326,9 @@ const loadTemplates = async () => {
       sortBy: sortBy.value || undefined,
     };
 
-    // 构建查询字符串
-    const queryString = new URLSearchParams(
-      Object.entries(params)
-        .filter(([_, v]) => v !== undefined)
-        .map(([k, v]) => [k, String(v)])
-    ).toString();
-
     // 调用API
-    const response = await fetch(
-      `${API_ENDPOINTS.templates.base}?${queryString}`
-    );
-    if (!response.ok) throw new Error(t('templates.loadFailed'));
-
-    const data = await response.json();
+    const response = await authAxios.get(API_ENDPOINTS.templates.base, { params });
+    const data = response.data;
 
     // 后端返回格式: { templates: [...] }
     if (data.templates) {
@@ -369,17 +369,13 @@ const editTemplate = (template: Template) => {
 
 const duplicateTemplate = async (template: Template) => {
   try {
-    const response = await fetch(
+    const response = await authAxios.post(
       API_ENDPOINTS.templates.duplicate(template.id),
-      {
-        method: "POST",
-      }
+      {}
     );
 
-    if (!response.ok) throw new Error(t('templates.duplicateFailed'));
-
     // 后端直接返回新模板对象
-    const data = await response.json();
+    const data = response.data;
     if (data.id) {
       ElMessage.success(t('templates.duplicateSuccess'));
       loadTemplates();
@@ -402,14 +398,10 @@ const deleteTemplate = async (template: Template) => {
       }
     );
 
-    const response = await fetch(API_ENDPOINTS.templates.byId(template.id), {
-      method: "DELETE",
-    });
-
-    if (!response.ok) throw new Error(t('templates.deleteFailed'));
+    const response = await authAxios.delete(API_ENDPOINTS.templates.byId(template.id));
 
     // 后端返回 { message: "模板已删除" }
-    const data = await response.json();
+    const data = response.data;
     if (data.message) {
       ElMessage.success(t('templates.deleteSuccess'));
       loadTemplates();

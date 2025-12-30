@@ -1,21 +1,23 @@
-import axios from "axios";
+import apiClient from "./client";
 
-const base = "/api/logs";
+const base = "/logs";
 
 export const fetchSystemLogs = async (lines = 300): Promise<string> => {
-  const { data } = await axios.get(`${base}/system`, { params: { lines } });
+  const { data } = await apiClient.get(`${base}/system`, { params: { lines } });
   return data as string;
 };
 
 export const fetchTaskLogs = async (lines = 300): Promise<string> => {
-  const { data } = await axios.get(`${base}/tasks`, { params: { lines } });
+  const { data } = await apiClient.get(`${base}/tasks`, { params: { lines } });
   return data as string;
 };
 
 export const downloadSystemLogs = () => {
-  window.open(`${base}/system/download`, "_blank");
+  const token = localStorage.getItem("token");
+  window.open(`${apiClient.defaults.baseURL}${base}/system/download?token=${token}`, "_blank");
 };
 
 export const downloadTaskLogs = () => {
-  window.open(`${base}/tasks/download`, "_blank");
+  const token = localStorage.getItem("token");
+  window.open(`${apiClient.defaults.baseURL}${base}/tasks/download?token=${token}`, "_blank");
 };

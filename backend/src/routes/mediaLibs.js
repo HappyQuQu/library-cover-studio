@@ -5,10 +5,10 @@ const { validateMediaLibrary } = require("../middleware/validation");
 const { authenticate } = require("../middleware/auth");
 
 // 获取所有媒体库配置
-router.get("/", mediaLibController.getAllMediaLibraries);
+router.get("/", authenticate, mediaLibController.getAllMediaLibraries);
 
 // 根据ID获取媒体库配置
-router.get("/:id", mediaLibController.getMediaLibraryById);
+router.get("/:id", authenticate, mediaLibController.getMediaLibraryById);
 
 // 创建新媒体库配置（需要认证）
 router.post(
@@ -36,6 +36,6 @@ router.post("/:id/test", authenticate, mediaLibController.testConnection);
 router.post("/:id/sync", authenticate, mediaLibController.syncMediaLibrary);
 
 // 获取媒体库中的媒体项目
-router.get("/:id/items", mediaLibController.getMediaItems);
+router.get("/:id/items", authenticate, mediaLibController.getMediaItems);
 
 module.exports = router;

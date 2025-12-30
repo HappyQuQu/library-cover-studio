@@ -3,12 +3,13 @@ const router = express.Router();
 const db = require("../services/database");
 const { getInstance: getScheduler } = require("../services/schedulerService");
 const cron = require("node-cron");
+const { authenticate } = require("../middleware/auth");
 
 /**
  * 获取所有定时任务
  * GET /api/scheduled-tasks
  */
-router.get("/", async (req, res) => {
+router.get("/", authenticate, async (req, res) => {
   try {
     const tasks = await db.getDb().all(
       `SELECT 
@@ -36,7 +37,7 @@ router.get("/", async (req, res) => {
  * 获取单个定时任务
  * GET /api/scheduled-tasks/:id
  */
-router.get("/:id", async (req, res) => {
+router.get("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -75,7 +76,7 @@ router.get("/:id", async (req, res) => {
  * 创建定时任务
  * POST /api/scheduled-tasks
  */
-router.post("/", async (req, res) => {
+router.post("/", authenticate, async (req, res) => {
   try {
     const {
       name,
@@ -181,7 +182,7 @@ router.post("/", async (req, res) => {
  * 更新定时任务
  * PUT /api/scheduled-tasks/:id
  */
-router.put("/:id", async (req, res) => {
+router.put("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -301,7 +302,7 @@ router.put("/:id", async (req, res) => {
  * 删除定时任务
  * DELETE /api/scheduled-tasks/:id
  */
-router.delete("/:id", async (req, res) => {
+router.delete("/:id", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -341,7 +342,7 @@ router.delete("/:id", async (req, res) => {
  * 启用/禁用定时任务
  * POST /api/scheduled-tasks/:id/toggle
  */
-router.post("/:id/toggle", async (req, res) => {
+router.post("/:id/toggle", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -394,7 +395,7 @@ router.post("/:id/toggle", async (req, res) => {
  * 手动触发任务
  * POST /api/scheduled-tasks/:id/trigger
  */
-router.post("/:id/trigger", async (req, res) => {
+router.post("/:id/trigger", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -430,7 +431,7 @@ router.post("/:id/trigger", async (req, res) => {
  * 获取任务执行历史
  * GET /api/scheduled-tasks/:id/executions
  */
-router.get("/:id/executions", async (req, res) => {
+router.get("/:id/executions", authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { limit = 10 } = req.query;

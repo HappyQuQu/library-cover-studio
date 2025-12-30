@@ -37,12 +37,22 @@ class ScheduleController {
   async createTask(req, res) {
     try {
       const db = database.getDb();
-      const { name, templateId, mediaLibraryId, cronExpression, filters } = req.body;
+      const { name, mediaSourceId, libraryTemplateMapping, textReplacements, cronExpression, posterCount, uploadEnabled, sortBy } = req.body;
       const id = crypto.randomBytes(16).toString("hex");
 
       await db.run(
-        "INSERT INTO scheduled_tasks (id, name, template_id, media_library_id, cron_expression, filters) VALUES (?, ?, ?, ?, ?, ?)",
-        [id, name, templateId, mediaLibraryId, cronExpression, JSON.stringify(filters || {})]
+        "INSERT INTO scheduled_tasks (id, name, media_source_id, library_template_mapping, text_replacements, cron_expression, poster_count, upload_enabled, sort_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [
+          id,
+          name,
+          mediaSourceId,
+          JSON.stringify(libraryTemplateMapping || {}),
+          JSON.stringify(textReplacements || {}),
+          cronExpression,
+          posterCount || 9,
+          uploadEnabled ? 1 : 0,
+          sortBy || 'DateCreated'
+        ]
       );
 
       const newTask = await db.get("SELECT * FROM scheduled_tasks WHERE id = ?", [id]);
@@ -57,7 +67,7 @@ class ScheduleController {
     try {
       const db = database.getDb();
       const { id } = req.params;
-      const { name, templateId, mediaLibraryId, cronExpression, filters } = req.body;
+      const { name, mediaSourceId, libraryTemplateMapping, textReplacements, cronExpression, posterCount, uploadEnabled, sortBy } = req.body;
 
       const existing = await db.get("SELECT * FROM scheduled_tasks WHERE id = ?", [id]);
 
@@ -66,8 +76,18 @@ class ScheduleController {
       }
 
       await db.run(
-        "UPDATE scheduled_tasks SET name = ?, template_id = ?, media_library_id = ?, cron_expression = ?, filters = ? WHERE id = ?",
-        [name, templateId, mediaLibraryId, cronExpression, JSON.stringify(filters || {}), id]
+        "UPDATE scheduled_tasks SET name = ?, media_source_id = ?, library_template_mapping = ?, text_replacements = ?, cron_expression = ?, poster_count = ?, upload_enabled = ?, sort_by = ? WHERE id = ?",
+        [
+          name,
+          mediaSourceId,
+          JSON.stringify(libraryTemplateMapping || {}),
+          JSON.stringify(textReplacements || {}),
+          cronExpression,
+          posterCount,
+          uploadEnabled ? 1 : 0,
+          sortBy,
+          id
+        ]
       );
 
       const updatedTask = await db.get("SELECT * FROM scheduled_tasks WHERE id = ?", [id]);
@@ -99,10 +119,13 @@ class ScheduleController {
 
   async triggerTask(req, res) {
     try {
-      res.json({ message: "手动触发功能待实现" });
+      const { id } = req.params;
+      const scheduleService = require("../services/scheduleService");
+      const result = await scheduleService.triggerTask(id);
+      res.json(result);
     } catch (error) {
       console.error("触发任务失败:", error);
-      res.status(500).json({ error: "触发任务失败" });
+      res.status(500).json({ error: "触发任务失败: " + error.message });
     }
   }
 

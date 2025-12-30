@@ -6,15 +6,15 @@ const upload = require("../middleware/upload");
 const { authenticate } = require("../middleware/auth");
 
 // 获取所有模板
-router.get("/", templateController.getAllTemplates);
+router.get("/", authenticate, templateController.getAllTemplates);
 
 // 根据ID获取模板
-router.get("/:id", templateController.getTemplateById);
+router.get("/:id", authenticate, templateController.getTemplateById);
 
 // 创建新模板（需要认证）
 router.post(
   "/",
-  // authenticate, // 暂时注释以便测试
+  authenticate,
   upload.single("preview"),
   validateTemplate,
   templateController.createTemplate
@@ -23,19 +23,19 @@ router.post(
 // 更新模板（需要认证）
 router.put(
   "/:id",
-  // authenticate, // 暂时注释以便测试
+  authenticate,
   upload.single("preview"),
   validateTemplate,
   templateController.updateTemplate
 );
 
 // 删除模板（需要认证）
-router.delete("/:id", /* authenticate, */ templateController.deleteTemplate);
+router.delete("/:id", authenticate, templateController.deleteTemplate);
 
 // 复制模板
-router.post("/:id/duplicate", templateController.duplicateTemplate);
+router.post("/:id/duplicate", authenticate, templateController.duplicateTemplate);
 
 // 导出模板
-router.get("/:id/export", templateController.exportTemplate);
+router.get("/:id/export", authenticate, templateController.exportTemplate);
 
 module.exports = router;

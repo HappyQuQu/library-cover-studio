@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const JellyfinService = require("../services/jellyfinService");
 const { getInstance: getScheduler } = require("../services/schedulerService");
+const { authenticate } = require("../middleware/auth");
 
 /**
  * 测试连接
  * POST /api/jellyfin/test-connection
  */
-router.post("/test-connection", async (req, res) => {
+router.post("/test-connection", authenticate, async (req, res) => {
   try {
     const { baseURL, apiKey, userId } = req.body;
 
@@ -47,7 +48,7 @@ router.post("/test-connection", async (req, res) => {
  * 获取媒体库列表
  * POST /api/jellyfin/libraries
  */
-router.post("/libraries", async (req, res) => {
+router.post("/libraries", authenticate, async (req, res) => {
   try {
     const { baseURL, apiKey, userId, excludeLibraries = [] } = req.body;
 
@@ -82,7 +83,7 @@ router.post("/libraries", async (req, res) => {
  * 获取媒体项
  * POST /api/jellyfin/items
  */
-router.post("/items", async (req, res) => {
+router.post("/items", authenticate, async (req, res) => {
   try {
     const {
       baseURL,
@@ -134,7 +135,7 @@ router.post("/items", async (req, res) => {
  * 添加定时任务
  * POST /api/jellyfin/schedule/add
  */
-router.post("/schedule/add", async (req, res) => {
+router.post("/schedule/add", authenticate, async (req, res) => {
   try {
     const {
       taskId,
@@ -183,7 +184,7 @@ router.post("/schedule/add", async (req, res) => {
  * 获取所有定时任务
  * GET /api/jellyfin/schedule/list
  */
-router.get("/schedule/list", async (req, res) => {
+router.get("/schedule/list", authenticate, async (req, res) => {
   try {
     const scheduler = getScheduler();
     const tasks = scheduler.getAllTasks();
@@ -204,7 +205,7 @@ router.get("/schedule/list", async (req, res) => {
  * 启动任务
  * POST /api/jellyfin/schedule/start/:taskId
  */
-router.post("/schedule/start/:taskId", async (req, res) => {
+router.post("/schedule/start/:taskId", authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
     const scheduler = getScheduler();
@@ -227,7 +228,7 @@ router.post("/schedule/start/:taskId", async (req, res) => {
  * 停止任务
  * POST /api/jellyfin/schedule/stop/:taskId
  */
-router.post("/schedule/stop/:taskId", async (req, res) => {
+router.post("/schedule/stop/:taskId", authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
     const scheduler = getScheduler();
@@ -250,7 +251,7 @@ router.post("/schedule/stop/:taskId", async (req, res) => {
  * 手动触发任务
  * POST /api/jellyfin/schedule/trigger/:taskId
  */
-router.post("/schedule/trigger/:taskId", async (req, res) => {
+router.post("/schedule/trigger/:taskId", authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
     const scheduler = getScheduler();
@@ -276,7 +277,7 @@ router.post("/schedule/trigger/:taskId", async (req, res) => {
  * 删除任务
  * DELETE /api/jellyfin/schedule/:taskId
  */
-router.delete("/schedule/:taskId", async (req, res) => {
+router.delete("/schedule/:taskId", authenticate, async (req, res) => {
   try {
     const { taskId } = req.params;
     const scheduler = getScheduler();

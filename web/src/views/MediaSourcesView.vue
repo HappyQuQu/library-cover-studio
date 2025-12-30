@@ -176,8 +176,18 @@ import { Plus, Refresh, Picture, Loading } from "@element-plus/icons-vue";
 import axios from "axios";
 import { API_ENDPOINTS } from "../config/api";
 import { useI18n } from "vue-i18n";
+import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+
+// 带有认证头的 Axios 辅助函数
+const authAxios = {
+  get: (url) => axios.get(url, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  post: (url, data) => axios.post(url, data, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  put: (url, data) => axios.put(url, data, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  delete: (url) => axios.delete(url, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+};
 
 // 类型定义
 interface MediaSource {
@@ -235,7 +245,7 @@ const rules = {
 const loadSources = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(API_ENDPOINTS.mediaSources.base);
+    const response = await authAxios.get(API_ENDPOINTS.mediaSources.base);
     mediaSources.value = response.data.data || [];
   } catch (error: any) {
     ElMessage.error(t('mediaSources.loadFailed') + ": " + error.message);
@@ -259,7 +269,7 @@ const handleExpandChange = (
 const loadLibraries = async (source: MediaSource) => {
   librariesLoading.value[source.id] = true;
   try {
-    const response = await axios.get(
+    const response = await authAxios.get(
       API_ENDPOINTS.mediaSources.libraries(source.id)
     );
     const libs = response.data.data || response.data.libraries || [];
@@ -311,7 +321,7 @@ const showAddDialog = () => {
 // 编辑媒体源
 const editSource = async (row: MediaSource) => {
   try {
-    const response = await axios.get(API_ENDPOINTS.mediaSources.byId(row.id));
+    const response = await authAxios.get(API_ENDPOINTS.mediaSources.byId(row.id));
     const data = response.data.data;
 
     dialogTitle.value = "编辑媒体源";
@@ -345,11 +355,11 @@ const submitForm = async () => {
 
     if (editingId.value) {
       // 更新
-      await axios.put(API_ENDPOINTS.mediaSources.byId(editingId.value), data);
+      await authAxios.put(API_ENDPOINTS.mediaSources.byId(editingId.value), data);
       ElMessage.success(t('mediaSources.updateSuccess'));
     } else {
       // 创建
-      await axios.post(API_ENDPOINTS.mediaSources.base, data);
+      await authAxios.post(API_ENDPOINTS.mediaSources.base, data);
       ElMessage.success(t('mediaSources.createSuccess'));
     }
 
@@ -376,7 +386,7 @@ const testConnection = async (row: MediaSource) => {
   });
 
   try {
-    const response = await axios.post(API_ENDPOINTS.mediaSources.test(row.id));
+    const response = await authAxios.post(API_ENDPOINTS.mediaSources.test(row.id), {});
     loading.close();
 
     const info = response.data.serverInfo || {};
@@ -413,7 +423,7 @@ const deleteSource = async (row: MediaSource) => {
       }
     );
 
-    await axios.delete(API_ENDPOINTS.mediaSources.byId(row.id));
+    await authAxios.delete(API_ENDPOINTS.mediaSources.byId(row.id));
     ElMessage.success(t('mediaSources.deleteSuccess'));
     loadSources();
   } catch (error: any) {

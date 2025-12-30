@@ -45,8 +45,10 @@ class MediaLibraryService {
       const params = {
         IncludeItemTypes: "Movie,Series",
         Recursive: true,
-        Fields: "Overview,Genres,ProductionYear,CommunityRating",
-        limit: filters.limit || 100,
+        Fields: "Overview,Genres,ProductionYear,CommunityRating,PrimaryImageAspectRatio",
+        Limit: filters.limit || 100,
+        SortBy: filters.sortBy || "DateCreated",
+        SortOrder: filters.sortBy === "Random" ? undefined : "Descending"
       };
 
       if (filters.mediaType) {
@@ -77,6 +79,7 @@ class MediaLibraryService {
         rating: item.CommunityRating,
         overview: item.Overview,
         genres: item.Genres || [],
+        posterUrl: `${mediaLib.base_url}/Items/${item.Id}/Images/Primary`
       }));
     } catch (error) {
       console.error("获取Jellyfin项目失败:", error);
@@ -90,8 +93,10 @@ class MediaLibraryService {
       const params = {
         IncludeItemTypes: "Movie,Series",
         Recursive: true,
-        Fields: "Overview,Genres,ProductionYear,CommunityRating",
-        limit: filters.limit || 100,
+        Fields: "Overview,Genres,ProductionYear,CommunityRating,PrimaryImageAspectRatio",
+        Limit: filters.limit || 100,
+        SortBy: filters.sortBy || "DateCreated",
+        SortOrder: filters.sortBy === "Random" ? undefined : "Descending"
       };
 
       if (filters.mediaType) {
@@ -118,6 +123,7 @@ class MediaLibraryService {
         rating: item.CommunityRating,
         overview: item.Overview,
         genres: item.Genres || [],
+        posterUrl: `${mediaLib.base_url}/emby/Items/${item.Id}/Images/Primary`
       }));
     } catch (error) {
       console.error("获取Emby项目失败:", error);

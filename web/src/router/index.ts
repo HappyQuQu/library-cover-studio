@@ -36,12 +36,7 @@ const routes = [
         component: () => import("../views/SettingsView.vue"),
         meta: { requiresAuth: true },
       },
-      {
-        path: "/app/schedule",
-        name: "Schedule",
-        component: () => import("../views/ScheduleView.vue"),
-        meta: { requiresAuth: true },
-      },
+
       {
         path: "/app/media-sources",
         name: "MediaSources",

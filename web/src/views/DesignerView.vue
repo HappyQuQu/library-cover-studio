@@ -15,28 +15,56 @@
         <div class="top-toolbar">
           <div class="toolbar-left">
             <el-button
-              size="small"
-              text
+              class="back-btn"
               @click="router.push('/app/templates')"
-              style="margin-right: 12px"
             >
               <el-icon><ArrowLeft /></el-icon>
-              {{ t('designer.backToList') }}
             </el-button>
-            <span class="toolbar-title">{{
-              templateInfo.name || t('designer.newTemplate')
-            }}</span>
+            <div class="template-info">
+              <span class="toolbar-title">{{ templateInfo.name || t('designer.newTemplate') }}</span>
+              <el-button class="edit-name-btn" @click="showTemplateInfoDialog = true">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </div>
           </div>
+          
+          <div class="toolbar-center">
+            <div class="quick-actions-bar">
+              <el-tooltip content="撤销" placement="bottom">
+                <el-button class="action-icon-btn" disabled>
+                  <el-icon><RefreshLeft /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="重做" placement="bottom">
+                <el-button class="action-icon-btn" disabled>
+                  <el-icon><RefreshRight /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <div class="action-divider"></div>
+              <el-tooltip content="缩放" placement="bottom">
+                <div class="zoom-control">
+                  <el-button class="zoom-btn" @click="zoomOut">
+                    <el-icon><Minus /></el-icon>
+                  </el-button>
+                  <span class="zoom-value">{{ Math.round(zoomLevel * 100) }}%</span>
+                  <el-button class="zoom-btn" @click="zoomIn">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                </div>
+              </el-tooltip>
+            </div>
+          </div>
+          
           <div class="toolbar-actions">
-            <el-button size="small" @click="showTemplateInfoDialog = true">
-              <el-icon><Edit /></el-icon>
+            <el-button class="toolbar-btn" @click="showTemplateInfoDialog = true">
+              <el-icon><Setting /></el-icon>
               {{ t('designer.templateInfo') }}
             </el-button>
-            <el-button size="small" type="success" @click="saveTemplate">
+            <el-button class="toolbar-btn save-btn" @click="saveTemplate">
               <el-icon><Check /></el-icon>
               {{ t('designer.saveTemplate') }}
             </el-button>
-            <el-button size="small" type="primary" @click="exportPoster">
+            <el-button class="toolbar-btn export-btn" @click="exportPoster">
               <el-icon><Download /></el-icon>
               {{ t('designer.exportPoster') }}
             </el-button>
@@ -47,14 +75,29 @@
         <div class="canvas-content">
           <div
             class="canvas-wrapper"
-            style="width: 960px; height: 540px; overflow: hidden; padding: 0"
+            :style="{
+              width: 960 * zoomLevel + 'px',
+              height: 540 * zoomLevel + 'px',
+              overflow: 'hidden',
+              padding: 0
+            }"
           >
             <canvas
               ref="canvasRef"
               :width="canvasWidth"
               :height="canvasHeight"
-              style="width: 100%; height: 100%; display: block; margin: 0"
+              :style="{
+                width: '100%',
+                height: '100%',
+                display: 'block',
+                margin: 0
+              }"
             ></canvas>
+          </div>
+          
+          <!-- 底部操作栏 -->
+          <div class="bottom-bar">
+            <span class="canvas-size">{{ canvasWidth }} × {{ canvasHeight }}px</span>
           </div>
         </div>
       </el-main>
@@ -67,9 +110,6 @@
           @delete-object="() => handlePropertiesAction('delete')"
           @bring-to-front="() => handlePropertiesAction('bringToFront')"
           @send-to-back="() => handlePropertiesAction('sendToBack')"
-          @toggle-pattern-edit-mode="togglePatternEditMode"
-          @update-pattern-transform="updatePatternTransform"
-          @change-poster-shape="changePosterShape"
           @change-poster-image="changePosterImage"
         />
       </el-aside>
@@ -287,10 +327,41 @@ import {
   Download,
   ArrowLeft,
   Edit,
+  Setting,
+  RefreshLeft,
+  RefreshRight,
+  Minus,
+  Plus,
 } from "@element-plus/icons-vue";
 import { API_ENDPOINTS } from "../config/api";
+import axios, { AxiosRequestConfig } from "axios";
+import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
+const authStore = useAuthStore();
+
+// 缩放级别
+const zoomLevel = ref(1);
+
+const zoomIn = () => {
+  zoomLevel.value = Math.min(2, zoomLevel.value + 0.1);
+};
+
+const zoomOut = () => {
+  zoomLevel.value = Math.max(0.5, zoomLevel.value - 0.1);
+};
+
+// 带有认证头的 Axios 辅助函数
+const authAxios = {
+  get: (url: string, config: AxiosRequestConfig = {}) => 
+    axios.get(url, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  post: (url: string, data: any, config: AxiosRequestConfig = {}) => 
+    axios.post(url, data, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  put: (url: string, data: any, config: AxiosRequestConfig = {}) => 
+    axios.put(url, data, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+  delete: (url: string, config: AxiosRequestConfig = {}) => 
+    axios.delete(url, { ...config, headers: { ...config.headers, Authorization: `Bearer ${authStore.token}` } }),
+};
 
 // 路由
 const route = useRoute();
@@ -319,6 +390,13 @@ let fabricCanvas: fabric.Canvas | null = null;
 const selectedObject = ref<fabric.Object | null>(null);
 // 添加一个计数器来强制刷新
 const updateCounter = ref(0);
+// 图层列表数据
+const canvasObjects = ref<any[]>([]);
+
+const syncCanvasObjects = () => {
+  if (!fabricCanvas) return;
+  canvasObjects.value = [...fabricCanvas.getObjects()];
+};
 // 图案编辑模式
 const patternEditMode = ref(false);
 const patternDragging = ref(false);
@@ -355,6 +433,7 @@ const patternImages = [
   "/template/poster/8.jpg",
   "/template/poster/9.jpg",
 ];
+
 const patternEditorDragging = ref(false);
 const patternEditorLast = ref({ x: 0, y: 0 });
 // 弹窗视图的展示尺寸（按实际元素尺寸1:1显示,如果太大则按比例缩小到最大640px宽）
@@ -435,13 +514,18 @@ onMounted(() => {
     // 监听对象选择
     fabricCanvas.on("selection:created", (e) => {
       selectedObject.value = e.selected?.[0] || null;
+      syncCanvasObjects();
     });
     fabricCanvas.on("selection:updated", (e) => {
       selectedObject.value = e.selected?.[0] || null;
+      syncCanvasObjects();
     });
     fabricCanvas.on("selection:cleared", () => {
       selectedObject.value = null;
+      syncCanvasObjects();
     });
+    fabricCanvas.on("object:added", syncCanvasObjects);
+    fabricCanvas.on("object:removed", syncCanvasObjects);
     // 监听对象变动，实时刷新属性面板
     const syncProperties = () => {
       if (!fabricCanvas) return;
@@ -781,9 +865,20 @@ const changeBackground = (bg: any) => {
   }
 };
 
-// 添加海报元素
-const addPosterElement = (posterIndex: number = 1) => {
+// 添加海报元素 - 创建带海报填充的形状
+const addPosterElement = (options: { shape: string; posterIndex: number } | number = { shape: 'rect', posterIndex: 1 }) => {
   if (!fabricCanvas) return;
+  
+  // 兼容旧的调用方式
+  let shape = 'rect';
+  let posterIndex = 1;
+  
+  if (typeof options === 'number') {
+    posterIndex = options;
+  } else {
+    shape = options.shape;
+    posterIndex = options.posterIndex;
+  }
   
   const posterSrc = `/template/poster/${posterIndex}.jpg`;
   const safeLeft = 300;
@@ -792,116 +887,176 @@ const addPosterElement = (posterIndex: number = 1) => {
   fabric.Image.fromURL(
     posterSrc,
     (img) => {
-      // 设置海报尺寸（与矩形元素相同）
-      const targetWidth = 150;
-      const targetHeight = 220;
+      const imgElement = img.getElement() as HTMLImageElement;
+      const imgWidth = img.width || 300;
+      const imgHeight = img.height || 450;
       
-      const scaleX = targetWidth / (img.width || 1);
-      const scaleY = targetHeight / (img.height || 1);
+      // 定义形状尺寸
+      let shapeWidth = 150;
+      let shapeHeight = 220;
       
-      img.set({
-        left: safeLeft,
-        top: safeTop,
-        scaleX: scaleX,
-        scaleY: scaleY,
+      if (shape === 'square') {
+        shapeWidth = 150;
+        shapeHeight = 150;
+      } else if (shape === 'circle') {
+        shapeWidth = 150;
+        shapeHeight = 150;
+      }
+      
+      // 计算 pattern 的缩放比例以适应形状
+      const scaleX = shapeWidth / imgWidth;
+      const scaleY = shapeHeight / imgHeight;
+      const patternScale = Math.max(scaleX, scaleY);
+      
+      // 创建 pattern
+      const pattern = new fabric.Pattern({
+        source: imgElement,
+        repeat: 'no-repeat',
+        patternTransform: [patternScale, 0, 0, patternScale, 0, 0],
+      });
+      
+      let fabricShape: fabric.Object | null = null;
+      
+      switch (shape) {
+        case 'rect':
+          fabricShape = new fabric.Rect({
+            left: safeLeft,
+            top: safeTop,
+            width: shapeWidth,
+            height: shapeHeight,
+            fill: pattern,
+            rx: 8,
+            ry: 8,
+          });
+          break;
+          
+        case 'square':
+          fabricShape = new fabric.Rect({
+            left: safeLeft,
+            top: safeTop,
+            width: shapeWidth,
+            height: shapeHeight,
+            fill: pattern,
+            rx: 8,
+            ry: 8,
+          });
+          break;
+          
+        case 'circle':
+          fabricShape = new fabric.Circle({
+            left: safeLeft,
+            top: safeTop,
+            radius: shapeWidth / 2,
+            fill: pattern,
+          });
+          break;
+          
+        case 'triangle':
+          fabricShape = new fabric.Triangle({
+            left: safeLeft,
+            top: safeTop,
+            width: shapeWidth,
+            height: shapeHeight,
+            fill: pattern,
+          });
+          break;
+          
+        case 'star':
+          // 创建五角星
+          const createStarPoints = (
+            spikes: number,
+            outerRadius: number,
+            innerRadius: number
+          ) => {
+            const points: { x: number; y: number }[] = [];
+            const step = Math.PI / spikes;
+            for (let i = 0; i < 2 * spikes; i++) {
+              const r = i % 2 === 0 ? outerRadius : innerRadius;
+              const a = i * step - Math.PI / 2;
+              points.push({ x: Math.cos(a) * r + outerRadius, y: Math.sin(a) * r + outerRadius });
+            }
+            return points;
+          };
+          const outerRadius = shapeWidth / 2;
+          const starPoints = createStarPoints(5, outerRadius, outerRadius * 0.4);
+          fabricShape = new fabric.Polygon(starPoints, {
+            left: safeLeft,
+            top: safeTop,
+            fill: pattern,
+          });
+          break;
+          
+        default:
+          fabricShape = new fabric.Rect({
+            left: safeLeft,
+            top: safeTop,
+            width: shapeWidth,
+            height: shapeHeight,
+            fill: pattern,
+            rx: 8,
+            ry: 8,
+          });
+      }
+      
+      if (fabricShape) {
         // 添加自定义属性标记这是海报元素
-        posterIndex: posterIndex,
-        posterType: 'poster'
-      } as any);
-      
-      fabricCanvas?.add(img);
-      fabricCanvas?.setActiveObject(img);
-      ElMessage.success(t('designer.posterAdded'));
+        (fabricShape as any).posterIndex = posterIndex;
+        (fabricShape as any).posterType = 'poster';
+        (fabricShape as any).posterShape = shape;
+        
+        fabricCanvas?.add(fabricShape);
+        fabricCanvas?.setActiveObject(fabricShape);
+        ElMessage.success(t('designer.posterAdded'));
+      }
     },
     { crossOrigin: "anonymous" }
   );
 };
 
-// 切换海报形状
-const changePosterShape = (shape: string) => {
-  if (!fabricCanvas || !selectedObject.value || selectedObject.value.posterType !== 'poster') return;
-  
-  const poster = selectedObject.value as any;
-  const width = poster.width * poster.scaleX;
-  const height = poster.height * poster.scaleY;
-  
-  let clipPath: fabric.Object | null = null;
-  
-  switch (shape) {
-    case 'circle':
-      clipPath = new fabric.Circle({
-        radius: Math.min(width, height) / 2,
-        originX: 'center',
-        originY: 'center',
-        left: width / 2,
-        top: height / 2
-      });
-      break;
-    case 'triangle':
-      clipPath = new fabric.Triangle({
-        width: width,
-        height: height,
-        originX: 'center',
-        originY: 'center',
-        left: width / 2,
-        top: height / 2
-      });
-      break;
-    case 'star':
-      // 创建星形路径
-      const points = 5;
-      const outerRadius = Math.min(width, height) / 2;
-      const innerRadius = outerRadius * 0.4;
-      const centerX = width / 2;
-      const centerY = height / 2;
-      
-      let pathData = '';
-      for (let i = 0; i < points * 2; i++) {
-        const radius = i % 2 === 0 ? outerRadius : innerRadius;
-        const angle = (Math.PI / points) * i - Math.PI / 2;
-        const x = centerX + radius * Math.cos(angle);
-        const y = centerY + radius * Math.sin(angle);
-        pathData += `${i === 0 ? 'M' : 'L'} ${x} ${y} `;
-      }
-      pathData += 'Z';
-      
-      clipPath = new fabric.Path(pathData, {
-        originX: 'left',
-        originY: 'top',
-        left: 0,
-        top: 0
-      });
-      break;
-    default: // rect
-      clipPath = null;
-  }
-  
-  poster.set({ clipPath: clipPath as any });
-  fabricCanvas.renderAll();
-  ElMessage.success(`已切换为${shape === 'rect' ? '矩形' : shape === 'circle' ? '圆形' : shape === 'triangle' ? '三角形' : '星形'}形状`);
-};
+// changePosterShape removed as requested - shape is now chosen only when adding the poster
+
 
 // 切换海报图片
 const changePosterImage = (index: number) => {
-  if (!fabricCanvas || !selectedObject.value || selectedObject.value.posterType !== 'poster') return;
+  if (!fabricCanvas || !selectedObject.value || (selectedObject.value as any).posterType !== 'poster') return;
   
-  const poster = selectedObject.value as fabric.Image;
-  const newSrc = `/template/poster/${index}.jpg`;
+  const currentObj = selectedObject.value as any;
+  const currentShape = currentObj.posterShape || 'rect';
+  const currentLeft = currentObj.left || 300;
+  const currentTop = currentObj.top || 300;
+  const posterSrc = `/template/poster/${index}.jpg`;
   
   fabric.Image.fromURL(
-    newSrc,
-    (newImg) => {
-      // 保持原有的缩放比例
-      const scaleX = poster.scaleX || 1;
-      const scaleY = poster.scaleY || 1;
+    posterSrc,
+    (img) => {
+      const imgElement = img.getElement() as HTMLImageElement;
+      const imgWidth = img.width || 300;
+      const imgHeight = img.height || 450;
       
-      // 更新图片源和属性
-      poster.setElement(newImg.getElement());
-      poster.set({
-        posterIndex: index,
-        scaleX: scaleX,
-        scaleY: scaleY
-      } as any);
+      // 获取当前形状尺寸
+      let shapeWidth = currentObj.width || 150;
+      let shapeHeight = currentObj.height || 220;
+      
+      if (currentObj.type === 'circle') {
+        shapeWidth = (currentObj.radius || 75) * 2;
+        shapeHeight = shapeWidth;
+      }
+      
+      // 计算新 pattern 的缩放比例
+      const scaleX = shapeWidth / imgWidth;
+      const scaleY = shapeHeight / imgHeight;
+      const patternScale = Math.max(scaleX, scaleY);
+      
+      // 创建新 pattern
+      const pattern = new fabric.Pattern({
+        source: imgElement,
+        repeat: 'no-repeat',
+        patternTransform: [patternScale, 0, 0, patternScale, 0, 0],
+      });
+      
+      // 更新填充
+      currentObj.set({ fill: pattern });
+      (currentObj as any).posterIndex = index;
       
       fabricCanvas?.renderAll();
       ElMessage.success(`已切换为海报 ${index}`);
@@ -914,9 +1069,7 @@ const changePosterImage = (index: number) => {
 const updateObjectProperties = (properties: any) => {
   if (!fabricCanvas || !selectedObject.value) return;
 
-  console.log("🔧 Updating object properties:", properties);
-
-  // 拆分阴影和其他参数(移除图案相关参数)
+  // 拆分参数
   const {
     shadowEnabled,
     shadowAngle,
@@ -924,23 +1077,15 @@ const updateObjectProperties = (properties: any) => {
     shadowOpacity,
     shadowColor,
     shadowBlur,
-    // 移除这些,图案只能通过双击编辑器修改
-    // patternSrc,
-    // patternMode,
     ...rest
   } = properties || {};
 
-  // 检查当前对象是否使用图案填充
   const currentFill = selectedObject.value.fill;
-  const isPatternFill =
-    currentFill && typeof currentFill === "object" && "source" in currentFill;
+  const isPatternFill = currentFill && typeof currentFill === "object" && "source" in currentFill;
 
-  // 图案填充已移除,只能通过双击编辑器修改
-  // 常规属性直接设置
-  // 处理描边宽度为0的情况：设置为透明描边而不是移除填充
   const propsToSet = { ...rest };
+  delete propsToSet.id; // 移除 id，不作为属性设置
 
-  // 如果当前是图案填充,从属性中移除 fill,避免覆盖图案
   if (isPatternFill && "fill" in propsToSet) {
     delete propsToSet.fill;
   }
@@ -948,7 +1093,10 @@ const updateObjectProperties = (properties: any) => {
   if (propsToSet.strokeWidth === 0) {
     propsToSet.stroke = "transparent";
   }
+
+  // 设置属性并同步坐标
   selectedObject.value.set(propsToSet);
+  selectedObject.value.setCoords();
 
   // 处理阴影
   if (typeof shadowEnabled !== "undefined") {
@@ -961,29 +1109,17 @@ const updateObjectProperties = (properties: any) => {
       const rad = (angle * Math.PI) / 180;
       const offsetX = Math.round(Math.cos(rad) * dist);
       const offsetY = Math.round(Math.sin(rad) * dist);
-      // 组装 RGBA 色值
+      
       let rgbaColor = color;
       if (/^#/.test(color)) {
-        // hex 转 rgb
         const hex = color.replace(/^#/, "");
         const bigint = parseInt(hex, 16);
         const r = (bigint >> 16) & 255;
         const g = (bigint >> 8) & 255;
         const b = bigint & 255;
         rgbaColor = `rgba(${r},${g},${b},${opacity})`;
-      } else if (/^rgb\(/i.test(color)) {
-        rgbaColor = color.replace(
-          /^rgb\(([^)]+)\)/i,
-          (_m: string, rgb: string) => `rgba(${rgb},${opacity})`
-        );
-      } else if (/^rgba\(/i.test(color)) {
-        // 替换 alpha
-        rgbaColor = color.replace(
-          /rgba\(([^,]+),([^,]+),([^,]+),[^)]+\)/i,
-          (_m: string, r: string, g: string, b: string) =>
-            `rgba(${r},${g},${b},${opacity})`
-        );
       }
+
       const shadow = new fabric.Shadow({
         color: rgbaColor,
         blur,
@@ -992,12 +1128,76 @@ const updateObjectProperties = (properties: any) => {
       });
       selectedObject.value.set("shadow", shadow);
     } else {
-      // 关闭阴影
       selectedObject.value.set("shadow", null as any);
     }
   }
 
   fabricCanvas?.renderAll();
+  syncCanvasObjects();
+};
+
+// 图层管理方法
+const selectObjectById = (id: string) => {
+  if (!fabricCanvas) return;
+  const obj = fabricCanvas.getObjects().find((o: any) => o.id === id);
+  if (obj) {
+    fabricCanvas.setActiveObject(obj);
+    fabricCanvas.renderAll();
+  }
+};
+
+const toggleObjectVisibility = (id: string) => {
+  if (!fabricCanvas) return;
+  const obj = fabricCanvas.getObjects().find((o: any) => o.id === id);
+  if (obj) {
+    obj.set("visible", !obj.visible);
+    fabricCanvas.renderAll();
+    syncCanvasObjects();
+  }
+};
+
+const toggleObjectLock = (id: string) => {
+  if (!fabricCanvas) return;
+  const obj = fabricCanvas.getObjects().find((o: any) => o.id === id);
+  if (obj) {
+    const isLocked = obj.lockMovementX;
+    obj.set({
+      lockMovementX: !isLocked,
+      lockMovementY: !isLocked,
+      lockScalingX: !isLocked,
+      lockScalingY: !isLocked,
+      lockRotation: !isLocked,
+      hasControls: isLocked,
+    });
+    fabricCanvas.renderAll();
+    syncCanvasObjects();
+  }
+};
+
+const handleLayerCommand = (data: { command: string; id: string }) => {
+  if (!fabricCanvas) return;
+  const obj = fabricCanvas.getObjects().find((o: any) => o.id === data.id);
+  if (!obj) return;
+
+  switch (data.command) {
+    case 'top': fabricCanvas.bringToFront(obj); break;
+    case 'bottom': fabricCanvas.sendToBack(obj); break;
+    case 'duplicate':
+      obj.clone((cloned: any) => {
+        fabricCanvas?.discardActiveObject();
+        cloned.set({
+          left: (obj.left || 0) + 20,
+          top: (obj.top || 0) + 20,
+          id: `obj_${Date.now()}`
+        });
+        fabricCanvas?.add(cloned);
+        fabricCanvas?.setActiveObject(cloned);
+      });
+      break;
+    case 'delete': fabricCanvas.remove(obj); break;
+  }
+  fabricCanvas.renderAll();
+  syncCanvasObjects();
 };
 
 // 切换图案编辑模式
@@ -1437,10 +1637,8 @@ const saveTemplateInfo = () => {
 // 从服务器加载模板
 const loadTemplateFromServer = async (id: string) => {
   try {
-    const response = await fetch(API_ENDPOINTS.templates.byId(id));
-    if (!response.ok) throw new Error("加载模板失败");
-
-    const template = await response.json();
+    const response = await authAxios.get(API_ENDPOINTS.templates.byId(id));
+    const template = response.data;
 
     // 加载模板信息
     templateInfo.value.name = template.name || "";
@@ -1510,21 +1708,13 @@ const saveTemplate = async () => {
     let response;
     if (templateId.value) {
       // 更新现有模板
-      response = await fetch(API_ENDPOINTS.templates.byId(templateId.value), {
-        method: "PUT",
-        body: formData,
-      });
+      response = await authAxios.put(API_ENDPOINTS.templates.byId(templateId.value), formData);
     } else {
       // 创建新模板
-      response = await fetch(API_ENDPOINTS.templates.base, {
-        method: "POST",
-        body: formData,
-      });
+      response = await authAxios.post(API_ENDPOINTS.templates.base, formData);
     }
 
-    if (!response.ok) throw new Error("保存模板失败");
-
-    const result = await response.json();
+    const result = response.data;
 
     // 如果是新建,保存返回的 ID
     if (!templateId.value && result.id) {
@@ -1661,27 +1851,203 @@ const handlePropertiesAction = (action: string) => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 20px;
-  background: var(--bg-primary);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-md);
   flex-shrink: 0;
+  gap: 16px;
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.back-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.back-btn:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateX(-2px);
+}
+
+.template-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .toolbar-title {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edit-name-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+}
+
+.edit-name-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--primary);
+}
+
+.toolbar-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.quick-actions-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+}
+
+.action-icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.action-icon-btn:hover:not(:disabled) {
+  background: var(--bg-primary);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.action-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.action-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 6px;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoom-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.zoom-btn:hover {
+  background: var(--bg-primary);
+  color: var(--primary);
+}
+
+.zoom-value {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 45px;
+  text-align: center;
 }
 
 .toolbar-actions {
   display: flex;
-  gap: 8px;
+  gap: 10px;
+}
+
+.toolbar-btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.toolbar-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.toolbar-btn.save-btn {
+  background: linear-gradient(135deg, #10b981, #059669);
+  border: none;
+  color: white;
+}
+
+.toolbar-btn.save-btn:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.toolbar-btn.export-btn {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  border: none;
+  color: white;
+}
+
+.toolbar-btn.export-btn:hover {
+  background: linear-gradient(135deg, var(--primary-dark), #6b4190);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
 }
 
 .dialog-label {
@@ -1693,25 +2059,42 @@ const handlePropertiesAction = (action: string) => {
 .canvas-content {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   overflow: auto;
+  padding: 24px;
+  background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
 }
 
 .canvas-wrapper {
   background: var(--bg-primary);
   border-radius: 16px;
   box-shadow:
-    0 8px 32px rgba(102, 126, 234, 0.08),
-    0 2px 8px rgba(0, 0, 0, 0.04);
+    0 20px 50px rgba(0, 0, 0, 0.1),
+    0 8px 20px rgba(102, 126, 234, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto;
-  width: 960px;
-  height: 540px;
   overflow: hidden;
   padding: 0;
+  transition: all var(--transition-normal);
+}
+
+.bottom-bar {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+}
+
+.canvas-size {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 500;
 }
 
 .properties-panel {

@@ -30,12 +30,13 @@
           <span style="color: #f56c6c">{{ row.error_count }}</span>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="300" fixed="right">
+      <el-table-column :label="t('common.actions')" width="380" fixed="right">
         <template #default="{ row }">
           <el-button size="small" @click="triggerTask(row)">{{ t('scheduledTasks.runNow') }}</el-button>
           <el-button size="small" @click="toggleTask(row)">
             {{ row.is_active ? t('scheduledTasks.stop') : t('scheduledTasks.start') }}
           </el-button>
+          <el-button size="small" @click="viewHistory(row)">{{ t('scheduledTasks.viewHistory') || '历史' }}</el-button>
           <el-button size="small" @click="editTask(row)">{{ t('common.edit') }}</el-button>
           <el-button size="small" type="danger" @click="deleteTask(row)"
             >{{ t('common.delete') }}</el-button
@@ -44,11 +45,37 @@
       </el-table-column>
     </el-table>
 
+    <!-- 执行历史对话框 -->
+    <el-dialog
+      v-model="historyVisible"
+      :title="t('scheduledTasks.executionHistory') || '任务执行历史'"
+      width="900px"
+    >
+      <el-table :data="historyList" v-loading="historyLoading" height="400px">
+        <el-table-column prop="started_at" :label="t('scheduledTasks.startTime') || '开始时间'" width="180">
+          <template #default="{ row }">
+            {{ formatDate(row.started_at) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" :label="t('common.status')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'completed' ? 'success' : (row.status === 'failed' ? 'danger' : 'info')">
+              {{ row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="processed_items" :label="t('scheduledTasks.processed') || '已处理'" width="100" />
+        <el-table-column prop="failed_items" :label="t('scheduledTasks.failed') || '失败'" width="100" />
+        <el-table-column prop="error_message" :label="t('common.error') || '错误信息'" show-overflow-tooltip />
+      </el-table>
+    </el-dialog>
+
     <!-- 创建/编辑任务对话框 -->
     <el-dialog
       v-model="dialogVisible"
       :title="dialogTitle"
-      width="800px"
+      width="1100px"
+      top="5vh"
       @close="resetForm"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="120px">
@@ -72,41 +99,84 @@
           </el-select>
         </el-form-item>
 
-        <el-form-item :label="t('scheduledTasks.libraryConfig')" v-if="libraries.length > 0">
-          <el-card
-            v-for="lib in libraries"
-            :key="lib.id"
-            class="library-card"
-            shadow="hover"
-          >
-            <div class="library-item">
-              <div class="library-name">
-                <el-icon><Folder /></el-icon>
-                {{ lib.name }}
+        <el-form-item label="媒体库配置" v-if="libraries.length > 0" class="full-width-item">
+          <div class="library-grid">
+            <el-card
+              v-for="lib in libraries"
+              :key="lib.id"
+              class="library-config-card"
+              :class="{ 'active': form.libraryConfigs[lib.id]?.templateId }"
+              shadow="hover"
+            >
+              <template #header>
+                <div class="lib-header">
+                  <div class="lib-info">
+                    <el-icon class="lib-icon"><Folder /></el-icon>
+                    <span class="lib-name">{{ lib.name }}</span>
+                  </div>
+                  <el-tag size="small" type="info">未配置</el-tag>
+                </div>
+              </template>
+              
+              <div class="lib-content">
+                <div class="config-section">
+                  <span class="section-label">选择模板</span>
+                  <el-select
+                    v-model="form.libraryConfigs[lib.id].templateId"
+                    :placeholder="t('scheduledTasks.selectTemplate')"
+                    clearable
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="tpl in templates"
+                      :key="tpl.id"
+                      :label="tpl.name"
+                      :value="tpl.id"
+                    />
+                  </el-select>
+                </div>
+
+                <div v-if="form.libraryConfigs[lib.id].templateId && getTemplatePreview(form.libraryConfigs[lib.id].templateId)" class="template-preview">
+                  <el-image 
+                    :src="getTemplatePreview(form.libraryConfigs[lib.id].templateId)" 
+                    fit="cover" 
+                    class="preview-image"
+                  >
+                    <template #error>
+                      <div class="image-slot">
+                        <el-icon><Picture /></el-icon>
+                      </div>
+                    </template>
+                  </el-image>
+                </div>
+
+                <template v-if="form.libraryConfigs[lib.id].templateId">
+                  <div class="config-divider"></div>
+                  
+                  <div class="config-section">
+                    <span class="section-label">文字替换 (可选)</span>
+                    <div class="text-inputs">
+                      <el-input 
+                        v-model="form.libraryConfigs[lib.id].primary" 
+                        placeholder="第一文字 ({{primary_title}})" 
+                        size="small"
+                      >
+                        <template #prefix>主</template>
+                      </el-input>
+                      <el-input 
+                        v-model="form.libraryConfigs[lib.id].secondary" 
+                        placeholder="第二文字 ({{secondary_title}})" 
+                        size="small"
+                        style="margin-top: 8px"
+                      >
+                        <template #prefix>副</template>
+                      </el-input>
+                    </div>
+                  </div>
+                </template>
               </div>
-              <el-select
-                v-model="form.libraryTemplateMapping[lib.id]"
-                :placeholder="t('scheduledTasks.selectTemplate')"
-                clearable
-                style="width: 300px"
-              >
-                <el-option
-                  v-for="tpl in templates"
-                  :key="tpl.id"
-                  :label="tpl.name"
-                  :value="tpl.id"
-                />
-              </el-select>
-            </div>
-          </el-card>
-          <el-alert
-            v-if="libraries.length > 0"
-            type="info"
-            :closable="false"
-            style="margin-top: 10px"
-          >
-            为每个媒体库选择对应的模板。未选择模板的媒体库将被跳过。
-          </el-alert>
+            </el-card>
+          </div>
         </el-form-item>
 
         <el-form-item label="Cron表达式" prop="cronExpression">
@@ -147,6 +217,8 @@
           />
         </el-form-item>
 
+        <!-- Removed global text replacement section -->
+
         <el-form-item label="任务状态">
           <el-switch
             v-model="form.isActive"
@@ -169,13 +241,23 @@
 <script setup>
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import { Plus, Folder } from "@element-plus/icons-vue";
+import { Plus, Folder, Picture } from "@element-plus/icons-vue";
 import axios from "axios";
 import { useI18n } from "vue-i18n";
+import { useAuthStore } from "../stores/auth";
 
 const { t } = useI18n();
+const authStore = useAuthStore();
 
 const API_BASE = "http://localhost:3001/api";
+
+// 带有认证头的 Axios 辅助函数
+const authAxios = {
+  get: (url) => axios.get(url, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  post: (url, data) => axios.post(url, data, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  put: (url, data) => axios.put(url, data, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+  delete: (url) => axios.delete(url, { headers: { Authorization: `Bearer ${authStore.token}` } }),
+};
 
 // 数据
 const loading = ref(false);
@@ -189,11 +271,17 @@ const dialogTitle = ref(t('scheduledTasks.createTask'));
 const editingId = ref(null);
 const formRef = ref(null);
 
+// 历史数据
+const historyVisible = ref(false);
+const historyLoading = ref(false);
+const historyList = ref([]);
+
 // 表单
 const form = reactive({
   name: "",
   mediaSourceId: "",
-  libraryTemplateMapping: {},
+  mediaSourceId: "",
+  libraryConfigs: {}, // { libId: { templateId, primary, secondary } }
   cronExpression: "0 0 * * *",
   posterCount: 9,
   sortBy: "DateCreated",
@@ -216,8 +304,9 @@ const rules = {
 const loadTasks = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(`${API_BASE}/scheduled-tasks`);
-    tasks.value = response.data.data || [];
+    const response = await authAxios.get(`${API_BASE}/scheduled-tasks`);
+    // API returns array directly
+    tasks.value = Array.isArray(response.data) ? response.data : (response.data.data || []);
   } catch (error) {
     ElMessage.error("加载任务列表失败: " + error.message);
   } finally {
@@ -228,7 +317,7 @@ const loadTasks = async () => {
 // 加载媒体源列表
 const loadMediaSources = async () => {
   try {
-    const response = await axios.get(`${API_BASE}/media-sources`);
+    const response = await authAxios.get(`${API_BASE}/media-sources`);
     mediaSources.value = response.data.data.filter((s) => s.is_active) || [];
   } catch (error) {
     ElMessage.error("加载媒体源列表失败: " + error.message);
@@ -238,8 +327,9 @@ const loadMediaSources = async () => {
 // 加载模板列表
 const loadTemplates = async () => {
   try {
-    const response = await axios.get(`${API_BASE}/templates`);
-    templates.value = response.data.data || [];
+    const response = await authAxios.get(`${API_BASE}/templates`);
+    // API returns { templates: [...] }
+    templates.value = response.data.templates || response.data.data || [];
   } catch (error) {
     ElMessage.error("加载模板列表失败: " + error.message);
   }
@@ -253,13 +343,16 @@ const onMediaSourceChange = async (sourceId) => {
   }
 
   try {
-    const response = await axios.get(
+    const response = await authAxios.get(
       `${API_BASE}/media-sources/${sourceId}/libraries`
     );
     libraries.value = response.data.data || [];
 
-    // 重置媒体库模板映射
-    form.libraryTemplateMapping = {};
+    // 初始化库配置
+    form.libraryConfigs = {};
+    libraries.value.forEach(lib => {
+      form.libraryConfigs[lib.id] = { templateId: "", primary: "", secondary: "" };
+    });
   } catch (error) {
     ElMessage.error("加载媒体库失败: " + error.message);
     libraries.value = [];
@@ -279,7 +372,7 @@ const showAddDialog = async () => {
 // 编辑任务
 const editTask = async (row) => {
   try {
-    const response = await axios.get(`${API_BASE}/scheduled-tasks/${row.id}`);
+    const response = await authAxios.get(`${API_BASE}/scheduled-tasks/${row.id}`);
     const data = response.data.data;
 
     await loadMediaSources();
@@ -298,13 +391,41 @@ const editTask = async (row) => {
     // 加载媒体库
     await onMediaSourceChange(data.media_source_id);
 
-    // 解析映射
+    // 解析映射和配置
     try {
-      form.libraryTemplateMapping = JSON.parse(
-        data.library_template_mapping || "{}"
-      );
+      const mapping = typeof data.library_template_mapping === 'string' 
+        ? JSON.parse(data.library_template_mapping || "{}")
+        : (data.library_template_mapping || {});
+        
+      const replacements = typeof data.text_replacements === 'string'
+        ? JSON.parse(data.text_replacements || "{}")
+        : (data.text_replacements || {});
+
+      // 填充 libraryConfigs
+      form.libraryConfigs = {};
+      libraries.value.forEach(lib => {
+        const libId = lib.id;
+        // Check if replacements is per-library (new format) or global (old format support)
+        let primary = "";
+        let secondary = "";
+        
+        if (replacements[libId]) {
+           primary = replacements[libId].primary || "";
+           secondary = replacements[libId].secondary || "";
+        } else if (replacements.primary_title || replacements.secondary_title) {
+           // Fallback to old global format if present and per-library not found
+           // But mostly we just init empty
+        }
+
+        form.libraryConfigs[libId] = {
+          templateId: mapping[libId] || "",
+          primary: primary,
+          secondary: secondary
+        };
+      });
     } catch (e) {
-      form.libraryTemplateMapping = {};
+      console.error("解析配置失败", e);
+      form.libraryConfigs = {};
     }
 
     dialogVisible.value = true;
@@ -318,10 +439,23 @@ const submitForm = async () => {
   try {
     await formRef.value.validate();
 
-    // 检查是否至少配置了一个媒体库
-    const mappedLibraries = Object.values(form.libraryTemplateMapping).filter(
-      Boolean
-    );
+    // 转换 libraryConfigs 为后端需要的格式
+    const libraryTemplateMapping = {};
+    const textReplacements = {};
+    const mappedLibraries = [];
+
+    // 遍历所有库配置
+    for (const [libId, config] of Object.entries(form.libraryConfigs)) {
+      if (config.templateId) {
+        libraryTemplateMapping[libId] = config.templateId;
+        textReplacements[libId] = {
+          primary: config.primary,
+          secondary: config.secondary
+        };
+        mappedLibraries.push(libId);
+      }
+    }
+
     if (mappedLibraries.length === 0) {
       ElMessage.warning("请至少为一个媒体库选择模板");
       return;
@@ -331,7 +465,8 @@ const submitForm = async () => {
     const data = {
       name: form.name,
       mediaSourceId: form.mediaSourceId,
-      libraryTemplateMapping: form.libraryTemplateMapping,
+      libraryTemplateMapping,
+      textReplacements,
       cronExpression: form.cronExpression,
       posterCount: form.posterCount,
       sortBy: form.sortBy,
@@ -341,11 +476,11 @@ const submitForm = async () => {
 
     if (editingId.value) {
       // 更新
-      await axios.put(`${API_BASE}/scheduled-tasks/${editingId.value}`, data);
+      await authAxios.put(`${API_BASE}/scheduled-tasks/${editingId.value}`, data);
       ElMessage.success("更新成功");
     } else {
       // 创建
-      await axios.post(`${API_BASE}/scheduled-tasks`, data);
+      await authAxios.post(`${API_BASE}/scheduled-tasks`, data);
       ElMessage.success("创建成功");
     }
 
@@ -367,17 +502,31 @@ const submitForm = async () => {
 // 手动触发任务
 const triggerTask = async (row) => {
   try {
-    await axios.post(`${API_BASE}/scheduled-tasks/${row.id}/trigger`);
+    await authAxios.post(`${API_BASE}/scheduled-tasks/${row.id}/trigger`);
     ElMessage.success("任务已触发,正在后台执行");
   } catch (error) {
     ElMessage.error("触发任务失败: " + error.message);
   }
 };
 
+// 查看执行历史
+const viewHistory = async (row) => {
+  historyVisible.value = true;
+  historyLoading.value = true;
+  try {
+    const response = await authAxios.get(`${API_BASE}/scheduled-tasks/${row.id}/executions`);
+    historyList.value = response.data.data || [];
+  } catch (error) {
+    ElMessage.error("加载执行历史失败: " + error.message);
+  } finally {
+    historyLoading.value = false;
+  }
+};
+
 // 启用/禁用任务
 const toggleTask = async (row) => {
   try {
-    const response = await axios.post(
+    const response = await authAxios.post(
       `${API_BASE}/scheduled-tasks/${row.id}/toggle`
     );
     ElMessage.success(response.data.message);
@@ -394,7 +543,7 @@ const deleteTask = async (row) => {
       type: "warning",
     });
 
-    await axios.delete(`${API_BASE}/scheduled-tasks/${row.id}`);
+    await authAxios.delete(`${API_BASE}/scheduled-tasks/${row.id}`);
     ElMessage.success("删除成功");
     loadTasks();
   } catch (error) {
@@ -408,7 +557,7 @@ const deleteTask = async (row) => {
 const resetForm = () => {
   form.name = "";
   form.mediaSourceId = "";
-  form.libraryTemplateMapping = {};
+  form.libraryConfigs = {};
   form.cronExpression = "0 0 * * *";
   form.posterCount = 9;
   form.sortBy = "DateCreated";
@@ -416,6 +565,17 @@ const resetForm = () => {
   form.isActive = true;
   libraries.value = [];
   formRef.value?.clearValidate();
+};
+
+// 获取模板预览图
+const getTemplatePreview = (templateId) => {
+  if (!templateId) return null;
+  const tpl = templates.value.find(t => t.id === templateId);
+  if (!tpl || !tpl.preview_url) return null;
+  
+  const baseUrl = API_BASE.replace('/api', '');
+  const previewPath = tpl.preview_url.startsWith('/') ? tpl.preview_url : `/${tpl.preview_url}`;
+  return `${baseUrl}${previewPath}`;
 };
 
 // 格式化日期
@@ -448,26 +608,94 @@ onMounted(() => {
   font-weight: 600;
 }
 
-.library-card {
-  margin-bottom: 10px;
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  width: 100%;
+  max-height: 50vh;
+  overflow-y: auto;
+  padding: 4px; /* Prevent shadow cutout */
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 4px;
+  background-color: var(--el-fill-color-extra-light);
 }
 
-.library-item {
+.library-config-card {
+  transition: all 0.3s;
+  border: 1px solid var(--el-border-color-lighter);
+  /* Remove individual card border since container has one, or keep for card definition */
+}
+
+.library-config-card.active {
+  border-color: var(--el-color-primary-light-5);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.lib-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.library-name {
+.lib-info {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
-.form-tip {
+.lib-content {
+  padding-top: 10px;
+}
+
+.config-section {
+  margin-bottom: 12px;
+}
+
+.section-label {
+  display: block;
   font-size: 12px;
-  color: #909399;
-  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  margin-bottom: 6px;
+}
+
+.config-divider {
+  height: 1px;
+  background-color: var(--el-border-color-lighter);
+  margin: 12px 0;
+}
+
+.full-width-item :deep(.el-form-item__content) {
+  display: block;
+}
+
+.template-preview {
+  margin: 10px 0;
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid var(--el-border-color-lighter);
+  height: 120px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: var(--el-fill-color-light);
+}
+
+.preview-image {
+  width: 100%;
+  height: 100%;
+}
+
+.image-slot {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-secondary);
+  font-size: 20px;
 }
 </style>

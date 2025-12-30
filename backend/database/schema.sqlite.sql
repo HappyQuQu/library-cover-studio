@@ -72,6 +72,7 @@ CREATE TABLE
         media_source_id TEXT REFERENCES media_libraries (id) ON DELETE CASCADE, -- 关联的媒体源
         library_template_mapping TEXT DEFAULT '{}', -- 媒体库ID到模板ID的映射 (JSON string)
         exclude_libraries TEXT DEFAULT '[]', -- 要排除的媒体库ID列表 (JSON array)
+        text_replacements TEXT DEFAULT '{}', -- 文字替换配置 (JSON string)
         cron_expression TEXT NOT NULL, -- Cron 表达式
         poster_count INTEGER DEFAULT 9, -- 每个媒体库下载的封面数量
         upload_enabled INTEGER DEFAULT 1, -- 是否上传回媒体服务器 (0=false, 1=true)

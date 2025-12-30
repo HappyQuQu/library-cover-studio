@@ -5,10 +5,10 @@ const { validateScheduleTask } = require("../middleware/validation");
 const { authenticate } = require("../middleware/auth");
 
 // 获取所有定时任务
-router.get("/", scheduleController.getAllTasks);
+router.get("/", authenticate, scheduleController.getAllTasks);
 
 // 根据ID获取定时任务
-router.get("/:id", scheduleController.getTaskById);
+router.get("/:id", authenticate, scheduleController.getTaskById);
 
 // 创建新定时任务（需要认证）
 router.post(
@@ -36,9 +36,9 @@ router.post("/:id/trigger", authenticate, scheduleController.triggerTask);
 router.patch("/:id/toggle", authenticate, scheduleController.toggleTask);
 
 // 获取任务执行历史
-router.get("/:id/executions", scheduleController.getTaskExecutions);
+router.get("/:id/executions", authenticate, scheduleController.getTaskExecutions);
 
 // 获取队列状态
-router.get("/queue/stats", scheduleController.getQueueStats);
+router.get("/queue/stats", authenticate, scheduleController.getQueueStats);
 
 module.exports = router;

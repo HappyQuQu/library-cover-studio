@@ -20,7 +20,7 @@ router.post(
 );
 
 // 获取生成历史
-router.get("/history", posterController.getGenerationHistory);
+router.get("/history", authenticate, posterController.getGenerationHistory);
 
 // 预览海报（需要认证）
 router.post("/preview", authenticate, posterController.previewPoster);

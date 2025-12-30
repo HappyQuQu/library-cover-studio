@@ -98,9 +98,23 @@ library-cover-studio/
 ├── database/              # 数据库脚本
 ├── docker-compose.yml     # 容器编排
 └── docs/                 # 文档资源
+    ├── AUTHENTICATION.md  # 认证指南
+    ├── DESIGNER_GUIDE.md  # 设计器指南
+    ├── JELLYFIN_GUIDE.md  # 媒体服务器集成
+    └── TECHNICAL_GUIDE.md # 技术手册
 ```
 
-## � 技术栈
+## 📚 项目资源与文档
+
+为了保持代码库整洁，我们对文档进行了深度整合。请参考以下核心指南：
+
+- 🚀 [**快速上手指南**](#-快速开始) - 基础安装与启动。
+- 📋 [**技术开发手册**](docs/TECHNICAL_GUIDE.md) - 系统架构、依赖管理及开发规范。
+- 🔐 [**认证系统使用手册**](docs/AUTHENTICATION.md) - 用户登录、API 安全及权限配置。
+- 🎬 [**媒体服务器集成**](docs/JELLYFIN_GUIDE.md) - Jellyfin/Emby 连接与自动化配置。
+- 🎨 [**海报设计器指南**](docs/DESIGNER_GUIDE.md) - 变量系统、占位符及设计技巧。
+
+## 🛠️ 技术栈
 
 | 层级         | 技术选择                | 说明               |
 | ------------ | ----------------------- | ------------------ |
@@ -108,9 +122,8 @@ library-cover-studio/
 | **UI 库**    | Element Plus + Tailwind | 企业级组件库       |
 | **画布**     | Fabric.js               | 专业 Canvas 编辑器 |
 | **后端**     | Node.js + Express       | 高性能 RESTful API |
-| **数据库**   | PostgreSQL              | 可靠的关系型数据库 |
-| **缓存**     | Redis                   | 高速缓存和任务队列 |
-| **任务调度** | Bull + node-cron        | 分布式任务处理     |
+| **数据库**   | SQLite                  | 轻量级嵌入式数据库 |
+| **图像处理** | Sharp                   | 高速图像合成处理   |
 | **部署**     | Docker + Compose        | 容器化部署         |
 
 ## 📊 功能对比
@@ -125,35 +138,11 @@ library-cover-studio/
 
 ## 🤝 贡献指南
 
-我们欢迎所有形式的贡献！
-
-### 贡献方式
-
-- 🐛 **报告 Bug**: [创建 Issue](../../issues/new?template=bug_report.md)
-- 💡 **功能建议**: [提交想法](../../issues/new?template=feature_request.md)
-- 📝 **改进文档**: 提交 PR 改进文档
-- 💻 **代码贡献**: Fork 项目并提交 PR
-
-### 开发流程
-
-1. Fork 项目到你的账户
-2. 创建功能分支: `git checkout -b feature/amazing-feature`
-3. 提交更改: `git commit -m 'Add amazing feature'`
-4. 推送分支: `git push origin feature/amazing-feature`
-5. 创建 Pull Request
+我们欢迎所有形式的贡献！详细开发说明请参考 [技术开发手册](docs/TECHNICAL_GUIDE.md)。
 
 ## 📄 许可证
 
 本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 了解详情
-
-## 🙏 致谢
-
-感谢所有贡献者和以下开源项目：
-
-- [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
-- [Fabric.js](https://fabricjs.com/) - 强大的 Canvas 库
-- [Element Plus](https://element-plus.org/) - Vue 3 组件库
-- [Express.js](https://expressjs.com/) - 快速的 Node.js 框架
 
 ---
 
