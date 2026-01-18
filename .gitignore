@@ -1,126 +1,48 @@
 # Dependencies
 node_modules/
-.pnp
-.pnp.js
+.pnpm-store/
 
-# Production builds
+# Build outputs
 dist/
 build/
-out/
+.vite/
+*.tsbuildinfo
 
-# Environment variables
+# Environment files
 .env
 .env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env*.local
+.env.*.local
+
+# Database
+*.sqlite
+*.sqlite3
+database/data.sqlite
+
+# Uploads & temp files
+uploads/
+temp/
+*.tmp
 
 # Logs
 logs/
 *.log
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-*~
-
-# OS generated files
-Thumbs.db
-.DS_Store
-.AppleDouble
-.LSOverride
-
-# Docker
-*.env.docker
-docker-compose.override.yml
-
-# Database
-*.sqlite
-*.sqlite3
-*.db
-
-# Uploads and media files
-uploads/*
-!uploads/.gitkeep
-backend/uploads/posters/*
-!backend/uploads/posters/.gitkeep
-backend/uploads/previews/*
-!backend/uploads/previews/.gitkeep
-
-# Configuration files (real config, not examples)
-config/config.json
-config/*.local.json
-
-# Test coverage
-coverage/
-*.lcov
-.nyc_output/
-
-# Temporary files
-*.tmp
-*.temp
+# IDE
+.vscode/
+.idea/
 *.swp
 *.swo
-.cache/
+.DS_Store
 
-# TypeScript
-*.tsbuildinfo
+# Testing
+coverage/
+.nyc_output/
 
-# Vite
-.vite/
-web/dist/
-web/.vite/
+# OS files
+Thumbs.db
+.DS_Store
 
-# Auto-generated files
-web/auto-imports.d.ts
-web/components.d.ts
-
-# Lock files (keep pnpm-lock.yaml, ignore others)
-package-lock.json
-yarn.lock
-
-# IDEs
-.fleet
-.project
-.classpath
-.settings/
-*.launch
-.vscode-test
-
-# Backup files
-*.bak
-*.backup
-*~
-
-# SSL certificates (if using nginx)
-nginx/ssl/*.pem
-nginx/ssl/*.key
-nginx/ssl/*.crt
-
-# PM2
-.pm2/
-pm2.json
-ecosystem.config.js
-
-# Misc
-*.pid
-*.seed
-*.pid.lock
-.npm
-.eslintcache
-.node_repl_history
-.yarn-integrity
+# Docker
+docker-compose.override.yml

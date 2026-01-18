@@ -1,32 +1,34 @@
 {
   "name": "library-cover-studio",
-  "version": "1.0.0",
-  "description": "Web-based poster designer and media library automation system",
+  "version": "1.3.0",
+  "description": "媒体库封面设计与自动化系统 - Jellyfin/Emby 海报美化专家",
   "private": true,
+  "type": "module",
   "workspaces": [
     "web",
     "backend"
   ],
   "scripts": {
     "dev": "pnpm -r --parallel --filter ./web --filter ./backend dev",
-    "build": "pnpm run --recursive build",
-    "start": "pnpm run --recursive start",
-    "clean": "pnpm run --recursive clean && rm -rf node_modules",
-    "lint": "pnpm run --recursive lint",
-    "format": "pnpm run --recursive format",
-    "test": "pnpm run --recursive test",
-    "install:all": "pnpm install",
-    "dev:web": "cd web && pnpm dev",
-    "dev:backend": "cd backend && pnpm dev",
-    "build:web": "cd web && pnpm build",
-    "start:backend": "cd backend && pnpm start"
+    "dev:web": "pnpm --filter web dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "build": "pnpm -r build",
+    "build:web": "pnpm --filter web build",
+    "build:backend": "pnpm --filter backend build",
+    "start": "pnpm --filter backend start",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "lint": "pnpm -r lint",
+    "format": "pnpm -r format",
+    "db:migrate": "pnpm --filter backend db:migrate",
+    "db:seed": "pnpm --filter backend db:seed"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=16.0.0",
-    "pnpm": ">=8.0.0"
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
   },
-  "packageManager": "pnpm@8.15.0"
+  "packageManager": "pnpm@9.15.0"
 }

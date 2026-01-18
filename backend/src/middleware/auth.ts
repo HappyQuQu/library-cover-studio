@@ -1,0 +1,75 @@
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { createError } from './errorHandler.js';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
+
+export interface JwtPayload {
+  userId: string;
+  username: string;
+  role: string;
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      user?: JwtPayload;
+    }
+  }
+}
+
+export function authenticate(req: Request, _res: Response, next: NextFunction) {
+  let token: string | undefined;
+
+  // 1. 尝试从 Authorization Header 获取
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  }
+
+  // 2. 尝试从 Query Parameter 获取 (用于 <img> 标签直接请求)
+  if (!token && req.query.token) {
+    token = req.query.token as string;
+  }
+
+  if (!token) {
+    return next(createError('No token provided', 401, 'NO_TOKEN'));
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    req.user = decoded;
+    next();
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return next(createError('Token expired', 401, 'TOKEN_EXPIRED'));
+    }
+    return next(createError('Invalid token', 401, 'INVALID_TOKEN'));
+  }
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return next(createError('Unauthorized', 401, 'UNAUTHORIZED'));
+    }
+
+    if (!roles.includes(req.user.role)) {
+      return next(createError('Forbidden', 403, 'FORBIDDEN'));
+    }
+
+    next();
+  };
+}
+
+export function generateToken(payload: JwtPayload): string {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any
+  });
+}
+
+export function generateRefreshToken(payload: JwtPayload): string {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '30d') as any
+  });
+}

@@ -1,0 +1,102 @@
+import cron from 'node-cron';
+import { db } from '../config/database.js';
+import { tasks } from '../config/schema.js';
+import { eq } from 'drizzle-orm';
+import { runTask } from './taskRunner.service.js';
+
+// 存储活跃的 cron 任务
+const scheduledJobs = new Map<string, cron.ScheduledTask>();
+
+// 初始化调度器 - 从数据库加载所有启用的定时任务
+export function initScheduler() {
+  try {
+    const enabledTasks = db.select()
+      .from(tasks)
+      .where(eq(tasks.isEnabled, 1))
+      .all();
+
+    for (const task of enabledTasks) {
+      if (task.type === 'scheduled' && task.cronExpression) {
+        scheduleTask(task.id, task.cronExpression);
+      }
+    }
+
+    console.log(`📅 Loaded ${enabledTasks.length} scheduled tasks`);
+  } catch (error) {
+    console.error('Failed to initialize scheduler:', error);
+  }
+}
+
+// 注册定时任务
+export function scheduleTask(taskId: string, cronExpression: string): boolean {
+  // 验证 cron 表达式
+  if (!cron.validate(cronExpression)) {
+    console.error(`Invalid cron expression: ${cronExpression}`);
+    return false;
+  }
+
+  // 移除已存在的任务
+  removeScheduledTask(taskId);
+
+  // 创建新的定时任务
+  const job = cron.schedule(cronExpression, async () => {
+    console.log(`⏰ Running scheduled task: ${taskId}`);
+    await executeScheduledTask(taskId);
+  }, {
+    timezone: 'Asia/Shanghai'
+  });
+
+  scheduledJobs.set(taskId, job);
+  console.log(`✅ Scheduled task ${taskId} with cron: ${cronExpression}`);
+  
+  return true;
+}
+
+// 移除定时任务
+export function removeScheduledTask(taskId: string): boolean {
+  const job = scheduledJobs.get(taskId);
+  if (job) {
+    job.stop();
+    scheduledJobs.delete(taskId);
+    console.log(`🗑️ Removed scheduled task: ${taskId}`);
+    return true;
+  }
+  return false;
+}
+
+// 执行定时任务
+async function executeScheduledTask(taskId: string) {
+  try {
+    const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get();
+    
+    if (!task) {
+      console.error(`Task not found: ${taskId}`);
+      removeScheduledTask(taskId);
+      return;
+    }
+
+    if (!task.isEnabled) {
+      console.log(`Task ${taskId} is disabled, skipping`);
+      return;
+    }
+
+    // 更新最后运行时间
+    const now = new Date().toISOString();
+    db.update(tasks)
+      .set({ lastRunAt: now, updatedAt: now })
+      .where(eq(tasks.id, taskId))
+      .run();
+
+    // 执行任务逻辑
+    await runTask(taskId);
+    console.log(`Task ${taskId} executed successfully`);
+
+  } catch (error) {
+    console.error(`Failed to execute task ${taskId}:`, error);
+  }
+}
+
+// 获取所有活跃任务
+export function getActiveJobs(): string[] {
+  return Array.from(scheduledJobs.keys());
+}
