@@ -257,3 +257,67 @@ export function useUpdateSettings(): UseMutationResult<any, Error, Record<string
     }
   });
 }
+// ==================== Logs ====================
+
+export interface LogEntry {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  message: string;
+}
+
+export function useLogs(): UseQueryResult<LogEntry[], Error> {
+  return useQuery({
+    queryKey: ['logs'],
+    queryFn: () => apiClient.get<LogEntry[]>('/logs').then((r) => r.data)
+  });
+}
+
+// ==================== Users ====================
+
+export interface User {
+  id: string;
+  username: string;
+  role: 'admin' | 'user';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export function useUsers(enabled: boolean = true): UseQueryResult<User[], Error> {
+  return useQuery({
+    queryKey: ['users'],
+    queryFn: () => apiClient.get<User[]>('/users').then((r) => r.data),
+    enabled
+  });
+}
+
+export function useCreateUser(): UseMutationResult<User, Error, Partial<User> & { password?: string }> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Partial<User> & { password?: string }) =>
+      apiClient.post<User>('/users', data).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
+  });
+}
+
+export function useUpdateUser(): UseMutationResult<any, Error, Partial<User> & { id: string; password?: string }> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<User> & { id: string; password?: string }) =>
+      apiClient.put(`/users/${id}`, data).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
+  });
+}
+
+export function useDeleteUser(): UseMutationResult<any, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/users/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    }
+  });
+}

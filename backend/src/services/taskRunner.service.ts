@@ -1,9 +1,13 @@
 import { db } from '../config/database.js';
-import { tasks, mediaServers, templates } from '../config/schema.js';
-import { eq } from 'drizzle-orm';
+import { tasks, mediaServers, templates, taskLogs, systemSettings } from '../config/schema.js';
+import { eq, inArray } from 'drizzle-orm';
 import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
 import { decrypt } from '../utils/crypto.js';
+import { logger } from '../utils/logger.js';
+import fs from 'fs';
+import path from 'path';
+import { POSTERS_DIR, COVERS_DIR } from '../config/paths.js';
 
 interface TaskProgress {
   total: number;
@@ -19,7 +23,25 @@ export function getTaskProgress(taskId: string): TaskProgress | undefined {
   return activeTaskProgress.get(taskId);
 }
 
-export async function runTask(taskId: string) {
+// Helper to save file to data directory
+async function saveFile(type: 'posters' | 'covers', filename: string, buffer: Buffer) {
+  try {
+    const dir = type === 'posters' ? POSTERS_DIR : COVERS_DIR;
+    // ensureDataDirs already runs on startup, but extra safety doesn't hurt
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+    const safeName = filename.replace(/[<>:"/\\|?*]/g, '_');
+    const filePath = path.join(dir, safeName);
+    fs.writeFileSync(filePath, buffer);
+    logger.debug(`Saved ${type} to ${filePath}`);
+    return filePath;
+  } catch (err) {
+    logger.error(`Failed to save ${type}:`, err);
+    return null;
+  }
+}
+
+export async function runTask(taskId: string, logId?: string) {
   const progress: TaskProgress = {
     total: 0,
     current: 0,
@@ -38,9 +60,16 @@ export async function runTask(taskId: string) {
     const serverDetail = db.select().from(mediaServers).where(eq(mediaServers.id, task.serverId!)).get();
     if (!serverDetail) throw new Error('Server not found');
 
+    // Get storage settings
+    const settings = db.select().from(systemSettings).where(inArray(systemSettings.key, ['storage.savePosters', 'storage.saveCovers'])).all();
+    const savePosters = settings.find(s => s.key === 'storage.savePosters')?.value === 'true';
+    const saveCovers = settings.find(s => s.key === 'storage.saveCovers')?.value === 'true';
+
     const apiKey = decrypt(serverDetail.apiKeyEncrypted);
 
-    console.log(`🚀 Starting Task: ${task.name}`);
+    logger.info(`🚀 Starting Task: ${task.name}`);
+    if (savePosters) logger.info('💾 Poster saving enabled');
+    if (saveCovers) logger.info('💾 Cover saving enabled');
 
     // Parse library configs
     let configs: any[] = [];
@@ -49,12 +78,18 @@ export async function runTask(taskId: string) {
         configs = JSON.parse(task.libraryConfigs).filter((c: any) => c.enabled);
       }
     } catch (e) {
-      console.error('Failed to parse libraryConfigs', e);
+      logger.error('Failed to parse libraryConfigs', e);
     }
 
     if (configs.length === 0) {
-      console.log('⚠️ No libraries configured to process');
+      logger.warn('⚠️ No libraries configured to process');
       progress.status = 'completed';
+      if (logId) {
+        db.update(taskLogs).set({
+          status: 'completed',
+          completedAt: new Date().toISOString()
+        }).where(eq(taskLogs.id, logId)).run();
+      }
       return;
     }
 
@@ -74,11 +109,11 @@ export async function runTask(taskId: string) {
       try {
         progress.current++;
         const libraryName = config.libraryName || config.libraryId;
-        console.log(`📂 Processing Library [${progress.current}/${progress.total}]: ${libraryName}`);
+        logger.info(`📂 Processing Library [${progress.current}/${progress.total}]: ${libraryName}`);
 
         const templateDetail = getTemplate(config.templateId);
         if (!templateDetail) {
-          console.warn(`⚠️ Template ${config.templateId} not found for library ${libraryName}, skipping...`);
+          logger.warn(`⚠️ Template ${config.templateId} not found for library ${libraryName}, skipping...`);
           progress.failed++;
           continue;
         }
@@ -87,11 +122,11 @@ export async function runTask(taskId: string) {
         const posterBuffers: Buffer[] = [];
         let startIndex = 0;
         let hasMoreItems = true;
-        const BATCH_SIZE = 10; // 每次获取少量数据，按需加载
-        const sortBy = config.sortBy || 'DateCreated'; // Define sortBy here for the loop
+        const BATCH_SIZE = 10;
+        const sortBy = config.sortBy || 'DateCreated';
 
         while (posterBuffers.length < 9 && hasMoreItems) {
-          console.log(`  🔄 Fetching batch of items (Start: ${startIndex}, Limit: ${BATCH_SIZE})...`);
+          logger.info(`  🔄 Fetching batch of items (Start: ${startIndex}, Limit: ${BATCH_SIZE})...`);
 
           const itemsResult = await mediaClient.getLibraryItems(
             serverDetail.type,
@@ -111,33 +146,31 @@ export async function runTask(taskId: string) {
           );
 
           if (itemsResult.items.length < BATCH_SIZE) {
-            hasMoreItems = false; // 没有更多数据了
+            hasMoreItems = false;
           }
-          // 即便这次 fetch 的 items 少于 batch size，依然要处理这批数据
           if (batchItems.length === 0 && hasMoreItems) {
             startIndex += BATCH_SIZE;
-            continue; // 这批没有带封面的，继续下一批
+            continue;
           }
           if (batchItems.length === 0 && !hasMoreItems) {
-            break; // 这批没有且没更多了，退出
+            break;
           }
 
-
-          console.log(`  📦 Processing batch: Found ${batchItems.length} items with potential cover`);
+          logger.info(`  📦 Processing batch: Found ${batchItems.length} items with potential cover`);
 
           for (const item of batchItems) {
             if (posterBuffers.length >= 9) break;
 
-            console.log(`  🖼️ Processing item: ${item.name}`);
+            // logger.debug(`  🖼️ Processing item: ${item.name}`);
 
             const imageTypes = ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile'];
             let validPoster: Buffer | null = null;
+            let usedType = '';
 
             for (const type of imageTypes) {
               const tag = item.imageTags?.[type];
               if (!tag) continue;
 
-              // console.log(`    Trying image type: ${type} (tag: ${tag})`);
               const poster = await mediaClient.downloadCover(
                 serverDetail.type,
                 serverDetail.url,
@@ -146,50 +179,39 @@ export async function runTask(taskId: string) {
                 type
               );
 
-              // 验证海报有效性
               if (!poster || poster.length === 0) continue;
 
-              // 1. 快速检查：已知黑图大小
+              // 1. Check black image size
               if (poster.length === 11488) {
-                console.warn(`    ⚠️ Skipping invalid black image for type: ${type} (size: 11488 bytes)`);
+                // logger.warn(`    ⚠️ Skipping invalid black image for type: ${type} (size: 11488 bytes)`);
                 continue;
               }
 
-              // 2. 深度检查：像素分析
+              // 2. Pixel analysis
               const { isBlackImage } = await import('../utils/imageUtils.js');
               const isBlack = await isBlackImage(poster);
               if (isBlack) {
-                console.warn(`    ⚠️ Skipping invalid black image for type: ${type} (pixel analysis detected >98% black)`);
+                // logger.warn(`    ⚠️ Skipping invalid black image for type: ${type} (pixel analysis detected > 98 % black)`);
                 continue;
               }
 
               validPoster = poster;
-              console.log(`    ✅ Found valid cover using type: ${type} (${poster.length} bytes)`);
+              usedType = type;
+              // logger.info(`    ✅ Found valid cover using type: ${type} (${poster.length} bytes)`);
               break;
             }
 
             if (!validPoster) {
-              console.warn(`  ⚠️ No valid cover found for item: ${item.name} (checked all types)`);
+              // logger.warn(`  ⚠️ No valid cover found for item: ${item.name}`);
               continue;
             }
 
             posterBuffers.push(validPoster);
 
-            // 保存海报到本地
-            try {
-              const fs = await import('fs');
-              const path = await import('path');
-              const postersDir = path.join(process.cwd(), 'output', 'posters', libraryName);
-
-              if (!fs.existsSync(postersDir)) {
-                fs.mkdirSync(postersDir, { recursive: true });
-              }
-
-              const cleanName = item.name.replace(/[<>:"/\\|?*]/g, '_');
-              const posterPath = path.join(postersDir, `${posterBuffers.length}_${cleanName}.jpg`);
-              fs.writeFileSync(posterPath, validPoster);
-            } catch (err) {
-              console.error('  Failed to save poster locally:', err);
+            // Save poster if enabled
+            if (savePosters) {
+              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+              await saveFile('posters', `${libraryName}_${item.name}_${usedType}_${timestamp}.jpg`, validPoster);
             }
           }
 
@@ -197,81 +219,116 @@ export async function runTask(taskId: string) {
         }
 
         if (posterBuffers.length === 0) {
-          console.warn(`⚠️ No valid posters found for library ${libraryName}, skipping...`);
+          logger.warn(`⚠️ No valid posters found for library ${libraryName}, skipping...`);
           progress.failed++;
           continue;
         }
 
-        // 如果不足9个，用已有的填充
+        // Fill if less than 9
         while (posterBuffers.length < 9) {
           const index = posterBuffers.length % Math.max(posterBuffers.filter(p => p !== null).length, 1);
           posterBuffers.push(posterBuffers[index]);
         }
 
-        // c. 使用模板渲染媒体库封面
-        console.log(`  🎨 Rendering library cover for ${libraryName}...`);
+        // c. Render cover
+        logger.info(`  🎨 Rendering library cover for ${libraryName}...`);
         const metadata = {
           title: libraryName,
           primaryTitle: config.primaryTitle || libraryName,
           secondaryTitle: config.secondaryTitle || ''
         };
 
+        let canvasJson = templateDetail.canvasJson || '{}';
+        let taskOptions: any = {};
+        try {
+          if (task.options) {
+            taskOptions = typeof task.options === 'string' ? JSON.parse(task.options) : task.options;
+          }
+        } catch (e) {
+          logger.warn('Failed to parse task options', e);
+        }
+
+        try {
+          const tmpl = JSON.parse(canvasJson);
+          if (taskOptions.randomBackground || tmpl.randomOnGeneration) {
+            tmpl.background = renderer.generateRandomGradient();
+            if (tmpl.backgroundColor) {
+              tmpl.backgroundColor = tmpl.background;
+            }
+            canvasJson = JSON.stringify(tmpl);
+            logger.info('    🎲 Applied random background gradient');
+          }
+        } catch (err) {
+          logger.error('    ❌ Failed to apply random background:', err);
+        }
+
         const renderedBuffer = await renderer.renderLibraryCover(
-          templateDetail.canvasJson || '{}',
+          canvasJson,
           metadata,
           posterBuffers.filter((p): p is Buffer => p !== null),
           { width: templateDetail.width || 1920, height: templateDetail.height || 1080 }
         );
 
-        // 保存到本地目录留存
-        const outputDir = './output/library-covers';
-        const fs = await import('fs');
-        const path = await import('path');
-        if (!fs.existsSync(outputDir)) {
-          fs.mkdirSync(outputDir, { recursive: true });
+        // Save generated cover if enabled
+        if (saveCovers) {
+          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          await saveFile('covers', `${libraryName}_${timestamp}.png`, renderedBuffer);
         }
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-        const safeLibraryName = libraryName.replace(/[<>:"/\\|?*]/g, '_');
-        const outputPath = path.join(outputDir, `${safeLibraryName}_${timestamp}.png`);
-        fs.writeFileSync(outputPath, renderedBuffer);
-        console.log(`  💾 Saved cover to: ${outputPath}`);
 
-        // d. 上传封面到媒体库（注意：是上传到媒体库，不是媒体项）
-        console.log(`  📤 Uploading library cover for ${libraryName}...`);
+        // Always save to output/library-covers for legacy/display purposes?
+        // Or just map to data/covers? Let's use saveFile logic above, plus keep the legacy output one if needed
+        // but user asked for data folder structure. Let's stick to the requested structure.
+        // Actually, let's keep the legacy basic save too but maybe redirect it? 
+        // For now, I'll remove the legacy ./output folder logic to be cleaner and use data/covers as the source of truth.
+
+        // d. Upload cover
+        logger.info(`  📤 Uploading library cover for ${libraryName}...`);
         const success = await mediaClient.uploadCover(
           serverDetail.type,
           serverDetail.url,
           apiKey,
-          config.libraryId,  // 这里使用的是媒体库ID，不是媒体项ID
+          config.libraryId,
           renderedBuffer
         );
 
         if (success) {
-          console.log(`  ✅ Successfully updated cover for ${libraryName}`);
+          logger.info(`  ✅ Successfully updated cover for ${libraryName}`);
           progress.success++;
         } else {
-          console.log(`  ❌ Failed to upload cover for ${libraryName}`);
+          logger.error(`  ❌ Failed to upload cover for ${libraryName}`);
           progress.failed++;
         }
 
       } catch (err) {
-        console.error(`❌ Error processing library ${config.libraryName}:`, err);
+        logger.error(`❌ Error processing library ${config.libraryName}: `, err);
         progress.failed++;
       }
     }
 
     progress.status = 'completed';
-    console.log(`✅ Task ${task.name} finished. Success: ${progress.success}, Failed: ${progress.failed}`);
+    logger.info(`✅ Task ${task.name} finished. Success: ${progress.success}, Failed: ${progress.failed}`);
 
-    // 更新最后运行时间
     const now = new Date().toISOString();
-    db.update(tasks)
-      .set({ lastRunAt: now })
-      .where(eq(tasks.id, taskId))
-      .run();
+    db.update(tasks).set({ lastRunAt: now }).where(eq(tasks.id, taskId)).run();
+
+    if (logId) {
+      db.update(taskLogs).set({
+        status: 'completed',
+        completedAt: now,
+        itemsProcessed: progress.success,
+        itemsFailed: progress.failed
+      }).where(eq(taskLogs.id, logId)).run();
+    }
 
   } catch (error) {
-    console.error(`🔴 Task ${taskId} failed:`, error);
+    logger.error(`🔴 Task ${taskId} failed: `, error);
     progress.status = 'error';
+    if (logId) {
+      db.update(taskLogs).set({
+        status: 'failed',
+        completedAt: new Date().toISOString(),
+        errorMessage: (error as any).message || String(error)
+      }).where(eq(taskLogs.id, logId)).run();
+    }
   }
 }

@@ -14,7 +14,7 @@ interface CanvasState {
   history: string[];
   historyIndex: number;
   zoom: number;
-  
+
   setCanvas: (canvas: fabric.Canvas | null) => void;
   setSelectedObject: (obj: fabric.FabricObject | null) => void;
   addObject: (obj: CanvasObject) => void;
@@ -34,25 +34,25 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   history: [],
   historyIndex: -1,
   zoom: 1,
-  
+
   setCanvas: (canvas) => set({ canvas }),
-  
+
   setSelectedObject: (obj) => set({ selectedObject: obj }),
-  
+
   addObject: (obj) => {
     set((state) => ({
       objects: [...state.objects, obj]
     }));
     get().saveToHistory();
   },
-  
+
   removeObject: (id) => {
     set((state) => ({
       objects: state.objects.filter((o) => o.id !== id)
     }));
     get().saveToHistory();
   },
-  
+
   updateObject: (id, data) => {
     set((state) => ({
       objects: state.objects.map((o) =>
@@ -60,13 +60,14 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       )
     }));
   },
-  
+
   setZoom: (zoom) => set({ zoom }),
-  
+
   saveToHistory: () => {
     const { canvas, history, historyIndex } = get();
     if (canvas) {
-      const json = JSON.stringify(canvas.toJSON());
+      // Include background and custom properties in the saved JSON
+      const json = JSON.stringify((canvas as any).toJSON(['id', 'posterVar', 'isPoster', 'randomOnGeneration']));
       const newHistory = history.slice(0, historyIndex + 1);
       newHistory.push(json);
       set({
@@ -75,29 +76,27 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
       });
     }
   },
-  
-  undo: () => {
+
+  undo: async () => {
     const { canvas, history, historyIndex } = get();
     if (canvas && historyIndex > 0) {
       const newIndex = historyIndex - 1;
-      canvas.loadFromJSON(JSON.parse(history[newIndex]), () => {
-        canvas.renderAll();
-      });
       set({ historyIndex: newIndex });
+      await canvas.loadFromJSON(JSON.parse(history[newIndex]));
+      canvas.renderAll();
     }
   },
-  
-  redo: () => {
+
+  redo: async () => {
     const { canvas, history, historyIndex } = get();
     if (canvas && historyIndex < history.length - 1) {
       const newIndex = historyIndex + 1;
-      canvas.loadFromJSON(JSON.parse(history[newIndex]), () => {
-        canvas.renderAll();
-      });
       set({ historyIndex: newIndex });
+      await canvas.loadFromJSON(JSON.parse(history[newIndex]));
+      canvas.renderAll();
     }
   },
-  
+
   clearCanvas: () => {
     const { canvas } = get();
     if (canvas) {

@@ -19,7 +19,8 @@ export const createTaskSchema = z.object({
   libraryConfigs: z.string().optional(), // JSON string from frontend
   options: z.object({
     skipLocked: z.boolean().default(true),
-    overwriteExisting: z.boolean().default(false)
+    overwriteExisting: z.boolean().default(false),
+    randomBackground: z.boolean().default(false)
   }).optional()
 });
 
@@ -73,6 +74,7 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
 // 创建任务
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
+    console.log('📝 Creating task with body:', JSON.stringify(req.body, null, 2));
     const { name, type, cronExpression, templateId, serverId, libraryIds, libraryConfigs, options } = req.body;
 
     const now = new Date().toISOString();
@@ -116,6 +118,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const updates = req.body;
+    console.log(`📝 Updating task ${id} with body:`, JSON.stringify(updates, null, 2));
     const now = new Date().toISOString();
 
     const idStr = id as string;
@@ -194,8 +197,18 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
     }).run();
 
     // 异步执行任务
-    runTask(idStr).catch(err => {
+    runTask(idStr, logId).catch(err => {
       console.error(`Task ${idStr} execution failed:`, err);
+      // Try to mark as failed if runTask completely blew up
+      try {
+        db.update(taskLogs).set({
+          status: 'failed',
+          errorMessage: (err as any).message || String(err),
+          completedAt: new Date().toISOString()
+        }).where(eq(taskLogs.id, logId)).run();
+      } catch (e) {
+        console.error('Failed to update log status on catastrophic failure', e);
+      }
     });
 
     res.json({

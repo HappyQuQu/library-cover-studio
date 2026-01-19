@@ -32,6 +32,8 @@ export function EditorPage() {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const [randomOnGeneration, setRandomOnGeneration] = useState(false);
+
   const {
     canvas, setCanvas, selectedObject, setSelectedObject,
     zoom, setZoom, undo, redo, saveToHistory
@@ -176,6 +178,13 @@ export function EditorPage() {
         try {
           const jsonData = JSON.parse(templateData.canvasJson);
           await canvas.loadFromJSON(jsonData);
+
+          // Restore randomOnGeneration setting
+          if (jsonData.randomOnGeneration) {
+            setRandomOnGeneration(true);
+            (canvas as any).randomOnGeneration = true;
+          }
+
           // Restore custom properties from JSON data
           const objects = canvas.getObjects();
           if (jsonData.objects && Array.isArray(jsonData.objects)) {
@@ -218,6 +227,69 @@ export function EditorPage() {
       canvas.renderAll();
     }
   }, [zoom, canvas, canvasWidth, canvasHeight]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    if (!canvas) return;
+
+    let clipboard: fabric.FabricObject | null = null;
+
+    const handleKeyDown = async (e: KeyboardEvent) => {
+      // Ignore if typing in an input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      const activeObject = canvas.getActiveObject();
+
+      // Delete key - delete selected object
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (activeObject) {
+          canvas.remove(activeObject);
+          canvas.discardActiveObject();
+          canvas.renderAll();
+          saveToHistory();
+        }
+        e.preventDefault();
+      }
+
+      // Ctrl+C - Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (activeObject) {
+          clipboard = await activeObject.clone();
+        }
+      }
+
+      // Ctrl+V - Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboard) {
+          const cloned = await clipboard.clone();
+          cloned.set({
+            left: (cloned.left || 0) + 20,
+            top: (cloned.top || 0) + 20,
+          });
+          (cloned as any).id = Math.random().toString(36).substr(2, 9);
+          canvas.add(cloned);
+          canvas.setActiveObject(cloned);
+          canvas.renderAll();
+          saveToHistory();
+        }
+      }
+
+      // Ctrl+Z - Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        undo();
+        e.preventDefault();
+      }
+
+      // Ctrl+Shift+Z or Ctrl+Y - Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        redo();
+        e.preventDefault();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [canvas, saveToHistory, undo, redo]);
   const addObject = useCallback(async (type: string, payload?: any) => {
     if (!canvas) {
       console.log('Canvas not ready');
@@ -435,7 +507,8 @@ export function EditorPage() {
     canvas.renderAll();
 
     // Serialize canvas with custom properties
-    const canvasData = canvas.toObject();
+    // IMPORTANT: Include 'randomOnGeneration' in the export
+    const canvasData = canvas.toObject(['randomOnGeneration']);
     canvasData.objects = canvasData.objects.map((obj: any, index: number) => {
       const fabricObj = canvas.getObjects()[index] as any;
       return {
@@ -469,6 +542,12 @@ export function EditorPage() {
       return;
     }
 
+    // Handle random generation flag
+    if (bg.randomOnGeneration !== undefined) {
+      setRandomOnGeneration(bg.randomOnGeneration);
+      (canvas as any).randomOnGeneration = bg.randomOnGeneration;
+    }
+
     // Get gradient coords based on direction
     const getGradientCoords = (direction: string) => {
       const width = canvas.getWidth();
@@ -493,11 +572,19 @@ export function EditorPage() {
       canvas.backgroundColor = bg.color;
     } else if (bg.type === 'gradient') {
       const coords = getGradientCoords(bg.direction);
+      // Calculate color stops based on intensity
+      // intensity 0 = soft blend (0% to 100%)
+      // intensity 100 = sharp transition (nearly solid colors meeting in middle)
+      const intensity = bg.intensity ?? 50;
+      const midStart = (50 - intensity / 2) / 100;
+      const midEnd = (50 + intensity / 2) / 100;
       const gradient = new fabric.Gradient({
         type: 'linear',
         coords,
         colorStops: [
           { offset: 0, color: bg.color1 },
+          { offset: midStart, color: bg.color1 },
+          { offset: midEnd, color: bg.color2 },
           { offset: 1, color: bg.color2 }
         ]
       });
@@ -509,13 +596,21 @@ export function EditorPage() {
       const h2 = Math.floor(Math.random() * 360);
       const s2 = Math.floor(40 + Math.random() * 40);
       const l2 = Math.floor(35 + Math.random() * 30);
+      const color1 = `hsl(${h1},${s1}%,${l1}%)`;
+      const color2 = `hsl(${h2},${s2}%,${l2}%)`;
       const coords = getGradientCoords(bg.direction);
+      // Apply intensity
+      const intensity = bg.intensity ?? 50;
+      const midStart = (50 - intensity / 2) / 100;
+      const midEnd = (50 + intensity / 2) / 100;
       const gradient = new fabric.Gradient({
         type: 'linear',
         coords,
         colorStops: [
-          { offset: 0, color: `hsl(${h1},${s1}%,${l1}%)` },
-          { offset: 1, color: `hsl(${h2},${s2}%,${l2}%)` }
+          { offset: 0, color: color1 },
+          { offset: midStart, color: color1 },
+          { offset: midEnd, color: color2 },
+          { offset: 1, color: color2 }
         ]
       });
       canvas.backgroundColor = gradient as any;
@@ -567,6 +662,7 @@ export function EditorPage() {
           onAddImage={() => addObject('image')}
           onAddShape={(type, payload) => addObject(type, payload)}
           onChangeBackground={changeBackground}
+          initialRandomOnGeneration={randomOnGeneration}
         />
       </aside>
 

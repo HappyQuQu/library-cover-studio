@@ -1,8 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
-import { useUpdateSettings } from '@/api/hooks';
-import { Settings, User, Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type } from 'lucide-react';
+import { useUpdateSettings, useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
+import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key, Settings } from 'lucide-react';
+import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/api/client';
 
@@ -14,17 +15,115 @@ interface Font {
   uploadedAt: string;
 }
 
+interface LogEntry {
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  message: string;
+}
+
 export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const { mode, setMode, brand, setBrand } = useThemeStore();
+  const { toast } = useToast();
   const updateSettings = useUpdateSettings();
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [activeSection, setActiveSection] = useState<'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users'>('appearance');
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [storageSettings, setStorageSettings] = useState({ savePosters: false, saveCovers: false });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // User Management State
+  const { data: userList = [], isLoading: usersLoading } = useUsers(user?.role === 'admin');
+  const createUserMutation = useCreateUser();
+  const updateUserMutation = useUpdateUser();
+  const deleteUserMutation = useDeleteUser();
+
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userFormData, setUserFormData] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' });
+  const { data: historicalLogs = [] } = useLogs();
+  const [logFilter, setLogFilter] = useState<'all' | 'info' | 'warn' | 'error'>('all');
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  // Self Change Password State
+  const [isChangePwdOpen, setIsChangePwdOpen] = useState(false);
+  const [pwdFormData, setPwdFormData] = useState({ password: '', confirmPassword: '' });
+
+  // Initialize logs with historical data once loaded
+  useEffect(() => {
+    if (historicalLogs.length > 0) {
+      setLogs(historicalLogs);
+    }
+  }, [historicalLogs]);
 
   useEffect(() => {
+    // 1. Initial Load
     loadFonts();
+    loadStorageSettings(); // Load storage settings
+
+    // 2. Capture Console Logs (Local)
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    console.log = (...args) => {
+      addLog('info', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+      originalLog.apply(console, args);
+    };
+    console.warn = (...args) => {
+      addLog('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+      originalWarn.apply(console, args);
+    };
+    console.error = (...args) => {
+      addLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+      originalError.apply(console, args);
+    };
+
+    // 3. Connect to Backend Log Stream (SSE)
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/logs/stream');
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          addLog(data.level, data.message);
+        } catch (e) {
+          console.error('Failed to parse log event', e);
+        }
+      };
+
+      eventSource.onerror = () => {
+        console.error('Log stream connection error');
+        eventSource?.close();
+      };
+    } catch (e) {
+      console.error('Failed to connect to log stream', e);
+    }
+
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+      eventSource?.close();
+    };
   }, []);
+
+  const addLog = (level: 'info' | 'warn' | 'error' | 'debug', message: string) => {
+    setLogs(prev => [...prev.slice(-200), {
+      timestamp: new Date().toLocaleTimeString(),
+      level,
+      message
+    }]);
+  };
+
+  useEffect(() => {
+    if (autoScroll) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, autoScroll]);
 
   const loadFonts = async () => {
     try {
@@ -83,240 +182,689 @@ export function SettingsPage() {
     }
   };
 
+  const loadStorageSettings = async () => {
+    try {
+      const res = await apiClient.get('/settings');
+      const settings = res.data || {};
+      setStorageSettings({
+        savePosters: settings['storage.savePosters'] === 'true',
+        saveCovers: settings['storage.saveCovers'] === 'true'
+      });
+    } catch (error) {
+      console.error('Failed to load storage settings', error);
+    }
+  };
+
+  const toggleStorage = async (key: 'savePosters' | 'saveCovers') => {
+    const newValue = !storageSettings[key];
+    setStorageSettings(prev => ({ ...prev, [key]: newValue }));
+    try {
+      // Send directly as object, backend now supports it
+      await apiClient.post('/settings', { [`storage.${key}`]: String(newValue) });
+    } catch (error) {
+      console.error('Failed to save storage setting', error);
+      // Revert on error
+      setStorageSettings(prev => ({ ...prev, [key]: !newValue }));
+    }
+  };
+
+  const handleUserAction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingUser) {
+        await updateUserMutation.mutateAsync({
+          id: editingUser.id,
+          role: userFormData.role,
+          ...(userFormData.password ? { password: userFormData.password } : {})
+        });
+        toast({ title: '用户更新成功' });
+      } else {
+        await createUserMutation.mutateAsync(userFormData);
+        toast({ title: '用户创建成功' });
+      }
+      setIsUserDialogOpen(false);
+      setEditingUser(null);
+      setUserFormData({ username: '', password: '', role: 'user' });
+    } catch (error: any) {
+      toast({ title: '操作失败', description: error.response?.data?.error || '未知错误', variant: 'destructive' });
+    }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pwdFormData.password !== pwdFormData.confirmPassword) {
+      return toast({ title: '错误', description: '两次输出的密码不一致', variant: 'destructive' });
+    }
+    if (pwdFormData.password.length < 6) {
+      return toast({ title: '错误', description: '密码长度至少为 6 位', variant: 'destructive' });
+    }
+
+    try {
+      await updateUserMutation.mutateAsync({
+        id: user!.id,
+        password: pwdFormData.password
+      });
+      toast({ title: '密码修改成功' });
+      setIsChangePwdOpen(false);
+      setPwdFormData({ password: '', confirmPassword: '' });
+    } catch (error: any) {
+      toast({ title: '修改失败', description: error.response?.data?.error || '未知错误', variant: 'destructive' });
+    }
+  };
+
+  const menuItems = [
+    { id: 'appearance', label: '外观设置', icon: Palette },
+    { id: 'rendering', label: '渲染设置', icon: Sparkles },
+    { id: 'storage', label: '存储设置', icon: Server },
+    { id: 'fonts', label: '字体管理', icon: Type },
+    { id: 'data', label: '数据管理', icon: Database },
+    { id: 'logs', label: '系统日志', icon: Terminal },
+    ...(user?.role === 'admin' ? [{ id: 'users', label: '用户管理', icon: Users }] : []),
+  ];
+
+  const getLogColor = (level: string) => {
+    switch (level) {
+      case 'error': return '#ef4444';
+      case 'warn': return '#f59e0b';
+      case 'info': return '#3b82f6';
+      default: return 'var(--text-tertiary)';
+    }
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>设置</h1>
-        <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
-          管理应用程序配置
-        </p>
-      </div>
-
-      {/* User Card */}
-      <div className="glass-panel" style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div className="avatar" style={{ width: 56, height: 56, fontSize: 20, borderRadius: 16 }}>
-            {user?.username?.[0]?.toUpperCase() || 'U'}
-          </div>
-          <div style={{ flex: 1 }}>
-            <h3 style={{ fontWeight: 600, fontSize: 18, color: 'var(--text-primary)' }}>{user?.username || 'User'}</h3>
-            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>
-              {user?.role === 'admin' ? '管理员' : '普通用户'}
-            </p>
-          </div>
-          <Button className="btn btn-secondary">
-            <User style={{ width: 16, height: 16 }} />
-            编辑
-          </Button>
-        </div>
-      </div>
-
-      {/* Theme */}
-      <div className="card">
-        <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Palette style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-          外观设置
-        </div>
-        <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Mode */}
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>显示模式</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                { id: 'light' as const, label: '浅色', icon: Sun },
-                { id: 'dark' as const, label: '深色', icon: Moon },
-                { id: 'system' as const, label: '系统', icon: Monitor },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  onClick={() => handleModeChange(m.id)}
-                  style={{
-                    padding: 16,
-                    borderRadius: 12,
-                    border: `2px solid ${mode === m.id ? 'var(--primary)' : 'var(--border-color)'}`,
-                    background: mode === m.id ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <m.icon style={{ width: 24, height: 24, color: mode === m.id ? 'var(--primary)' : 'var(--text-tertiary)' }} />
-                  <span style={{ fontSize: 14, fontWeight: 500, color: mode === m.id ? 'var(--primary)' : 'var(--text-secondary)' }}>
-                    {m.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Brand */}
-          <div>
-            <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>品牌色彩</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-              {[
-                { id: 'jellyfin' as const, label: 'Jellyfin', icon: Palette, color: 'var(--jellyfin)' },
-                { id: 'emby' as const, label: 'Emby', icon: Server, color: 'var(--emby)' },
-              ].map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => handleBrandChange(b.id)}
-                  style={{
-                    padding: 16,
-                    borderRadius: 12,
-                    border: `2px solid ${brand === b.id ? b.color : 'var(--border-color)'}`,
-                    background: brand === b.id ? `${b.color}15` : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: 8,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <b.icon style={{ width: 24, height: 24, color: brand === b.id ? b.color : 'var(--text-tertiary)' }} />
-                  <span style={{ fontSize: 14, fontWeight: 500, color: brand === b.id ? b.color : 'var(--text-secondary)' }}>
-                    {b.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Custom Fonts */}
-      <div className="card">
-        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ display: 'flex', gap: 24, height: 'calc(100vh - 120px)' }}>
+      {/* Left Sidebar */}
+      <div style={{ width: 240, flexShrink: 0 }}>
+        {/* User Card */}
+        <div className="glass-panel" style={{ padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <Type style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-            自定义字体
+            <div className="avatar" style={{ width: 44, height: 44, fontSize: 16, borderRadius: 12 }}>
+              {user?.username?.[0]?.toUpperCase() || 'U'}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h3 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.username || 'User'}</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                {user?.role === 'admin' ? '管理员' : '普通用户'}
+              </p>
+            </div>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".ttf,.otf,.woff,.woff2"
-            onChange={handleFontUpload}
-            style={{ display: 'none' }}
-          />
           <Button
-            className="btn btn-secondary btn-sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            className="btn btn-ghost btn-xs"
+            onClick={() => setIsChangePwdOpen(true)}
+            style={{ width: '100%', marginTop: 12, fontSize: 11, height: 28, gap: 6, opacity: 0.8 }}
           >
-            <Upload style={{ width: 14, height: 14 }} />
-            {uploading ? '上传中...' : '上传字体'}
+            <Key style={{ width: 12, height: 12 }} />
+            修改密码
           </Button>
         </div>
-        <div>
-          {fonts.length === 0 ? (
-            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-              暂无自定义字体，点击上方按钮上传
+
+        {/* Menu */}
+        <div className="glass-panel" style={{ padding: 8 }}>
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveSection(item.id as any)}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                borderRadius: 10,
+                border: 'none',
+                background: activeSection === item.id ? 'var(--primary)' : 'transparent',
+                color: activeSection === item.id ? 'white' : 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                marginBottom: 2,
+                fontSize: 13,
+                fontWeight: 500
+              }}
+            >
+              <item.icon style={{ width: 18, height: 18 }} />
+              {item.label}
+              {activeSection === item.id && <ChevronRight style={{ width: 16, height: 16, marginLeft: 'auto' }} />}
+            </button>
+          ))}
+        </div>
+
+        {/* About */}
+        <div style={{ marginTop: 16, padding: 16, textAlign: 'center', opacity: 0.7 }}>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>CoverStudio v1.3.0</p>
+        </div>
+      </div>
+
+      {/* Right Content */}
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {/* Appearance */}
+        {activeSection === 'appearance' && (
+          <div className="card" style={{ height: 'fit-content' }}>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Palette style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              外观设置
             </div>
-          ) : (
-            fonts.map((font) => (
-              <div key={font.filename} style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Type style={{ width: 20, height: 20, color: 'var(--text-tertiary)' }} />
-                  </div>
-                  <div>
-                    <h4 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{font.name}</h4>
-                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{(font.size / 1024).toFixed(1)} KB</p>
-                  </div>
+            <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+              {/* Mode */}
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>显示模式</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, maxWidth: 400 }}>
+                  {[
+                    { id: 'light' as const, label: '浅色', icon: Sun },
+                    { id: 'dark' as const, label: '深色', icon: Moon },
+                    { id: 'system' as const, label: '系统', icon: Monitor },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => handleModeChange(m.id)}
+                      style={{
+                        padding: 20,
+                        borderRadius: 16,
+                        border: `2px solid ${mode === m.id ? 'var(--primary)' : 'var(--border-color)'}`,
+                        background: mode === m.id ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-primary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 10,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <m.icon style={{ width: 28, height: 28, color: mode === m.id ? 'var(--primary)' : 'var(--text-tertiary)' }} />
+                      <span style={{ fontSize: 13, fontWeight: 500, color: mode === m.id ? 'var(--primary)' : 'var(--text-secondary)' }}>
+                        {m.label}
+                      </span>
+                    </button>
+                  ))}
                 </div>
-                <Button
-                  className="btn btn-ghost btn-sm"
-                  onClick={() => handleDeleteFont(font.filename)}
-                  style={{ color: 'var(--danger)' }}
-                >
-                  <Trash2 style={{ width: 14, height: 14 }} />
+              </div>
+
+              {/* Brand */}
+              <div>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>品牌色彩</p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, maxWidth: 280 }}>
+                  {[
+                    { id: 'jellyfin' as const, label: 'Jellyfin', icon: Palette, color: 'var(--jellyfin)' },
+                    { id: 'emby' as const, label: 'Emby', icon: Server, color: 'var(--emby)' },
+                  ].map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => handleBrandChange(b.id)}
+                      style={{
+                        padding: 20,
+                        borderRadius: 16,
+                        border: `2px solid ${brand === b.id ? b.color : 'var(--border-color)'}`,
+                        background: brand === b.id ? `${b.color}15` : 'var(--bg-primary)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 10,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <b.icon style={{ width: 28, height: 28, color: brand === b.id ? b.color : 'var(--text-tertiary)' }} />
+                      <span style={{ fontSize: 13, fontWeight: 500, color: brand === b.id ? b.color : 'var(--text-secondary)' }}>
+                        {b.label}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Rendering */}
+        {activeSection === 'rendering' && (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              渲染设置
+            </div>
+            <div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出格式</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>生成海报的图片格式</p>
+                </div>
+                <select className="input" style={{ width: 140 }}>
+                  <option>PNG</option>
+                  <option>JPEG</option>
+                  <option>WebP</option>
+                </select>
+              </div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出质量</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>压缩质量 (1-100)</p>
+                </div>
+                <Input type="number" defaultValue="90" className="input" style={{ width: 120 }} />
+              </div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>并发数量</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>同时处理任务数</p>
+                </div>
+                <Input type="number" defaultValue="3" className="input" style={{ width: 120 }} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Storage */}
+        {activeSection === 'storage' && (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Server style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              存储设置
+            </div>
+            <div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存原海报</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>将抓取到的高清海报保存到 <code>./data/posters</code></p>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={storageSettings.savePosters}
+                    onChange={() => toggleStorage('savePosters')}
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存生成的封面</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>将生成的最终封面保存到 <code>./data/covers</code></p>
+                </div>
+                <label className="switch">
+                  <input
+                    type="checkbox"
+                    checked={storageSettings.saveCovers}
+                    onChange={() => toggleStorage('saveCovers')}
+                  />
+                  <span className="slider round"></span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fonts */}
+        {activeSection === 'fonts' && (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Type style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+                字体管理
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".ttf,.otf,.woff,.woff2"
+                onChange={handleFontUpload}
+                style={{ display: 'none' }}
+              />
+              <Button
+                className="btn btn-primary btn-sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <Upload style={{ width: 14, height: 14 }} />
+                {uploading ? '上传中...' : '上传字体'}
+              </Button>
+            </div>
+            <div>
+              {fonts.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center' }}>
+                  <Type style={{ width: 48, height: 48, color: 'var(--text-tertiary)', margin: '0 auto 16px' }} />
+                  <p style={{ color: 'var(--text-tertiary)' }}>暂无自定义字体</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>点击上方按钮上传 TTF/OTF/WOFF 字体</p>
+                </div>
+              ) : (
+                fonts.map((font) => (
+                  <div key={font.filename} style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Type style={{ width: 22, height: 22, color: 'var(--text-tertiary)' }} />
+                      </div>
+                      <div>
+                        <h4 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{font.name}</h4>
+                        <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 2 }}>{(font.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                    </div>
+                    <Button
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => handleDeleteFont(font.filename)}
+                      style={{ color: 'var(--danger)' }}
+                    >
+                      <Trash2 style={{ width: 16, height: 16 }} />
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Data */}
+        {activeSection === 'data' && (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Database style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              数据管理
+            </div>
+            <div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>导出数据</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>导出所有模板和配置文件</p>
+                </div>
+                <Button className="btn btn-secondary">
+                  <Download style={{ width: 16, height: 16 }} />
+                  导出
                 </Button>
               </div>
-            ))
-          )}
-        </div>
+              <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>清理缓存</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>清除临时生成文件和缓存</p>
+                </div>
+                <Button className="btn btn-secondary">
+                  <Trash2 style={{ width: 16, height: 16 }} />
+                  清理
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Logs */}
+        {activeSection === 'logs' && (
+          <div className="card" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Terminal style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+                系统日志
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: 10 }}>
+                  {logs.filter(l => logFilter === 'all' || l.level === logFilter).length} 条
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {/* Auto-scroll Toggle */}
+                <button
+                  onClick={() => setAutoScroll(!autoScroll)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                    border: 'none', cursor: 'pointer',
+                    background: autoScroll ? 'var(--success)' : 'var(--bg-tertiary)',
+                    color: autoScroll ? 'white' : 'var(--text-secondary)',
+                    transition: 'all 0.2s'
+                  }}
+                  title={autoScroll ? '自动滚动已开启' : '自动滚动已关闭'}
+                >
+                  {autoScroll ? <Play style={{ width: 12, height: 12 }} /> : <Pause style={{ width: 12, height: 12 }} />}
+                  {autoScroll ? '滚动' : '暂停'}
+                </button>
+                <Button className="btn btn-ghost btn-sm" onClick={() => setLogs([])}>
+                  <Trash2 style={{ width: 14, height: 14 }} />
+                  清空
+                </Button>
+              </div>
+            </div>
+
+            {/* Log Level Filter Tabs */}
+            <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
+              {[
+                { id: 'all' as const, label: '全部', color: 'var(--text-primary)' },
+                { id: 'info' as const, label: 'INFO', color: '#3b82f6' },
+                { id: 'warn' as const, label: 'WARN', color: '#f59e0b' },
+                { id: 'error' as const, label: 'ERROR', color: '#ef4444' },
+              ].map(filter => {
+                const count = filter.id === 'all' ? logs.length : logs.filter(l => l.level === filter.id).length;
+                return (
+                  <button
+                    key={filter.id}
+                    onClick={() => setLogFilter(filter.id)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+                      border: 'none', cursor: 'pointer',
+                      background: logFilter === filter.id ? (filter.id === 'all' ? 'var(--primary)' : filter.color) : 'transparent',
+                      color: logFilter === filter.id ? 'white' : filter.color,
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {filter.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ flex: 1, overflow: 'auto', background: '#1a1a2e', borderRadius: '0 0 12px 12px' }}>
+              {logs.filter(l => logFilter === 'all' || l.level === logFilter).length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center' }}>
+                  <Terminal style={{ width: 48, height: 48, color: '#4a5568', margin: '0 auto 16px' }} />
+                  <p style={{ color: '#718096' }}>暂无{logFilter !== 'all' ? ` ${logFilter.toUpperCase()} ` : ''}日志</p>
+                  <p style={{ fontSize: 13, color: '#4a5568', marginTop: 8 }}>执行操作时将在此显示日志</p>
+                </div>
+              ) : (
+                <div style={{ padding: 16, fontFamily: 'Consolas, Monaco, monospace', fontSize: 12, lineHeight: 1.8 }}>
+                  {logs.filter(l => logFilter === 'all' || l.level === logFilter).map((log, i) => (
+                    <div key={i} style={{ display: 'flex', gap: 12 }}>
+                      <span style={{ color: '#4a5568', flexShrink: 0 }}>{log.timestamp}</span>
+                      <span style={{ color: getLogColor(log.level), flexShrink: 0, width: 50 }}>[{log.level.toUpperCase()}]</span>
+                      <span style={{ color: '#e2e8f0', wordBreak: 'break-all' }}>{log.message}</span>
+                    </div>
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* User Management */}
+        {activeSection === 'users' && user?.role === 'admin' && (
+          <div className="card" style={{ height: 'fit-content' }}>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <Users style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+                用户管理
+              </div>
+              <Button
+                className="btn btn-primary btn-sm"
+                onClick={() => {
+                  setEditingUser(null);
+                  setUserFormData({ username: '', password: '', role: 'user' });
+                  setIsUserDialogOpen(true);
+                }}
+              >
+                <UserPlus style={{ width: 14, height: 14 }} />
+                添加用户
+              </Button>
+            </div>
+
+            <div>
+              {usersLoading ? (
+                <div style={{ padding: 48, textAlign: 'center' }}>加载中...</div>
+              ) : userList.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center' }}>未找到用户</div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border-color)' }}>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>用户名</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>角色</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>创建日期</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500, textAlign: 'right' }}>操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userList.map((u) => (
+                        <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }} className="hover:bg-muted/50">
+                          <td style={{ padding: '16px 24px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div className="avatar" style={{ width: 32, height: 32, fontSize: 12, borderRadius: 8 }}>
+                                {u.username[0].toUpperCase()}
+                              </div>
+                              <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{u.username}</span>
+                              {u.id === user.id && <span style={{ fontSize: 10, background: 'var(--primary)', color: 'white', padding: '1px 6px', borderRadius: 4 }}>我</span>}
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 24px' }}>
+                            <span style={{
+                              padding: '2px 8px', borderRadius: 6, fontSize: 11,
+                              background: u.role === 'admin' ? 'rgba(79, 70, 229, 0.1)' : 'rgba(107, 114, 128, 0.1)',
+                              color: u.role === 'admin' ? 'var(--primary)' : 'var(--text-secondary)',
+                              fontWeight: 500
+                            }}>
+                              {u.role === 'admin' ? '管理员' : '普通用户'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 24px', color: 'var(--text-tertiary)' }}>
+                            {new Date(u.createdAt).toLocaleDateString()}
+                          </td>
+                          <td style={{ padding: '12px 24px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                              <Button
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => {
+                                  setEditingUser(u);
+                                  setUserFormData({ username: u.username, password: '', role: u.role });
+                                  setIsUserDialogOpen(true);
+                                }}
+                              >
+                                编辑
+                              </Button>
+                              <Button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: 'var(--danger)' }}
+                                onClick={async () => {
+                                  if (u.id === user.id) return alert('不能删除自己');
+                                  if (confirm(`确定要删除用户 "${u.username}" 吗？`)) {
+                                    try {
+                                      await deleteUserMutation.mutateAsync(u.id);
+                                    } catch (err) {
+                                      alert('删除失败');
+                                    }
+                                  }
+                                }}
+                              >
+                                删除
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* User Dialog */}
+            {isUserDialogOpen && (
+              <div style={{
+                position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 1000
+              }}>
+                <div className="card" style={{ width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                  <div className="card-header">
+                    {editingUser ? '编辑用户' : '新建用户'}
+                  </div>
+                  <form onSubmit={handleUserAction} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>用户名</label>
+                      <Input
+                        value={userFormData.username}
+                        onChange={e => setUserFormData({ ...userFormData, username: e.target.value })}
+                        disabled={!!editingUser}
+                        required
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{editingUser ? '新密码 (留空则不修改)' : '密码'}</label>
+                      <Input
+                        type="password"
+                        value={userFormData.password}
+                        onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
+                        required={!editingUser}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>角色</label>
+                      <select
+                        className="input"
+                        value={userFormData.role}
+                        onChange={e => setUserFormData({ ...userFormData, role: e.target.value as any })}
+                      >
+                        <option value="user">普通用户</option>
+                        <option value="admin">管理员</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                      <Button type="button" className="btn btn-secondary" onClick={() => setIsUserDialogOpen(false)}>取消</Button>
+                      <Button type="submit" className="btn btn-primary" disabled={createUserMutation.isPending || updateUserMutation.isPending}>
+                        {editingUser ? '保存修改' : '立即创建'}
+                      </Button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Rendering Settings */}
-      <div className="card">
-        <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-          渲染设置
-        </div>
-        <div>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
-            <div>
-              <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出格式</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>生成海报的图片格式</p>
+      {/* Change Password Dialog (Self) */}
+      {isChangePwdOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div className="card" style={{ width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Key style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              修改我的密码
             </div>
-            <select className="input" style={{ width: 120 }}>
-              <option>PNG</option>
-              <option>JPEG</option>
-              <option>WebP</option>
-            </select>
-          </div>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
-            <div>
-              <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出质量</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>压缩质量 (1-100)</p>
-            </div>
-            <Input type="number" defaultValue="90" className="input" style={{ width: 100 }} />
-          </div>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>并发数量</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>同时处理任务数</p>
-            </div>
-            <Input type="number" defaultValue="3" className="input" style={{ width: 100 }} />
-          </div>
-        </div>
-      </div>
+            <form onSubmit={handleChangePassword} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>新密码</label>
+                <Input
+                  type="password"
+                  placeholder="请输入至少 6 位新密码"
+                  value={pwdFormData.password}
+                  onChange={e => setPwdFormData({ ...pwdFormData, password: e.target.value })}
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>确认新密码</label>
+                <Input
+                  type="password"
+                  placeholder="请再次输入新密码"
+                  value={pwdFormData.confirmPassword}
+                  onChange={e => setPwdFormData({ ...pwdFormData, confirmPassword: e.target.value })}
+                  required
+                />
+              </div>
 
-      {/* Data Management */}
-      <div className="card">
-        <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Database style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-          数据管理
-        </div>
-        <div>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
-            <div>
-              <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>导出数据</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>导出模板和配置</p>
-            </div>
-            <Button className="btn btn-secondary btn-sm">
-              <Download style={{ width: 14, height: 14 }} />
-              导出
-            </Button>
-          </div>
-          <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>清理缓存</h3>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 2 }}>清除临时文件</p>
-            </div>
-            <Button className="btn btn-secondary btn-sm">
-              <Trash2 style={{ width: 14, height: 14 }} />
-              清理
-            </Button>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
+                <Button type="button" className="btn btn-secondary" onClick={() => setIsChangePwdOpen(false)}>取消</Button>
+                <Button type="submit" className="btn btn-primary" disabled={updateUserMutation.isPending}>
+                  确认修改
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
-      </div>
-
-      {/* About */}
-      <div className="glass-panel" style={{ padding: '32px', textAlign: 'center' }}>
-        <div className="gradient-purple-blue" style={{ width: 56, height: 56, borderRadius: 16, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
-          <Settings style={{ width: 28, height: 28, color: 'white' }} />
-        </div>
-        <h3 style={{ fontWeight: 600, fontSize: 18, color: 'var(--text-primary)' }}>CoverStudio</h3>
-        <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>v1.3.0</p>
-        <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 12 }}>
-          Jellyfin / Emby 封面设计工具
-        </p>
-      </div>
+      )}
     </div>
   );
 }

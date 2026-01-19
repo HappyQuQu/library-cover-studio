@@ -29,6 +29,10 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       return next(createError('Username already exists', 400, 'USER_EXISTS'));
     }
 
+    // 检查是否为第一个用户
+    const userCount = db.select().from(users).all().length;
+    const role = userCount === 0 ? 'admin' : 'user';
+
     // 创建用户
     const passwordHash = await bcrypt.hash(password, 12);
     const now = new Date().toISOString();
@@ -38,17 +42,17 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       id,
       username,
       passwordHash,
-      role: 'user',
+      role,
       createdAt: now,
       updatedAt: now
     }).run();
 
     // 生成 Token
-    const token = generateToken({ userId: id, username, role: 'user' });
-    const refreshToken = generateRefreshToken({ userId: id, username, role: 'user' });
+    const token = generateToken({ userId: id, username, role });
+    const refreshToken = generateRefreshToken({ userId: id, username, role });
 
     res.status(201).json({
-      user: { id, username, role: 'user' },
+      user: { id, username, role },
       token,
       refreshToken
     });

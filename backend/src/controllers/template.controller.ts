@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import fs from 'fs';
 import path from 'path';
+import { THUMBNAILS_DIR } from '../config/paths.js';
 
 const d: any = db;
 
@@ -77,7 +78,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
     // Save thumbnail if provided
     let thumbnailPath = null;
     if (thumbnail && thumbnail.startsWith('data:image')) {
-      const uploadsDir = 'uploads/thumbnails';
+      const uploadsDir = THUMBNAILS_DIR;
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
@@ -85,7 +86,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       const buffer = Buffer.from(base64Data, 'base64');
       const filename = `${id}.jpg`;
       fs.writeFileSync(path.join(uploadsDir, filename), buffer);
-      thumbnailPath = `/uploads/thumbnails/${filename}`;
+      thumbnailPath = `/thumbnails/${filename}`;
     }
 
     d.insert(templates).values({
@@ -133,7 +134,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 
     // Handle thumbnail update
     if (updates.thumbnail && updates.thumbnail.startsWith('data:image')) {
-      const uploadsDir = 'uploads/thumbnails';
+      const uploadsDir = THUMBNAILS_DIR;
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
@@ -141,7 +142,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       const buffer = Buffer.from(base64Data, 'base64');
       const filename = `${id}.jpg`;
       fs.writeFileSync(path.join(uploadsDir, filename), buffer);
-      updateData.thumbnailPath = `/uploads/thumbnails/${filename}`;
+      updateData.thumbnailPath = `/thumbnails/${filename}`;
     }
 
     if (updates.name !== undefined) updateData.name = updates.name;

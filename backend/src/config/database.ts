@@ -1,20 +1,12 @@
 import Database from 'better-sqlite3';
 
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import path from 'path';
-import fs from 'fs';
 import * as schema from './schema.js';
 
-const DB_PATH = process.env.DATABASE_PATH || './database/data.sqlite';
-
-// 确保目录存在
-const dbDir = path.dirname(DB_PATH);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
+import { DB_FILE } from './paths.js';
 
 // 创建 SQLite 连接
-const sqlite = new Database(DB_PATH);
+const sqlite = new Database(DB_FILE);
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 

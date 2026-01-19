@@ -579,6 +579,12 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
+.jellyfin .btn-primary,
+.emby .btn-primary {
+  background: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+
 .btn-primary:hover {
   transform: translateY(-2px);
   box-shadow:
@@ -757,11 +763,11 @@
 }
 
 .gradient-jellyfin {
-  background: linear-gradient(135deg, var(--jellyfin-blue) 0%, var(--jellyfin) 100%);
+  background: var(--jellyfin);
 }
 
 .gradient-emby {
-  background: linear-gradient(135deg, var(--emby) 0%, var(--emby-blue) 100%);
+  background: var(--emby);
 }
 
 /* ============================================

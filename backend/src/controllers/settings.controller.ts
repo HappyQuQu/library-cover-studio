@@ -18,18 +18,19 @@ export const getSettings = async (_req: Request, res: Response) => {
 };
 
 export const updateSettings = async (req: Request, res: Response) => {
-  const { settings } = req.body; // Expecting { key1: value1, key2: value2 }
+  let settings = req.body.settings || req.body;
 
+  // If body is empty or not an object
   if (!settings || typeof settings !== 'object') {
     return res.status(400).json({ message: 'Invalid settings data' });
   }
 
   try {
     const entries = Object.entries(settings);
-    
+
     for (const [key, value] of entries) {
       const existing = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).get();
-      
+
       if (existing) {
         await db.update(systemSettings)
           .set({ value: String(value), updatedAt: new Date().toISOString() })

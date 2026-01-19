@@ -34,6 +34,28 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
 
   return (
     <div className="p-5 flex flex-col gap-6 animate-fade-in pb-20">
+      {/* Quick Actions at Top */}
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors"
+          onClick={onDelete}
+        >
+          <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+          {t('common.delete', '删除')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 hover:bg-(--primary)/5 hover:text-(--primary) hover:border-(--primary)/30 transition-colors"
+          onClick={onClone}
+        >
+          <Copy className="w-3.5 h-3.5 mr-1.5" />
+          {t('designer.duplicate', '复制')}
+        </Button>
+      </div>
+
       {/* Transformation Controls */}
       <section>
         <div className="flex items-center justify-between mb-3">
@@ -177,6 +199,41 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           {/* Text Styling */}
           {isText && (
             <section className="animate-fade-in pt-4 border-t border-(--border-color) space-y-4">
+              {/* Font Family */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontFamily', '字体')}</label>
+                <select
+                  value={selectedObject.fontFamily || 'Arial'}
+                  onChange={(e) => onPropertyChange('fontFamily', e.target.value)}
+                  className="w-full h-8 text-xs bg-(--bg-primary) border border-(--border-color) rounded-md px-2 focus:border-(--primary) transition-all text-(--text-primary)"
+                >
+                  <optgroup label="无衬线字体">
+                    <option value="Arial">Arial</option>
+                    <option value="Helvetica">Helvetica</option>
+                    <option value="Microsoft YaHei">微软雅黑</option>
+                    <option value="PingFang SC">苹方</option>
+                    <option value="Noto Sans SC">思源黑体</option>
+                    <option value="sans-serif">系统默认无衬线</option>
+                  </optgroup>
+                  <optgroup label="衬线字体">
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="SimSun">宋体</option>
+                    <option value="Noto Serif SC">思源宋体</option>
+                    <option value="serif">系统默认衬线</option>
+                  </optgroup>
+                  <optgroup label="等宽字体">
+                    <option value="Courier New">Courier New</option>
+                    <option value="Consolas">Consolas</option>
+                    <option value="monospace">系统默认等宽</option>
+                  </optgroup>
+                  <optgroup label="艺术字体">
+                    <option value="Impact">Impact</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </optgroup>
+                </select>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontSize', '字号')}</label>
@@ -337,21 +394,6 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         </section>
       )}
 
-      {/* Footer Actions */}
-      <div className="mt-auto pt-4 border-t border-(--border-color) grid grid-cols-2 gap-3 fixed bottom-4 w-[280px] bg-(--bg-glass) backdrop-blur-md p-4 left-[96px] rounded-t-xl z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] border-x" style={{ left: 'auto', width: 'auto', position: 'static', background: 'transparent', padding: 0, border: 'none', boxShadow: 'none' }}>
-        <Button
-          variant="outline"
-          className="h-9 hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors"
-          onClick={onDelete}
-        >
-          <Trash2 className="w-4 h-4 mr-2" />
-          {t('common.delete', '删除')}
-        </Button>
-        <Button variant="outline" className="h-9 hover:bg-(--primary)/5 hover:text-(--primary) hover:border-(--primary)/30 transition-colors" onClick={onClone}>
-          <Copy className="w-4 h-4 mr-2" />
-          {t('designer.duplicate', '复制')}
-        </Button>
-      </div>
     </div>
   );
 }
