@@ -40,6 +40,8 @@ interface MediaMetadata {
   rating?: number;
   genres?: string[];
   posterUrl?: string;
+  primaryTitle?: string;
+  secondaryTitle?: string;
 }
 
 // 并发限制
@@ -57,23 +59,23 @@ export async function renderTemplate(
   templateJson: string,
   metadata: MediaMetadata,
   posterBuffer?: Buffer,
-  options: RenderOptions = { width: 600, height: 900 }
+  options: RenderOptions = { width: 900, height: 600 }
 ): Promise<Buffer> {
   return limit(async () => {
     try {
       const template: TemplateData = JSON.parse(templateJson);
-      
+
       // 替换变量
       const processedTemplate = replaceVariables(template, metadata);
-      
+
       // 基础画布
       let canvas = sharp({
         create: {
           width: options.width,
           height: options.height,
           channels: 4,
-          background: template.background 
-            ? parseColor(template.background) 
+          background: template.background
+            ? parseColor(template.background)
             : { r: 0, g: 0, b: 0, alpha: 1 }
         }
       });
@@ -119,7 +121,9 @@ function replaceVariables(template: TemplateData, metadata: MediaMetadata): Temp
       .replace(/\{\{title\}\}/g, metadata.title || '')
       .replace(/\{\{year\}\}/g, String(metadata.year || ''))
       .replace(/\{\{rating\}\}/g, metadata.rating?.toFixed(1) || '')
-      .replace(/\{\{genres\}\}/g, metadata.genres?.join(' / ') || '');
+      .replace(/\{\{genres\}\}/g, metadata.genres?.join(' / ') || '')
+      .replace(/\{\{primary_title\}\}/g, metadata.primaryTitle || '')
+      .replace(/\{\{secondary_title\}\}/g, metadata.secondaryTitle || '');
   };
 
   const processedObjects = template.objects.map(obj => {
@@ -149,7 +153,7 @@ async function renderObject(
   switch (obj.type) {
     case 'rect':
       return renderRect(obj, left, top);
-    
+
     case 'image':
       // 如果是海报容器，使用传入的海报图片
       if (obj.src === '{{poster}}' && posterBuffer) {
@@ -160,12 +164,12 @@ async function renderObject(
         return renderImage(obj, left, top);
       }
       return null;
-    
+
     case 'text':
     case 'i-text':
     case 'textbox':
       return renderText(obj, left, top);
-    
+
     default:
       return null;
   }
@@ -180,7 +184,7 @@ async function renderRect(
   const width = Math.round((obj.width || 100) * (obj.scaleX || 1));
   const height = Math.round((obj.height || 100) * (obj.scaleY || 1));
   const color = parseColor(obj.fill || '#000000');
-  
+
   const rect = await sharp({
     create: {
       width,

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
-export type BrandTheme = 'default' | 'jellyfin' | 'emby';
+export type BrandTheme = 'jellyfin' | 'emby';
 
 interface ThemeState {
   mode: ThemeMode;
@@ -23,29 +23,27 @@ function updateDocumentTheme(mode: 'light' | 'dark', brand: BrandTheme) {
   const root = document.documentElement;
   // 清理旧类
   root.classList.remove('light', 'dark', 'jellyfin', 'emby');
-  
+
   // 应用模式
   root.classList.add(mode);
-  
-  // 应用品牌色 (如果不是默认)
-  if (brand !== 'default') {
-    root.classList.add(brand);
-  }
+
+  // 应用品牌色
+  root.classList.add(brand);
 }
 
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
       mode: 'dark',
-      brand: 'default',
+      brand: 'jellyfin',
       resolvedMode: 'dark',
-      
+
       setMode: (mode) => {
         const resolvedMode = mode === 'system' ? getSystemMode() : mode;
         updateDocumentTheme(resolvedMode, get().brand);
         set({ mode, resolvedMode });
       },
-      
+
       setBrand: (brand) => {
         updateDocumentTheme(get().resolvedMode, brand);
         set({ brand });

@@ -24,15 +24,18 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // 静态文件 (上传目录)
-app.use('/uploads', express.static('uploads'));
+app.use('/api/uploads', express.static('uploads'));
+// 模板图片
+app.use('/api/templates/posters', express.static('src/template/poster'));
+
 
 // API 路由
 app.use('/api', apiRouter);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     timestamp: new Date().toISOString(),
     version: '1.3.0'
   });

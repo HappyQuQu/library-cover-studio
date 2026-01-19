@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { createError } from './errorHandler.js';
 
+import { users } from '../config/schema.js';
+import { db } from '../config/database.js';
+import { eq } from 'drizzle-orm';
+
 const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
 
 export interface JwtPayload {
@@ -18,7 +22,7 @@ declare global {
   }
 }
 
-export function authenticate(req: Request, _res: Response, next: NextFunction) {
+export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   let token: string | undefined;
 
   // 1. 尝试从 Authorization Header 获取
@@ -38,6 +42,13 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    // 验证用户是否在数据库中存在 (防止数据库重置后 Token 依然有效但关联失败)
+    const user = db.select().from(users).where(eq(users.id, decoded.userId)).get();
+    if (!user) {
+      return next(createError('User not found or database reset', 401, 'USER_NOT_FOUND'));
+    }
+
     req.user = decoded;
     next();
   } catch (error) {

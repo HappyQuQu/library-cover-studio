@@ -101,6 +101,7 @@ export interface Template {
   description?: string;
   canvasJson?: string;
   thumbnailPath?: string;
+  thumbnail?: string; // Base64 data URL for thumbnail upload
   width: number;
   height: number;
   isPublic: boolean;
@@ -165,6 +166,7 @@ export interface Task {
   cronExpression?: string;
   templateId?: string;
   serverId?: string;
+  libraryConfigs?: string; // JSON string of LibraryConfig[]
   isEnabled: boolean;
   lastRunAt?: string;
   nextRunAt?: string;

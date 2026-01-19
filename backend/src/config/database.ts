@@ -75,6 +75,7 @@ export async function initDatabase() {
       template_id TEXT,
       server_id TEXT,
       library_ids TEXT,
+      library_configs TEXT,
       options TEXT,
       is_enabled INTEGER DEFAULT 1,
       last_run_at TEXT,
@@ -85,6 +86,24 @@ export async function initDatabase() {
       FOREIGN KEY (server_id) REFERENCES media_servers(id) ON DELETE CASCADE
     );
 
+    -- 检查并添加 library_configs 列 (如果表已存在但列不存在)
+    PRAGMA table_info(tasks);
+  `);
+
+  // 检查 library_configs 列是否存在，不存在则添加
+  const tableInfo = sqlite.prepare("PRAGMA table_info(tasks)").all() as any[];
+  const hasLibraryConfigs = tableInfo.some(col => col.name === 'library_configs');
+
+  if (!hasLibraryConfigs) {
+    try {
+      sqlite.exec('ALTER TABLE tasks ADD COLUMN library_configs TEXT;');
+      console.log('⚡ Added library_configs column to tasks table');
+    } catch (err) {
+      console.warn('⚠️ Could not add library_configs column (it might already exist):', err);
+    }
+  }
+
+  sqlite.exec(`
     -- 任务日志表
     CREATE TABLE IF NOT EXISTS task_logs (
       id TEXT PRIMARY KEY,

@@ -6,6 +6,8 @@ import { db } from '../config/database.js';
 import { templates } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
+import fs from 'fs';
+import path from 'path';
 
 const d: any = db;
 
@@ -14,8 +16,9 @@ export const createTemplateSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
   canvasJson: z.string(),
-  width: z.number().int().min(100).max(4000).default(600),
-  height: z.number().int().min(100).max(6000).default(900),
+  thumbnail: z.string().optional(), // Base64 data URL
+  width: z.number().int().min(100).max(4000).default(900),
+  height: z.number().int().min(100).max(6000).default(600),
   isPublic: z.boolean().default(false)
 });
 
@@ -35,8 +38,8 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
       createdAt: templates.createdAt,
       updatedAt: templates.updatedAt
     })
-    .from(templates)
-    .all();
+      .from(templates)
+      .all();
 
     res.json(templateList);
   } catch (error) {
@@ -48,7 +51,7 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
-    
+
     // Use all().find() to bypass Drizzle type issues in this environment
     const template = (d.select().from(templates).all() as any[]).find(t => t.id === id);
 
@@ -65,17 +68,32 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
 // 创建模板
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, description, canvasJson, width, height, isPublic } = req.body;
+    const { name, description, canvasJson, thumbnail, width, height, isPublic } = req.body;
     const userId = req.user?.userId;
 
     const now = new Date().toISOString();
     const id = uuidv4();
+
+    // Save thumbnail if provided
+    let thumbnailPath = null;
+    if (thumbnail && thumbnail.startsWith('data:image')) {
+      const uploadsDir = 'uploads/thumbnails';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const base64Data = thumbnail.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const filename = `${id}.jpg`;
+      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+      thumbnailPath = `/uploads/thumbnails/${filename}`;
+    }
 
     d.insert(templates).values({
       id,
       name,
       description,
       canvasJson,
+      thumbnailPath,
       width,
       height,
       userId,
@@ -88,6 +106,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       id,
       name,
       description,
+      thumbnailPath,
       width,
       height,
       isPublic,
@@ -111,7 +130,20 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     }
 
     const updateData: Record<string, unknown> = { updatedAt: now };
-    
+
+    // Handle thumbnail update
+    if (updates.thumbnail && updates.thumbnail.startsWith('data:image')) {
+      const uploadsDir = 'uploads/thumbnails';
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      const base64Data = updates.thumbnail.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      const filename = `${id}.jpg`;
+      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+      updateData.thumbnailPath = `/uploads/thumbnails/${filename}`;
+    }
+
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.description !== undefined) updateData.description = updates.description;
     if (updates.canvasJson !== undefined) updateData.canvasJson = updates.canvasJson;
@@ -136,7 +168,7 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
 
     const result = (d.delete(templates).where(eq(templates.id, id)) as any).run();
-    
+
     if (!result || result.changes === 0) {
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }

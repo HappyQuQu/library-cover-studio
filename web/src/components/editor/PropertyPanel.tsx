@@ -47,38 +47,38 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">X</label>
-            <Input 
-              type="number" 
-              value={Math.round(selectedObject.left || 0)} 
-              className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono"
-              onChange={(e) => onPropertyChange('left', parseInt(e.target.value))} 
+            <Input
+              type="number"
+              value={Math.round(selectedObject.left || 0)}
+              className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
+              onChange={(e) => onPropertyChange('left', parseInt(e.target.value))}
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">Y</label>
-            <Input 
-              type="number" 
-              value={Math.round(selectedObject.top || 0)} 
-              className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono"
-              onChange={(e) => onPropertyChange('top', parseInt(e.target.value))} 
+            <Input
+              type="number"
+              value={Math.round(selectedObject.top || 0)}
+              className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
+              onChange={(e) => onPropertyChange('top', parseInt(e.target.value))}
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.width', '宽度')}</label>
-            <Input 
-              type="number" 
-              value={Math.round(selectedObject.getScaledWidth ? selectedObject.getScaledWidth() : (selectedObject.width * (selectedObject.scaleX || 1)))} 
+            <Input
+              type="number"
+              value={Math.round(selectedObject.getScaledWidth ? selectedObject.getScaledWidth() : (selectedObject.width * (selectedObject.scaleX || 1)))}
               className="h-8 text-xs bg-(--bg-tertiary) border-transparent text-(--text-secondary) font-mono"
-              readOnly 
+              readOnly
             />
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.height', '高度')}</label>
-            <Input 
-              type="number" 
-              value={Math.round(selectedObject.getScaledHeight ? selectedObject.getScaledHeight() : (selectedObject.height * (selectedObject.scaleY || 1)))} 
+            <Input
+              type="number"
+              value={Math.round(selectedObject.getScaledHeight ? selectedObject.getScaledHeight() : (selectedObject.height * (selectedObject.scaleY || 1)))}
               className="h-8 text-xs bg-(--bg-tertiary) border-transparent text-(--text-secondary) font-mono"
-              readOnly 
+              readOnly
             />
           </div>
         </div>
@@ -88,7 +88,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
 
       {/* Style & Shadow Tabs */}
       <div className="flex bg-(--bg-tertiary) p-1 rounded-lg">
-        <button 
+        <button
           onClick={() => setActiveTab('style')}
           className={cn(
             "flex-1 py-1.5 text-xs font-medium rounded-md transition-all",
@@ -97,7 +97,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         >
           {t('designer.appearance', '外观')}
         </button>
-        <button 
+        <button
           onClick={() => setActiveTab('shadow')}
           className={cn(
             "flex-1 py-1.5 text-xs font-medium rounded-md transition-all",
@@ -117,11 +117,11 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 <span className="text-xs font-medium text-(--text-secondary)">{t('designer.fillColor', '填充颜色')}</span>
                 <div className="flex items-center gap-2 bg-(--bg-tertiary) pl-2 pr-1 py-1 rounded-md border border-(--border-color)">
                   <span className="text-[10px] font-mono text-(--text-tertiary) uppercase">{selectedObject.fill?.toString()}</span>
-                  <input 
-                    type="color" 
-                    value={selectedObject.fill as string} 
+                  <input
+                    type="color"
+                    value={selectedObject.fill as string}
                     className="w-5 h-5 p-0 border-none bg-transparent cursor-pointer rounded overflow-hidden"
-                    onChange={(e) => onPropertyChange('fill', e.target.value)} 
+                    onChange={(e) => onPropertyChange('fill', e.target.value)}
                   />
                 </div>
               </div>
@@ -132,16 +132,46 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 <span className="text-xs font-medium text-(--text-secondary)">{t('designer.opacity', '不透明度')}</span>
                 <span className="text-[10px] font-medium text-(--text-tertiary)">{Math.round(selectedObject.opacity * 100)}%</span>
               </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="1" 
-                step="0.01" 
-                value={selectedObject.opacity} 
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={selectedObject.opacity}
                 className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
-                onChange={(e) => onPropertyChange('opacity', parseFloat(e.target.value))} 
+                onChange={(e) => onPropertyChange('opacity', parseFloat(e.target.value))}
               />
             </div>
+
+            {/* Rounded Corners for Poster/Image */}
+            {(selectedObject.isPoster || selectedObject.type === 'image') && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-(--text-secondary)">圆角</span>
+                  <span className="text-[10px] font-medium text-(--text-tertiary)">{selectedObject.clipPath?.rx || 0}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="50"
+                  step="1"
+                  value={selectedObject.clipPath?.rx || 0}
+                  className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                  onChange={(e) => {
+                    const radius = parseInt(e.target.value);
+                    onPropertyChange('clipPath', {
+                      type: 'rect',
+                      width: selectedObject.width,
+                      height: selectedObject.height,
+                      rx: radius,
+                      ry: radius,
+                      originX: 'center',
+                      originY: 'center',
+                    });
+                  }}
+                />
+              </div>
+            )}
           </section>
 
           {/* Text Styling */}
@@ -150,130 +180,167 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontSize', '字号')}</label>
-                  <Input 
-                    type="number" 
-                    value={selectedObject.fontSize} 
+                  <Input
+                    type="number"
+                    value={selectedObject.fontSize}
                     className="h-8 text-xs bg-(--bg-primary) border-(--border-color)"
-                    onChange={(e) => onPropertyChange('fontSize', parseInt(e.target.value))} 
+                    onChange={(e) => onPropertyChange('fontSize', parseInt(e.target.value))}
                   />
                 </div>
                 <div className="space-y-1.5">
-                   <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">行高</label>
-                   <Input 
-                    type="number" 
-                    value={selectedObject.lineHeight || 1} 
+                  <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">行高</label>
+                  <Input
+                    type="number"
+                    value={selectedObject.lineHeight || 1}
                     step="0.1"
                     className="h-8 text-xs bg-(--bg-primary) border-(--border-color)"
-                    onChange={(e) => onPropertyChange('lineHeight', parseFloat(e.target.value))} 
+                    onChange={(e) => onPropertyChange('lineHeight', parseFloat(e.target.value))}
                   />
                 </div>
               </div>
 
               <div className="flex gap-1 bg-(--bg-tertiary) p-1 rounded-lg">
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.fontWeight === 'bold' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontWeight', selectedObject.fontWeight === 'bold' ? 'normal' : 'bold')}>B</Button>
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 italic", selectedObject.fontStyle === 'italic' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontStyle', selectedObject.fontStyle === 'italic' ? 'normal' : 'italic')}>I</Button>
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 underline", selectedObject.underline && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('underline', !selectedObject.underline)}>U</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.fontWeight === 'bold' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontWeight', selectedObject.fontWeight === 'bold' ? 'normal' : 'bold')}>B</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 italic", selectedObject.fontStyle === 'italic' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontStyle', selectedObject.fontStyle === 'italic' ? 'normal' : 'italic')}>I</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 underline", selectedObject.underline && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('underline', !selectedObject.underline)}>U</Button>
               </div>
 
               <div className="flex gap-1 bg-(--bg-tertiary) p-1 rounded-lg">
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'left' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'left')}><AlignLeft className="w-3.5 h-3.5" /></Button>
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'center' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'center')}><AlignCenter className="w-3.5 h-3.5" /></Button>
-                 <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'right' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'right')}><AlignRight className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'left' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'left')}><AlignLeft className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'center' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'center')}><AlignCenter className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'right' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'right')}><AlignRight className="w-3.5 h-3.5" /></Button>
               </div>
             </section>
           )}
 
-           {/* Variable Binding */}
-          <section className="bg-(--bg-secondary)/50 border border-(--border-color) rounded-xl p-3 space-y-3">
-             <div className="flex items-center justify-between">
+          {/* Variable Binding - Text Only */}
+          {isText && (
+            <section className="bg-(--bg-secondary)/50 border border-(--border-color) rounded-xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
-                   <Wand2 className="w-3 h-3 text-(--primary)" />
-                   {t('designer.placeholder', '变量绑定')}
+                  <Wand2 className="w-3 h-3 text-(--primary)" />
+                  {t('designer.placeholder', '变量绑定')}
                 </span>
-             </div>
-             <div className="grid grid-cols-1 gap-1.5">
-               {[
-                  { var: '{{title}}', label: t('designer.movieTitle', '影片标题') },
-                  { var: '{{year}}', label: t('designer.year', '年份') },
-               ].map((item) => (
-                  <button 
+              </div>
+              <div className="grid grid-cols-1 gap-1.5">
+                {[
+                  { var: '{{primary_title}}', label: '主标题' },
+                  { var: '{{secondary_title}}', label: '副标题' },
+                ].map((item) => (
+                  <button
                     key={item.var}
-                    onClick={() => isText && onPropertyChange('text', (selectedObject.text || '') + item.var)}
+                    onClick={() => onPropertyChange('text', (selectedObject.text || '') + item.var)}
                     className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-(--border-color) hover:border-(--primary) hover:shadow-sm transition-all group text-left"
                   >
                     <code className="text-[10px] font-mono text-(--primary) bg-(--primary)/10 px-1 rounded">{item.var}</code>
                     <span className="text-[10px] text-(--text-tertiary) group-hover:text-(--text-secondary)">{item.label}</span>
                   </button>
-               ))}
-             </div>
-          </section>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Variable Binding - Poster Only */}
+          {(selectedObject.isPoster || selectedObject.type === 'image') && (
+            <section className="bg-(--bg-secondary)/50 border border-(--border-color) rounded-xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
+                  <Wand2 className="w-3 h-3 text-(--primary)" />
+                  海报变量
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {Array.from({ length: 9 }).map((_, i) => {
+                  const varName = `post${i + 1}`;
+                  const isActive = selectedObject.posterVar === varName;
+                  return (
+                    <button
+                      key={varName}
+                      onClick={() => onPropertyChange('posterVar', varName)}
+                      className={`px-2 py-1.5 rounded-lg border text-center transition-all ${isActive
+                        ? 'bg-(--primary) text-white border-(--primary)'
+                        : 'bg-white border-(--border-color) hover:border-(--primary) hover:shadow-sm'
+                        }`}
+                    >
+                      <code className={`text-[10px] font-mono ${isActive ? 'text-white' : 'text-(--primary)'}`}>{`{{${varName}}}`}</code>
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedObject.posterVar && (
+                <p className="text-[10px] text-(--text-tertiary)">
+                  当前绑定: <code className="text-(--primary)">{`{{${selectedObject.posterVar}}}`}</code>
+                </p>
+              )}
+            </section>
+          )}
         </>
       ) : (
         /* Shadow Controls */
         <section className="space-y-5 animate-fade-in">
-           <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-(--text-secondary)">启用阴影</span>
-              <input 
-                 type="checkbox" 
-                 checked={!!selectedObject.shadow} 
-                 onChange={(e) => {
-                    const val = e.target.checked ? { color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 } : null;
-                    onPropertyChange('shadow', val);
-                 }}
-                 className="w-4 h-4 accent-(--primary) rounded cursor-pointer"
-              />
-           </div>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-(--text-secondary)">启用阴影</span>
+            <input
+              type="checkbox"
+              checked={!!selectedObject.shadow}
+              onChange={(e) => {
+                const val = e.target.checked ? { color: 'rgba(0,0,0,0.5)', blur: 10, offsetX: 5, offsetY: 5 } : null;
+                onPropertyChange('shadow', val);
+              }}
+              className="w-4 h-4 accent-(--primary) rounded cursor-pointer"
+            />
+          </div>
 
-           {selectedObject.shadow && (
-              <>
-                 <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                       <span className="text-xs font-medium text-(--text-tertiary)">模糊度</span>
-                       <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.blur}px</span>
-                    </div>
-                    <input 
-                       type="range" min="0" max="50" 
-                       value={selectedObject.shadow.blur || 0}
-                       onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, blur: parseInt(e.target.value) })}
-                       className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full"
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                       <span className="text-xs font-medium text-(--text-tertiary)">偏移量</span>
-                       <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.offsetX}px</span>
-                    </div>
-                    <input 
-                       type="range" min="-50" max="50" 
-                       value={selectedObject.shadow.offsetX || 0}
-                       onChange={(e) => onPropertyChange('shadow', { 
-                          ...selectedObject.shadow, 
-                          offsetX: parseInt(e.target.value),
-                          offsetY: parseInt(e.target.value)
-                       })}
-                       className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full"
-                    />
-                 </div>
-                 <div className="space-y-2">
-                    <span className="text-xs font-medium text-(--text-tertiary)">颜色</span>
-                    <div className="flex items-center gap-2">
-                       <input 
-                          type="color" 
-                          value={typeof selectedObject.shadow.color === 'string' ? selectedObject.shadow.color : '#000000'}
-                          onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, color: e.target.value })}
-                          className="w-full h-8 rounded cursor-pointer border border-(--border-color)"
-                       />
-                    </div>
-                 </div>
-              </>
-           )}
+          {selectedObject.shadow && (
+            <>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-(--text-tertiary)">模糊度</span>
+                  <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.blur}px</span>
+                </div>
+                <input
+                  type="range" min="0" max="50"
+                  value={selectedObject.shadow.blur || 0}
+                  onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, blur: parseInt(e.target.value) })}
+                  className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-(--text-tertiary)">偏移量</span>
+                  <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.offsetX}px</span>
+                </div>
+                <input
+                  type="range" min="-50" max="50"
+                  value={selectedObject.shadow.offsetX || 0}
+                  onChange={(e) => onPropertyChange('shadow', {
+                    ...selectedObject.shadow,
+                    offsetX: parseInt(e.target.value),
+                    offsetY: parseInt(e.target.value)
+                  })}
+                  className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full"
+                />
+              </div>
+              <div className="space-y-2">
+                <span className="text-xs font-medium text-(--text-tertiary)">颜色</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={typeof selectedObject.shadow.color === 'string' ? selectedObject.shadow.color : '#000000'}
+                    onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, color: e.target.value })}
+                    className="w-full h-8 rounded cursor-pointer border border-(--border-color)"
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </section>
       )}
 
       {/* Footer Actions */}
       <div className="mt-auto pt-4 border-t border-(--border-color) grid grid-cols-2 gap-3 fixed bottom-4 w-[280px] bg-(--bg-glass) backdrop-blur-md p-4 left-[96px] rounded-t-xl z-50 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] border-x" style={{ left: 'auto', width: 'auto', position: 'static', background: 'transparent', padding: 0, border: 'none', boxShadow: 'none' }}>
-        <Button 
-          variant="outline" 
+        <Button
+          variant="outline"
           className="h-9 hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors"
           onClick={onDelete}
         >

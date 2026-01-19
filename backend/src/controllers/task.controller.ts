@@ -13,9 +13,10 @@ export const createTaskSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['scheduled', 'manual']),
   cronExpression: z.string().optional(),
-  templateId: z.string().uuid(),
+  templateId: z.string().uuid().optional(), // Now optional since template can be per-library
   serverId: z.string().uuid(),
   libraryIds: z.array(z.string()).optional(),
+  libraryConfigs: z.string().optional(), // JSON string from frontend
   options: z.object({
     skipLocked: z.boolean().default(true),
     overwriteExisting: z.boolean().default(false)
@@ -34,13 +35,14 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
       cronExpression: tasks.cronExpression,
       templateId: tasks.templateId,
       serverId: tasks.serverId,
+      libraryConfigs: tasks.libraryConfigs,
       isEnabled: tasks.isEnabled,
       lastRunAt: tasks.lastRunAt,
       nextRunAt: tasks.nextRunAt,
       createdAt: tasks.createdAt
     })
-    .from(tasks)
-    .all();
+      .from(tasks)
+      .all();
 
     res.json(taskList);
   } catch (error) {
@@ -52,7 +54,7 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
-    
+
     const task = db.select()
       .from(tasks)
       .where(eq(tasks.id, id as string))
@@ -71,7 +73,7 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
 // 创建任务
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, type, cronExpression, templateId, serverId, libraryIds, options } = req.body;
+    const { name, type, cronExpression, templateId, serverId, libraryIds, libraryConfigs, options } = req.body;
 
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -83,7 +85,8 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       cronExpression,
       templateId,
       serverId,
-      libraryIds: libraryIds ? JSON.stringify(libraryIds) : null,
+      libraryIds: libraryIds ? JSON.stringify(libraryIds) : (libraryConfigs ? '[]' : null),
+      libraryConfigs: libraryConfigs || null,
       options: options ? JSON.stringify(options) : null,
       isEnabled: 1,
       createdAt: now,
@@ -122,13 +125,14 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     }
 
     const updateData: Record<string, unknown> = { updatedAt: now };
-    
+
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.type !== undefined) updateData.type = updates.type;
     if (updates.cronExpression !== undefined) updateData.cronExpression = updates.cronExpression;
     if (updates.templateId !== undefined) updateData.templateId = updates.templateId;
     if (updates.serverId !== undefined) updateData.serverId = updates.serverId;
     if (updates.libraryIds !== undefined) updateData.libraryIds = JSON.stringify(updates.libraryIds);
+    if (updates.libraryConfigs !== undefined) updateData.libraryConfigs = updates.libraryConfigs;
     if (updates.options !== undefined) updateData.options = JSON.stringify(updates.options);
     if (updates.isEnabled !== undefined) updateData.isEnabled = updates.isEnabled ? 1 : 0;
 
@@ -155,9 +159,9 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
     const idStr = id as string;
     removeScheduledTask(idStr);
-    
+
     const result = db.delete(tasks).where(eq(tasks.id, idStr)).run();
-    
+
     if (result.changes === 0) {
       return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
     }
@@ -194,9 +198,9 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
       console.error(`Task ${idStr} execution failed:`, err);
     });
 
-    res.json({ 
+    res.json({
       message: 'Task execution started',
-      logId 
+      logId
     });
   } catch (error) {
     next(error);
@@ -207,7 +211,7 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
 export async function getLogs(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
-    
+
     const logs = db.select()
       .from(taskLogs)
       .where(eq(taskLogs.taskId, id as string))

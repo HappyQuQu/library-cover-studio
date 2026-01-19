@@ -4,6 +4,7 @@ import { serverRouter } from './server.routes.js';
 import { templateRouter } from './template.routes.js';
 import { taskRouter } from './task.routes.js';
 import { settingsRouter } from './settings.routes.js';
+import { fontRouter } from './font.routes.js';
 
 const router = Router();
 
@@ -13,5 +14,6 @@ router.use('/servers', serverRouter);
 router.use('/templates', templateRouter);
 router.use('/tasks', taskRouter);
 router.use('/settings', settingsRouter);
+router.use('/fonts', fontRouter);
 
 export { router };

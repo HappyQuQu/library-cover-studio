@@ -2,12 +2,68 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { useUpdateSettings } from '@/api/hooks';
-import { Settings, User, Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server } from 'lucide-react';
+import { Settings, User, Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { apiClient } from '@/api/client';
+
+interface Font {
+  filename: string;
+  name: string;
+  size: number;
+  url: string;
+  uploadedAt: string;
+}
 
 export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const { mode, setMode, brand, setBrand } = useThemeStore();
   const updateSettings = useUpdateSettings();
+  const [fonts, setFonts] = useState<Font[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    loadFonts();
+  }, []);
+
+  const loadFonts = async () => {
+    try {
+      const res = await apiClient.get('/fonts');
+      setFonts(res.data.fonts || []);
+    } catch (error) {
+      console.error('Failed to load fonts:', error);
+    }
+  };
+
+  const handleFontUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('font', file);
+
+    try {
+      await apiClient.post('/fonts/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      loadFonts();
+    } catch (error) {
+      console.error('Failed to upload font:', error);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteFont = async (filename: string) => {
+    try {
+      await apiClient.delete(`/fonts/${filename}`);
+      loadFonts();
+    } catch (error) {
+      console.error('Failed to delete font:', error);
+    }
+  };
 
   const handleModeChange = async (newMode: any) => {
     setMode(newMode);
@@ -102,7 +158,6 @@ export function SettingsPage() {
             <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>品牌色彩</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               {[
-                { id: 'default' as const, label: '默认主题', icon: Sparkles, color: 'var(--primary)' },
                 { id: 'jellyfin' as const, label: 'Jellyfin', icon: Palette, color: 'var(--jellyfin)' },
                 { id: 'emby' as const, label: 'Emby', icon: Server, color: 'var(--emby)' },
               ].map((b) => (
@@ -130,6 +185,59 @@ export function SettingsPage() {
               ))}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* Custom Fonts */}
+      <div className="card">
+        <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <Type style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+            自定义字体
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".ttf,.otf,.woff,.woff2"
+            onChange={handleFontUpload}
+            style={{ display: 'none' }}
+          />
+          <Button
+            className="btn btn-secondary btn-sm"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+          >
+            <Upload style={{ width: 14, height: 14 }} />
+            {uploading ? '上传中...' : '上传字体'}
+          </Button>
+        </div>
+        <div>
+          {fonts.length === 0 ? (
+            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+              暂无自定义字体，点击上方按钮上传
+            </div>
+          ) : (
+            fonts.map((font) => (
+              <div key={font.filename} style={{ padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 8, background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Type style={{ width: 20, height: 20, color: 'var(--text-tertiary)' }} />
+                  </div>
+                  <div>
+                    <h4 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{font.name}</h4>
+                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>{(font.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                </div>
+                <Button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => handleDeleteFont(font.filename)}
+                  style={{ color: 'var(--danger)' }}
+                >
+                  <Trash2 style={{ width: 14, height: 14 }} />
+                </Button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

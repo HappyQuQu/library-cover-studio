@@ -32,7 +32,7 @@
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  
+
   --animate-fade-in: fadeIn 0.3s ease-out forwards;
   --animate-slide-up: slideUp 0.3s ease-out forwards;
   --animate-scale-in: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -47,39 +47,40 @@
 
 
 /* ===== Dark Theme ===== */
-:root, .dark {
+:root,
+.dark {
   --primary: #6366f1;
   --primary-light: #818cf8;
   --secondary: #a855f7;
   --accent: #f59e0b;
   --success: #22c55e;
   --danger: #ef4444;
-  
+
   /* Brand Colors */
   --jellyfin: #AA5CC3;
   --jellyfin-blue: #00A4DC;
   --emby: #52B54B;
   --emby-blue: #2979FF;
-  
+
   --text-primary: #f9fafb;
   --text-secondary: #9ca3af;
   --text-tertiary: #6b7280;
-  
+
   --bg-primary: #09090b;
   --bg-secondary: #18181b;
   --bg-tertiary: #27272a;
   --bg-elevated: #1f1f23;
-  
+
   --border-color: rgba(255, 255, 255, 0.08);
   --border-light: rgba(255, 255, 255, 0.12);
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.6);
   --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.7);
   --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.2);
   --shadow-inner: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  
+
   /* HSL for shadcn */
   --background: 0 0% 3.9%;
   --foreground: 0 0% 98%;
@@ -90,7 +91,7 @@
   --border: 0 0% 14.9%;
   --input: 0 0% 14.9%;
   --ring: 263.4 70% 50.4%;
-  
+
   --radius: 12px;
 }
 
@@ -99,21 +100,42 @@
   --text-primary: #09090b;
   --text-secondary: #52525b;
   --text-tertiary: #a1a1aa;
-  
+
   --bg-primary: #ffffff;
   --bg-secondary: #fafafa;
   --bg-tertiary: #f4f4f5;
   --bg-elevated: #ffffff;
-  
+
   --border-color: rgba(0, 0, 0, 0.06);
   --border-light: rgba(0, 0, 0, 0.1);
-  
+
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
   --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
   --shadow-xl: 0 24px 60px rgba(0, 0, 0, 0.15);
   --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
   --shadow-inner: inset 0 1px 0 rgba(0, 0, 0, 0.05);
+
+  /* HSL overrides for light mode */
+  --foreground: 222.2 84% 4.9%;
+  --background: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+}
+
+/* ===== Jellyfin Theme ===== */
+.jellyfin {
+  --primary: #AA5CC3;
+  --primary-light: #c77ddb;
+  --shadow-glow: 0 0 60px rgba(170, 92, 195, 0.2);
+}
+
+/* ===== Emby Theme ===== */
+.emby {
+  --primary: #52B54B;
+  --primary-light: #6cd365;
+  --shadow-glow: 0 0 60px rgba(82, 181, 75, 0.2);
 }
 
 @layer base {
@@ -127,7 +149,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    --primary-hsl: 243 75% 59%; /* Indigo-600 */
+    --primary-hsl: 243 75% 59%;
+    /* Indigo-600 */
     --primary-foreground: 210 40% 98%;
 
     --secondary-hsl: 210 40% 96.1%;
@@ -189,7 +212,7 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 243 75% 59%;
-    
+
     /* Pro Max Dark Variables */
     --bg-glass: rgba(15, 23, 42, 0.85);
     --bg-glass-hover: rgba(30, 41, 59, 0.95);
@@ -205,7 +228,8 @@
 
   /* Jellyfin Brand Overrides */
   .jellyfin {
-    --primary-hsl: 217 91% 60%; /* #3b82f6 */
+    --primary-hsl: 217 91% 60%;
+    /* #3b82f6 */
     --primary-foreground: 0 0% 100%;
     --ring: 217 91% 60%;
     --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
@@ -213,7 +237,8 @@
 
   /* Emby Brand Overrides */
   .emby {
-    --primary-hsl: 142 71% 45%; /* #22c55e */
+    --primary-hsl: 142 71% 45%;
+    /* #22c55e */
     --primary-foreground: 0 0% 100%;
     --ring: 142 71% 45%;
     --shadow-glow: 0 0 20px rgba(34, 197, 94, 0.3);
@@ -224,6 +249,7 @@
   * {
     border-color: hsl(var(--border));
   }
+
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
@@ -239,7 +265,7 @@
     box-shadow: var(--shadow-lg);
     border-radius: 0.75rem;
   }
-  
+
   .glass-panel-sm {
     background-color: var(--bg-glass);
     backdrop-filter: blur(12px);
@@ -256,11 +282,11 @@
   .animate-fade-in {
     animation: fadeIn 0.3s ease-out forwards;
   }
-  
+
   .animate-slide-up {
     animation: slideUp 0.3s ease-out forwards;
   }
-  
+
   .animate-scale-in {
     animation: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
@@ -268,11 +294,12 @@
   .hover-lift {
     transition: transform 0.2s ease-out, box-shadow 0.2s ease-out;
   }
+
   .hover-lift:hover {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
   }
-  
+
   .bg-dot-pattern {
     background-image: radial-gradient(circle, var(--text-tertiary) 1px, transparent 1px);
     background-size: 24px 24px;
@@ -282,18 +309,37 @@
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* Custom Scrollbar */
@@ -301,14 +347,17 @@
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
   background-color: hsl(var(--muted-foreground) / 0.3);
   border-radius: 9999px;
   transition: background-color 0.15s ease;
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background-color: hsl(var(--muted-foreground) / 0.5);
 }
@@ -378,10 +427,9 @@
 
 /* Glass Panel */
 .glass-panel {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.03) 0%, 
-    rgba(255, 255, 255, 0.01) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.01) 100%);
   backdrop-filter: blur(40px);
   -webkit-backdrop-filter: blur(40px);
   border: 1px solid var(--border-color);
@@ -390,10 +438,9 @@
 }
 
 .light .glass-panel {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.9) 0%, 
-    rgba(255, 255, 255, 0.7) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(255, 255, 255, 0.9) 0%,
+      rgba(255, 255, 255, 0.7) 100%);
 }
 
 /* ============================================
@@ -414,12 +461,10 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    135deg, 
-    rgba(99, 102, 241, 0.03) 0%, 
-    rgba(168, 85, 247, 0.03) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(99, 102, 241, 0.03) 0%,
+      rgba(168, 85, 247, 0.03) 50%,
+      transparent 100%);
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -439,7 +484,7 @@
 .action-card:hover {
   transform: translateY(-8px) scale(1.01);
   border-color: rgba(99, 102, 241, 0.3);
-  box-shadow: 
+  box-shadow:
     var(--shadow-xl),
     0 0 0 1px rgba(99, 102, 241, 0.1),
     0 0 80px rgba(99, 102, 241, 0.15);
@@ -529,14 +574,14 @@
 .btn-primary {
   background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
   color: white;
-  box-shadow: 
+  box-shadow:
     0 4px 20px rgba(99, 102, 241, 0.4),
     inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .btn-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 
+  box-shadow:
     0 8px 30px rgba(99, 102, 241, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
@@ -729,24 +774,56 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-8px);
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.animate-fade-in { animation: fadeIn 0.4s ease-out; }
-.animate-float { animation: float 4s ease-in-out infinite; }
-.animate-scale-in { animation: scaleIn 0.3s ease-out; }
-.page-enter { animation: fadeIn 0.5s ease-out; }
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.3s ease-out;
+}
+
+.page-enter {
+  animation: fadeIn 0.5s ease-out;
+}
 
 /* ============================================
    Tool Button (Editor)

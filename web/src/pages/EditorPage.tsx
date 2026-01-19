@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Wand2, Plus, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle } from 'lucide-react';
+import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/stores/canvasStore';
@@ -18,28 +18,30 @@ export function EditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
-  
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  
+
   const [templateName, setTemplateName] = useState('');
   const [activeTool, setActiveTool] = useState('select');
   const [activePanel, setActivePanel] = useState<'properties' | 'layers'>('properties');
   const [layers, setLayers] = useState<any[]>([]);
-  const [canvasWidth, setCanvasWidth] = useState(1920); 
+  const [canvasWidth, setCanvasWidth] = useState(1920);
   const [canvasHeight, setCanvasHeight] = useState(1080);
   const [canvasReady, setCanvasReady] = useState(false);
-  
-  const { 
-    canvas, setCanvas, selectedObject, setSelectedObject, 
-    zoom, setZoom, undo, redo, saveToHistory 
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const {
+    canvas, setCanvas, selectedObject, setSelectedObject,
+    zoom, setZoom, undo, redo, saveToHistory
   } = useCanvasStore();
 
   // Initialize Zoom to fit
   useEffect(() => {
     setZoom(0.5);
   }, []);
-  
+
   const { data: templateData } = useTemplate(id || '');
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
@@ -59,13 +61,13 @@ export function EditorPage() {
 
   // Canvas Initialization - use ref to prevent re-initialization
   const isCanvasInitialized = useRef(false);
-  
+
   // Use refs to avoid stale closures and prevent effect re-runs
   const syncLayersRef = useRef(syncLayers);
   const saveToHistoryRef = useRef(saveToHistory);
   const setCanvasRef = useRef(setCanvas);
   const setSelectedObjectRef = useRef(setSelectedObject);
-  
+
   // Keep refs up to date
   useEffect(() => {
     syncLayersRef.current = syncLayers;
@@ -73,7 +75,7 @@ export function EditorPage() {
     setCanvasRef.current = setCanvas;
     setSelectedObjectRef.current = setSelectedObject;
   });
-  
+
   useEffect(() => {
     if (!canvasRef.current || isCanvasInitialized.current) return;
     isCanvasInitialized.current = true;
@@ -103,10 +105,13 @@ export function EditorPage() {
     fabricCanvas.on('selection:created', (e: any) => setSelectedObjectRef.current(e.selected?.[0]));
     fabricCanvas.on('selection:updated', (e: any) => setSelectedObjectRef.current(e.selected?.[0]));
     fabricCanvas.on('selection:cleared', () => setSelectedObjectRef.current(null));
-    
+
     fabricCanvas.on('object:added', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
     fabricCanvas.on('object:removed', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
     fabricCanvas.on('object:modified', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
+    fabricCanvas.on('object:moving', (e: any) => { setSelectedObjectRef.current(e.target); });
+    fabricCanvas.on('object:scaling', (e: any) => { setSelectedObjectRef.current(e.target); });
+    fabricCanvas.on('object:rotating', (e: any) => { setSelectedObjectRef.current(e.target); });
 
     return () => {
       fabricCanvas.dispose();
@@ -114,7 +119,7 @@ export function EditorPage() {
       isCanvasInitialized.current = false;
     };
   }, []);
-  
+
   // Load template data when available
   useEffect(() => {
     const defaultW = 1920;
@@ -127,7 +132,7 @@ export function EditorPage() {
       const padding = 120; // Room for margins
       const availableWidth = container.clientWidth - padding;
       const availableHeight = container.clientHeight - padding;
-      
+
       const scaleX = availableWidth / w;
       const scaleY = availableHeight / h;
       const newZoom = Math.min(scaleX, scaleY, 1);
@@ -139,9 +144,9 @@ export function EditorPage() {
       setCanvasWidth(defaultW);
       setCanvasHeight(defaultH);
       const initialZoom = fitToView(defaultW, defaultH);
-      canvas.setDimensions({ 
-        width: defaultW * initialZoom, 
-        height: defaultH * initialZoom 
+      canvas.setDimensions({
+        width: defaultW * initialZoom,
+        height: defaultH * initialZoom
       });
       canvas.setZoom(initialZoom);
       setZoom(initialZoom);
@@ -150,30 +155,44 @@ export function EditorPage() {
     }
 
     if (!canvas || !templateData) return;
-    
+
     const loadTemplate = async () => {
       setTemplateName(templateData.name || '');
       const width = templateData.width || defaultW;
       const height = templateData.height || defaultH;
       setCanvasWidth(width);
       setCanvasHeight(height);
-      
+
       const currentZoom = fitToView(width, height);
       // Set physical dimensions based on zoom
-      canvas.setDimensions({ 
-        width: width * currentZoom, 
-        height: height * currentZoom 
+      canvas.setDimensions({
+        width: width * currentZoom,
+        height: height * currentZoom
       });
       canvas.setZoom(currentZoom);
       setZoom(currentZoom);
-      
+
       if (templateData.canvasJson) {
         try {
-          await canvas.loadFromJSON(JSON.parse(templateData.canvasJson));
+          const jsonData = JSON.parse(templateData.canvasJson);
+          await canvas.loadFromJSON(jsonData);
+          // Restore custom properties from JSON data
+          const objects = canvas.getObjects();
+          if (jsonData.objects && Array.isArray(jsonData.objects)) {
+            jsonData.objects.forEach((objData: any, index: number) => {
+              if (objects[index]) {
+                const obj = objects[index] as any;
+                if (objData.id) obj.id = objData.id;
+                if (objData.name) obj.name = objData.name;
+                if (objData.posterVar) obj.posterVar = objData.posterVar;
+                if (objData.isPoster) obj.isPoster = objData.isPoster;
+              }
+            });
+          }
           // Restore dimensions and zoom after JSON load as it might overwrite it
-          canvas.setDimensions({ 
-            width: width * currentZoom, 
-            height: height * currentZoom 
+          canvas.setDimensions({
+            width: width * currentZoom,
+            height: height * currentZoom
           });
           canvas.setZoom(currentZoom);
           canvas.renderAll();
@@ -191,15 +210,15 @@ export function EditorPage() {
   // Sync fabric zoom and dimensions when zoom state changes
   useEffect(() => {
     if (canvas) {
-      canvas.setDimensions({ 
-        width: canvasWidth * zoom, 
-        height: canvasHeight * zoom 
+      canvas.setDimensions({
+        width: canvasWidth * zoom,
+        height: canvasHeight * zoom
       });
       canvas.setZoom(zoom);
       canvas.renderAll();
     }
   }, [zoom, canvas, canvasWidth, canvasHeight]);
-  const addObject = useCallback((type: string) => {
+  const addObject = useCallback(async (type: string, payload?: any) => {
     if (!canvas) {
       console.log('Canvas not ready');
       return;
@@ -210,7 +229,7 @@ export function EditorPage() {
     const centerX = vCenter.x;
     const centerY = vCenter.y;
     const id = Math.random().toString(36).substr(2, 9);
-      
+
     switch (type) {
       case 'text': {
         const text = new fabric.IText(t('designer.sampleText', '双击编辑文字'), {
@@ -296,19 +315,59 @@ export function EditorPage() {
         break;
       }
       case 'poster': {
-        // Create a poster placeholder rect with pattern fill
-        const posterRect = new fabric.Rect({
-          left: centerX, top: centerY,
-          originX: 'center', originY: 'center',
-          width: 150, height: 220, 
-          fill: '#667eea', 
-          rx: 12, ry: 12,
-          stroke: '#4f46e5',
-          strokeWidth: 2
-        });
-        (posterRect as any).id = id;
-        (posterRect as any).isPoster = true;
-        obj = posterRect;
+        if (payload) {
+          // Load poster from URL
+          try {
+            const imgEl = document.createElement('img');
+            imgEl.src = payload;
+            imgEl.crossOrigin = 'anonymous';
+
+            await new Promise((resolve, reject) => {
+              imgEl.onload = resolve;
+              imgEl.onerror = reject;
+            });
+
+            const fabricImg = new fabric.FabricImage(imgEl, {
+              left: centerX, top: centerY,
+              originX: 'center', originY: 'center',
+            });
+
+            // Scale to reasonable size if too big
+            if (fabricImg.width && fabricImg.width > 500) {
+              fabricImg.scaleToWidth(500);
+            }
+
+            (fabricImg as any).id = id;
+            (fabricImg as any).isPoster = true;
+            // Apply rounded corners via clipPath
+            fabricImg.set('clipPath', new fabric.Rect({
+              width: fabricImg.width,
+              height: fabricImg.height,
+              rx: 12,
+              ry: 12,
+              originX: 'center',
+              originY: 'center',
+            }));
+            obj = fabricImg;
+          } catch (err) {
+            console.error('Failed to load poster:', err);
+            toast({ title: t('common.error'), description: '无法加载海报图片', variant: 'destructive' });
+          }
+        } else {
+          // Create a poster placeholder rect with pattern fill
+          const posterRect = new fabric.Rect({
+            left: centerX, top: centerY,
+            originX: 'center', originY: 'center',
+            width: 150, height: 220,
+            fill: '#667eea',
+            rx: 12, ry: 12,
+            stroke: '#4f46e5',
+            strokeWidth: 2
+          });
+          (posterRect as any).id = id;
+          (posterRect as any).isPoster = true;
+          obj = posterRect;
+        }
         break;
       }
       case 'image': {
@@ -348,13 +407,52 @@ export function EditorPage() {
 
   const handleSave = async () => {
     if (!canvas) return;
-    const canvasJson = JSON.stringify(canvas.toJSON());
+
+    // Deselect for clean export
+    canvas.discardActiveObject();
+    canvas.renderAll();
+
+    // Store current state
+    const currentZoom = canvas.getZoom();
+    const currentWidth = canvas.getWidth();
+    const currentHeight = canvas.getHeight();
+
+    // Temporarily reset to full size for thumbnail
+    canvas.setZoom(1);
+    canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+    canvas.renderAll();
+
+    // Generate thumbnail (scaled down for storage)
+    const thumbnailDataUrl = canvas.toDataURL({
+      format: 'jpeg',
+      quality: 0.7,
+      multiplier: 0.2 // 20% of original size for thumbnail
+    });
+
+    // Restore dimensions
+    canvas.setZoom(currentZoom);
+    canvas.setDimensions({ width: currentWidth, height: currentHeight });
+    canvas.renderAll();
+
+    // Serialize canvas with custom properties
+    const canvasData = canvas.toObject();
+    canvasData.objects = canvasData.objects.map((obj: any, index: number) => {
+      const fabricObj = canvas.getObjects()[index] as any;
+      return {
+        ...obj,
+        id: fabricObj.id,
+        name: fabricObj.name,
+        posterVar: fabricObj.posterVar,
+        isPoster: fabricObj.isPoster
+      };
+    });
+    const canvasJson = JSON.stringify(canvasData);
     try {
       if (id) {
-        await updateMutation.mutateAsync({ id, name: templateName, canvasJson, width: canvasWidth, height: canvasHeight });
+        await updateMutation.mutateAsync({ id, name: templateName, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
       } else {
         const result = await createMutation.mutateAsync({
-          name: templateName || t('designer.newTemplate'), canvasJson, width: canvasWidth, height: canvasHeight
+          name: templateName || t('designer.newTemplate'), canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
         });
         navigate(`/editor/${result.id}`, { replace: true });
       }
@@ -390,7 +488,7 @@ export function EditorPage() {
           return { x1: 0, y1: 0, x2: width, y2: height };
       }
     };
-    
+
     if (bg.type === 'color') {
       canvas.backgroundColor = bg.color;
     } else if (bg.type === 'gradient') {
@@ -426,6 +524,40 @@ export function EditorPage() {
     saveToHistory();
   }, [canvas, saveToHistory]);
 
+  // Handle preview - export canvas to image and show in modal
+  const handlePreview = useCallback(() => {
+    if (!canvas) return;
+
+    // Deselect any selected objects for clean preview
+    canvas.discardActiveObject();
+    canvas.renderAll();
+
+    // Store current dimensions and zoom
+    const currentZoom = canvas.getZoom();
+    const currentWidth = canvas.getWidth();
+    const currentHeight = canvas.getHeight();
+
+    // Temporarily reset to full size for export
+    canvas.setZoom(1);
+    canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+    canvas.renderAll();
+
+    // Export canvas to data URL at full resolution
+    const dataUrl = canvas.toDataURL({
+      format: 'png',
+      quality: 1,
+      multiplier: 1
+    });
+
+    // Restore original dimensions and zoom
+    canvas.setZoom(currentZoom);
+    canvas.setDimensions({ width: currentWidth, height: currentHeight });
+    canvas.renderAll();
+
+    setPreviewImage(dataUrl);
+    setPreviewOpen(true);
+  }, [canvas, canvasWidth, canvasHeight]);
+
   return (
     <div className="flex -mx-6 -mb-6 bg-(--bg-secondary) overflow-hidden" style={{ height: 'calc(100vh - 56px - 48px)' }}>
       {/* Left - Toolbox Panel */}
@@ -433,7 +565,7 @@ export function EditorPage() {
         <ToolboxPanel
           onAddText={() => addObject('text')}
           onAddImage={() => addObject('image')}
-          onAddShape={(type) => addObject(type)}
+          onAddShape={(type, payload) => addObject(type, payload)}
           onChangeBackground={changeBackground}
         />
       </aside>
@@ -447,7 +579,7 @@ export function EditorPage() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="flex items-center gap-2">
-              <input 
+              <input
                 type="text"
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
@@ -458,7 +590,7 @@ export function EditorPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" className="h-9 gap-2 text-(--text-secondary) hover:text-(--text-primary)">
+            <Button variant="ghost" className="h-9 gap-2 text-(--text-secondary) hover:text-(--text-primary)" onClick={handlePreview}>
               <Eye className="w-4 h-4" />
               {t('common.preview')}
             </Button>
@@ -475,8 +607,8 @@ export function EditorPage() {
             onClick={() => setActiveTool('select')}
             className={cn(
               "h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm font-medium",
-              activeTool === 'select' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'select'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
           >
@@ -490,8 +622,8 @@ export function EditorPage() {
             onClick={() => { setActiveTool('text'); addObject('text'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm font-medium",
-              activeTool === 'text' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'text'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
           >
@@ -503,8 +635,8 @@ export function EditorPage() {
             onClick={() => { setActiveTool('image'); addObject('image'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm font-medium",
-              activeTool === 'image' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'image'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
           >
@@ -518,8 +650,8 @@ export function EditorPage() {
             onClick={() => { setActiveTool('rect'); addObject('rect'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
-              activeTool === 'rect' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'rect'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
             title="矩形"
@@ -531,8 +663,8 @@ export function EditorPage() {
             onClick={() => { setActiveTool('circle'); addObject('circle'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
-              activeTool === 'circle' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'circle'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
             title="圆形"
@@ -544,8 +676,8 @@ export function EditorPage() {
             onClick={() => { setActiveTool('triangle'); addObject('triangle'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
-              activeTool === 'triangle' 
-                ? "bg-(--primary) text-white shadow-md" 
+              activeTool === 'triangle'
+                ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
             title="三角形"
@@ -563,7 +695,7 @@ export function EditorPage() {
               <Redo className="w-4 h-4" />
             </button>
           </div>
-          
+
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-(--bg-tertiary) border border-(--border-color)">
             <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>
               <ZoomOut className="w-4 h-4 text-(--text-secondary)" />
@@ -575,12 +707,12 @@ export function EditorPage() {
           </div>
         </div>
 
-        <main 
-          ref={containerRef} 
+        <main
+          ref={containerRef}
           className="flex-1 overflow-auto bg-(--bg-tertiary) flex items-center justify-center p-8 relative"
         >
           <div className="absolute inset-0 bg-dot-pattern pointer-events-none opacity-30" />
-          
+
           {!canvasReady && (
             <div className="absolute inset-0 flex items-center justify-center bg-(--bg-tertiary) z-30">
               <div className="flex flex-col items-center gap-3">
@@ -590,19 +722,19 @@ export function EditorPage() {
             </div>
           )}
 
-          <div 
+          <div
             className={cn(
               "shadow-2xl rounded-lg overflow-hidden bg-white ring-1 ring-black/5 relative z-10",
               !canvasReady ? "opacity-0 invisible" : "opacity-100 visible"
             )}
-            style={{ 
-              width: canvasWidth * zoom, 
+            style={{
+              width: canvasWidth * zoom,
               height: canvasHeight * zoom,
-              padding: 0 
+              padding: 0
             }}
           >
-            <canvas 
-              ref={canvasRef} 
+            <canvas
+              ref={canvasRef}
             />
           </div>
 
@@ -615,13 +747,13 @@ export function EditorPage() {
       {/* Right Sidebar */}
       <aside className="w-[280px] shrink-0 bg-(--bg-primary) border-l border-(--border-color) flex flex-col overflow-hidden">
         <div className="flex border-b border-(--border-color) p-1">
-          <button 
+          <button
             className={cn("flex-1 py-2.5 text-xs font-bold rounded-lg transition-all", activePanel === 'properties' ? "bg-(--bg-secondary) text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)")}
             onClick={() => setActivePanel('properties')}
           >
             {t('designer.properties')}
           </button>
-          <button 
+          <button
             className={cn("flex-1 py-2.5 text-xs font-bold rounded-lg transition-all", activePanel === 'layers' ? "bg-(--bg-secondary) text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)")}
             onClick={() => setActivePanel('layers')}
           >
@@ -630,11 +762,26 @@ export function EditorPage() {
         </div>
         <div className="flex-1 overflow-auto p-1">
           {activePanel === 'properties' ? (
-            <PropertyPanel 
+            <PropertyPanel
               selectedObject={selectedObject}
               onPropertyChange={(prop, val) => {
                 if (!selectedObject || !canvas) return;
-                (selectedObject as any).set(prop, val);
+
+                // Special handling for clipPath (rounded corners)
+                if (prop === 'clipPath' && val) {
+                  const clipRect = new fabric.Rect({
+                    width: val.width,
+                    height: val.height,
+                    rx: val.rx,
+                    ry: val.ry,
+                    originX: 'center',
+                    originY: 'center',
+                  });
+                  selectedObject.set('clipPath', clipRect);
+                } else {
+                  (selectedObject as any).set(prop, val);
+                }
+
                 canvas.renderAll();
                 // Don't spread Fabric objects as they lose their prototype methods
                 // Just pass the object as is; the state update below will trigger re-render
@@ -658,7 +805,7 @@ export function EditorPage() {
               }}
             />
           ) : (
-            <LayerPanel 
+            <LayerPanel
               layers={layers}
               selectedId={selectedObject?.id ?? null}
               onSelect={(id) => {
@@ -671,11 +818,11 @@ export function EditorPage() {
               }}
               onToggleLock={(id) => {
                 const obj = canvas?.getObjects().find((o: any) => (o as any).id === id);
-                if (obj) { 
+                if (obj) {
                   const isLocked = !obj.lockMovementX;
                   obj.set({ lockMovementX: isLocked, lockMovementY: isLocked, lockScalingX: isLocked, lockScalingY: isLocked, lockRotation: isLocked });
-                  canvas?.renderAll(); 
-                  syncLayers(); 
+                  canvas?.renderAll();
+                  syncLayers();
                 }
               }}
               onReorder={(id, direction) => {
@@ -687,28 +834,44 @@ export function EditorPage() {
                   syncLayers();
                 }
               }}
+              onRename={(id, name) => {
+                const obj = canvas?.getObjects().find((o: any) => (o as any).id === id);
+                if (obj) {
+                  (obj as any).name = name;
+                  syncLayers();
+                }
+              }}
             />
           )}
         </div>
-        <div className="p-4 bg-(--bg-glass) border-t border-(--border-color)">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-(--text-tertiary) flex items-center gap-2">
-              <Wand2 className="w-3 h-3 text-(--primary)" />
-              {t('designer.quickAssets', '快速素材')}
-            </span>
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <button key={i} className="aspect-square rounded-lg border border-(--border-color) hover:border-(--primary) transition-all overflow-hidden group relative">
-                <div className="absolute inset-0 bg-linear-to-br from-(--bg-secondary) to-(--bg-tertiary)" />
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/10">
-                  <Plus className="w-4 h-4 text-(--primary)" />
-                </div>
+
+      </aside>
+
+      {/* Preview Modal */}
+      {previewOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="relative max-w-[90vw] max-h-[90vh] bg-(--bg-primary) rounded-2xl shadow-2xl overflow-hidden border border-(--border-color)">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-color)">
+              <h3 className="font-bold text-(--text-primary)">{t('common.preview')}</h3>
+              <button
+                onClick={() => setPreviewOpen(false)}
+                className="w-8 h-8 rounded-lg bg-(--bg-tertiary) hover:bg-(--bg-secondary) flex items-center justify-center transition-all"
+              >
+                <X className="w-4 h-4 text-(--text-secondary)" />
               </button>
-            ))}
+            </div>
+            <div className="p-6 flex items-center justify-center" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+              {previewImage && (
+                <img
+                  src={previewImage}
+                  alt="Preview"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                />
+              )}
+            </div>
           </div>
         </div>
-      </aside>
+      )}
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { Layers, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, GripVertical } from 'lucide-react'; // refresh
+import { useState } from 'react';
+import { Layers, Eye, EyeOff, Lock, Unlock, ChevronUp, ChevronDown, GripVertical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
@@ -9,17 +10,21 @@ interface LayerPanelProps {
   onToggleVisibility: (id: string) => void;
   onToggleLock: (id: string) => void;
   onReorder: (id: string, direction: 'up' | 'down') => void;
+  onRename: (id: string, name: string) => void;
 }
 
-export function LayerPanel({ 
-  layers, 
-  selectedId, 
-  onSelect, 
-  onToggleVisibility, 
+export function LayerPanel({
+  layers,
+  selectedId,
+  onSelect,
+  onToggleVisibility,
   onToggleLock,
-  onReorder 
+  onReorder,
+  onRename
 }: LayerPanelProps) {
   const { t } = useTranslation();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
 
   return (
     <div className="flex flex-col h-full animate-fade-in p-2">
@@ -41,74 +46,104 @@ export function LayerPanel({
         ) : (
           layers.map((layer, index) => {
             const isSelected = selectedId === layer.id;
-            
+
             return (
-              <div 
+              <div
                 key={layer.id}
                 onClick={() => onSelect(layer.id)}
                 className={cn(
                   "group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border border-transparent hover:scale-[1.01] duration-200",
-                  isSelected 
-                    ? "bg-white shadow-sm border-(--primary)/20 shadow-glow" 
+                  isSelected
+                    ? "bg-white shadow-sm border-(--primary)/20 shadow-glow"
                     : "hover:bg-white/60 hover:shadow-sm hover:border-(--border-color)"
                 )}
               >
                 {/* Drag Handle (Visual) */}
                 <div className="text-(--text-tertiary)/30 group-hover:text-(--text-tertiary) cursor-grab active:cursor-grabbing">
-                   <GripVertical className="w-3.5 h-3.5" />
+                  <GripVertical className="w-3.5 h-3.5" />
                 </div>
 
                 {/* Layer Preview / Icon */}
                 <div className="w-8 h-8 rounded-md bg-(--bg-tertiary) flex items-center justify-center border border-(--border-color) overflow-hidden shrink-0">
                   {/* Ideally fetch preview here, for now rely on type */}
-                   <span className="text-[9px] font-mono text-(--text-tertiary) uppercase">{layer.type.slice(0, 2)}</span>
+                  <span className="text-[9px] font-mono text-(--text-tertiary) uppercase">{layer.type.slice(0, 2)}</span>
                 </div>
 
                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                  <div className={cn(
-                    "text-[12px] font-medium truncate transition-colors", 
-                    isSelected ? "text-(--primary)" : "text-(--text-primary)"
-                  )}>
-                    {layer.name || (layer.type === 'i-text' ? 'Text' : layer.type)}
-                  </div>
+                  {editingId === layer.id ? (
+                    <input
+                      type="text"
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onBlur={() => {
+                        onRename(layer.id, editingName);
+                        setEditingId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          onRename(layer.id, editingName);
+                          setEditingId(null);
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingId(null);
+                        }
+                      }}
+                      autoFocus
+                      className="text-[12px] font-medium bg-transparent border-b border-(--primary) outline-none text-(--text-primary) w-full"
+                    />
+                  ) : (
+                    <div
+                      className={cn(
+                        "text-[12px] font-medium truncate transition-colors cursor-text",
+                        isSelected ? "text-(--primary)" : "text-(--text-primary)"
+                      )}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(layer.id);
+                        setEditingName(layer.name || (layer.type === 'i-text' ? 'Text' : layer.type));
+                      }}
+                    >
+                      {layer.name || (layer.type === 'i-text' ? 'Text' : layer.type)}
+                    </div>
+                  )}
                 </div>
 
                 {/* Quick Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); onToggleLock(layer.id); }}
                     className={cn(
-                       "p-1.5 rounded-md transition-colors",
-                       layer.locked ? "text-(--accent) bg-(--accent)/10" : "text-(--text-tertiary) hover:bg-(--bg-tertiary) hover:text-(--text-secondary)"
+                      "p-1.5 rounded-md transition-colors",
+                      layer.locked ? "text-(--accent) bg-(--accent)/10" : "text-(--text-tertiary) hover:bg-(--bg-tertiary) hover:text-(--text-secondary)"
                     )}
                   >
                     {layer.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   </button>
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); onToggleVisibility(layer.id); }}
                     className={cn(
-                       "p-1.5 rounded-md transition-colors",
-                       !layer.visible ? "text-(--text-tertiary) opacity-50" : "text-(--text-tertiary) hover:bg-(--bg-tertiary) hover:text-(--text-secondary)"
+                      "p-1.5 rounded-md transition-colors",
+                      !layer.visible ? "text-(--text-tertiary) opacity-50" : "text-(--text-tertiary) hover:bg-(--bg-tertiary) hover:text-(--text-secondary)"
                     )}
                   >
                     {layer.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
                   </button>
-                   <div className="flex flex-col gap-0.5 ml-1">
-                      <button 
-                         onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'up'); }}
-                         disabled={index === 0}
-                         className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"
-                      >
-                         <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <button 
-                         onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'down'); }}
-                         disabled={index === layers.length - 1}
-                         className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"
-                      >
-                         <ChevronDown className="w-3 h-3" />
-                      </button>
-                   </div>
+                  <div className="flex flex-col gap-0.5 ml-1">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'up'); }}
+                      disabled={index === 0}
+                      className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'down'); }}
+                      disabled={index === layers.length - 1}
+                      className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             );

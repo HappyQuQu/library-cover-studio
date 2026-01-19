@@ -31,8 +31,8 @@ export const templates = sqliteTable('templates', {
   description: text('description'),
   canvasJson: text('canvas_json').notNull(),
   thumbnailPath: text('thumbnail_path'),
-  width: integer('width').default(600),
-  height: integer('height').default(900),
+  width: integer('width').default(900),
+  height: integer('height').default(600),
   userId: text('user_id').references(() => users.id),
   isPublic: integer('is_public').default(0),
   createdAt: text('created_at'),
@@ -47,7 +47,8 @@ export const tasks = sqliteTable('tasks', {
   cronExpression: text('cron_expression'),
   templateId: text('template_id').references(() => templates.id),
   serverId: text('server_id').references(() => mediaServers.id),
-  libraryIds: text('library_ids'), // JSON array
+  libraryIds: text('library_ids'), // Deprecated in favor of libraryConfigs
+  libraryConfigs: text('library_configs'), // JSON list of LibraryConfig
   options: text('options'), // JSON
   isEnabled: integer('is_enabled').default(1),
   lastRunAt: text('last_run_at'),

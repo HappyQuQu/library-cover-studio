@@ -15,14 +15,9 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'fixed inset-0 z-50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+      'fixed inset-0 z-50 bg-black/50 dark:bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
       className
     )}
-    style={{
-      background: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)'
-    }}
     {...props}
   />
 ));
@@ -31,7 +26,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, style, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -43,16 +38,19 @@ const DialogContent = React.forwardRef<
       )}
       style={{
         maxWidth: 420,
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
+        background: 'var(--bg-primary)',
+        border: '1px solid var(--border-light)',
         borderRadius: 16,
         padding: 24,
-        boxShadow: '0 24px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset'
+        boxShadow: '0 24px 80px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15)',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        ...style
       }}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close 
+      <DialogPrimitive.Close
         style={{
           position: 'absolute',
           right: 16,
@@ -83,11 +81,11 @@ const DialogHeader = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
       gap: 6,
-      marginBottom: 20 
+      marginBottom: 20
     }}
     className={className}
     {...props}

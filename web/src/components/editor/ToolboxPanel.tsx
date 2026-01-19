@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { 
-  ChevronDown, 
-  Type, 
-  Image as ImageIcon, 
-  Film, 
-  Square, 
-  Circle, 
+import {
+  ChevronDown,
+  Type,
+  Image as ImageIcon,
+  Square,
+  Circle,
   Triangle,
   Minus,
   Star,
@@ -17,14 +16,15 @@ import {
   ArrowDown,
   ArrowRightIcon,
   ArrowDownRight,
-  ArrowDownLeft
+  ArrowDownLeft,
+  Plus
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ToolboxPanelProps {
   onAddText: () => void;
   onAddImage: () => void;
-  onAddShape: (type: string) => void;
+  onAddShape: (type: string, payload?: any) => void;
   onChangeBackground: (bg: any) => void;
 }
 
@@ -70,6 +70,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
   const [bgColor, setBgColor] = useState('#ffffff');
   const [selectedPreset, setSelectedPreset] = useState(-1);
   const [gradientDirection, setGradientDirection] = useState('leftTopToRightBottom');
+  const [randomOnGeneration, setRandomOnGeneration] = useState(false);
 
   const toggleSection = (section: 'background' | 'elements') => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
@@ -83,9 +84,9 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
   const applyPreset = (idx: number) => {
     setSelectedPreset(idx);
     const preset = gradientPresets[idx];
-    onChangeBackground({ 
-      type: 'gradient', 
-      color1: preset.color1, 
+    onChangeBackground({
+      type: 'gradient',
+      color1: preset.color1,
       color2: preset.color2,
       direction: gradientDirection
     });
@@ -96,9 +97,9 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
     // If a preset is selected, reapply with new direction
     if (selectedPreset >= 0) {
       const preset = gradientPresets[selectedPreset];
-      onChangeBackground({ 
-        type: 'gradient', 
-        color1: preset.color1, 
+      onChangeBackground({
+        type: 'gradient',
+        color1: preset.color1,
         color2: preset.color2,
         direction: dir
       });
@@ -113,7 +114,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
     <div className="h-full overflow-auto p-3 space-y-3">
       {/* Background Settings */}
       <div className="rounded-xl border border-(--border-color) bg-(--bg-primary) overflow-hidden">
-        <button 
+        <button
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-(--bg-tertiary) transition-all"
           onClick={() => toggleSection('background')}
         >
@@ -123,7 +124,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
           </div>
           <ChevronDown className={cn("w-4 h-4 text-(--text-tertiary) transition-transform", expandedSections.background && "rotate-180")} />
         </button>
-        
+
         {expandedSections.background && (
           <div className="px-4 pb-4 space-y-4">
             {/* Background Type Tabs */}
@@ -138,8 +139,8 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   onClick={() => setBgType(item.id)}
                   className={cn(
                     "flex flex-col items-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-all",
-                    bgType === item.id 
-                      ? "bg-(--primary) text-white shadow-md" 
+                    bgType === item.id
+                      ? "bg-(--primary) text-white shadow-md"
                       : "bg-(--bg-tertiary) text-(--text-secondary) hover:bg-(--bg-secondary)"
                   )}
                 >
@@ -153,8 +154,8 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {bgType === 'color' && (
               <div className="flex flex-col items-center gap-2">
                 <span className="text-xs text-(--text-tertiary)">选择颜色</span>
-                <input 
-                  type="color" 
+                <input
+                  type="color"
                   value={bgColor}
                   onChange={(e) => handleColorChange(e.target.value)}
                   className="w-12 h-12 rounded-lg border-2 border-(--border-color) cursor-pointer"
@@ -190,8 +191,8 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                         onClick={() => handleDirectionChange(dir.id)}
                         className={cn(
                           "w-9 h-9 rounded-lg flex items-center justify-center transition-all border",
-                          gradientDirection === dir.id 
-                            ? "bg-(--primary) text-white border-(--primary)" 
+                          gradientDirection === dir.id
+                            ? "bg-(--primary) text-white border-(--primary)"
                             : "bg-(--bg-tertiary) text-(--text-secondary) border-(--border-color) hover:border-(--primary)"
                         )}
                         title={dir.label}
@@ -212,6 +213,24 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   <span>每次点击生成随机渐变色</span>
                 </div>
 
+                {/* Random Background on Generation Toggle */}
+                <label className="flex items-center gap-3 p-3 rounded-lg border border-(--border-color) cursor-pointer hover:bg-(--bg-tertiary) transition-all">
+                  <input
+                    type="checkbox"
+                    checked={randomOnGeneration}
+                    onChange={(e) => {
+                      setRandomOnGeneration(e.target.checked);
+                      onChangeBackground({ type: 'random-gradient', direction: gradientDirection, randomOnGeneration: e.target.checked });
+                    }}
+                    className="w-4 h-4 accent-(--primary) cursor-pointer"
+                  />
+                  <div className="flex-1">
+                    <span className="text-sm font-medium text-(--text-primary)">生成任务时随机背景</span>
+                    <p className="text-xs text-(--text-tertiary) mt-0.5">每次执行任务时自动使用随机背景</p>
+                  </div>
+                  <Shuffle className="w-4 h-4 text-(--text-tertiary)" />
+                </label>
+
                 {/* Direction Selector for Random */}
                 <div className="space-y-2">
                   <span className="text-xs text-(--text-tertiary)">渐变方向</span>
@@ -222,8 +241,8 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                         onClick={() => setGradientDirection(dir.id)}
                         className={cn(
                           "w-9 h-9 rounded-lg flex items-center justify-center transition-all border",
-                          gradientDirection === dir.id 
-                            ? "bg-(--primary) text-white border-(--primary)" 
+                          gradientDirection === dir.id
+                            ? "bg-(--primary) text-white border-(--primary)"
                             : "bg-(--bg-tertiary) text-(--text-secondary) border-(--border-color) hover:border-(--primary)"
                         )}
                         title={dir.label}
@@ -234,7 +253,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={applyRandomGradient}
                   className="w-full py-2.5 rounded-lg bg-linear-to-r from-amber-500 to-rose-500 text-white text-sm font-medium hover:opacity-90 transition-all"
                 >
@@ -249,7 +268,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
 
       {/* Add Elements */}
       <div className="rounded-xl border border-(--border-color) bg-(--bg-primary) overflow-hidden">
-        <button 
+        <button
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-(--bg-tertiary) transition-all"
           onClick={() => toggleSection('elements')}
         >
@@ -259,12 +278,12 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
           </div>
           <ChevronDown className={cn("w-4 h-4 text-(--text-tertiary) transition-transform", expandedSections.elements && "rotate-180")} />
         </button>
-        
+
         {expandedSections.elements && (
           <div className="px-4 pb-4 space-y-4">
             {/* Basic Elements */}
             <div className="grid grid-cols-3 gap-2">
-              <button 
+              <button
                 onClick={onAddText}
                 className="flex flex-col items-center gap-2 p-3 rounded-xl bg-(--bg-tertiary) hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
@@ -273,7 +292,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 </div>
                 <span className="text-xs font-medium text-(--text-primary)">文字</span>
               </button>
-              <button 
+              <button
                 onClick={onAddImage}
                 className="flex flex-col items-center gap-2 p-3 rounded-xl bg-(--bg-tertiary) hover:shadow-md hover:-translate-y-0.5 transition-all"
               >
@@ -282,19 +301,39 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 </div>
                 <span className="text-xs font-medium text-(--text-primary)">图片</span>
               </button>
-              <button 
-                onClick={() => onAddShape('poster')}
-                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-(--bg-tertiary) hover:shadow-md hover:-translate-y-0.5 transition-all"
-              >
-                <div className="w-10 h-10 rounded-xl bg-linear-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white">
-                  <Film className="w-5 h-5" />
-                </div>
-                <span className="text-xs font-medium text-(--text-primary)">海报</span>
-              </button>
+            </div>
+
+            {/* Posters Section */}
+            <div className="flex items-center gap-3 text-xs text-(--text-tertiary)">
+              <div className="flex-1 h-px bg-(--border-color)" />
+              <span>海报模板</span>
+              <div className="flex-1 h-px bg-(--border-color)" />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {/* Generate 1-9 poster buttons */}
+              {Array.from({ length: 9 }).map((_, i) => (
+                <button
+                  key={`poster-${i + 1}`}
+                  onClick={() => onAddShape('poster', `http://localhost:3000/api/templates/posters/${i + 1}.jpg`)}
+                  className="aspect-[2/3] relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group"
+                  title={`海报 ${i + 1}`}
+                >
+                  <img
+                    src={`http://localhost:3000/api/templates/posters/${i + 1}.jpg`}
+                    alt={`Poster ${i + 1}`}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                  <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Plus className="w-6 h-6 text-white drop-shadow-md" />
+                  </div>
+                </button>
+              ))}
             </div>
 
             {/* Shapes Divider */}
-            <div className="flex items-center gap-3 text-xs text-(--text-tertiary)">
+            <div className="flex items-center gap-3 text-xs text-(--text-tertiary) mt-2">
               <div className="flex-1 h-px bg-(--border-color)" />
               <span>形状</span>
               <div className="flex-1 h-px bg-(--border-color)" />

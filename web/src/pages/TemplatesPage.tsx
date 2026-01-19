@@ -50,45 +50,56 @@ export function TemplatesPage() {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
-          {templates.map((template) => (
-            <Link key={template.id} to={`/editor/${template.id}`}>
-              <div className="card" style={{ overflow: 'hidden' }}>
-                <div style={{ aspectRatio: '2/3', background: 'var(--bg-tertiary)', position: 'relative' }}>
-                  {template.thumbnailPath ? (
-                    <img
-                      src={template.thumbnailPath}
-                      alt={template.name}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                    />
-                  ) : (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Palette style={{ width: 32, height: 32, color: 'var(--text-tertiary)' }} />
+          {templates.map((template) => {
+            // Use backend URL for thumbnail
+            const thumbnailUrl = template.thumbnailPath
+              ? `${import.meta.env.VITE_API_URL || '/api'}${template.thumbnailPath}`
+              : null;
+            // Calculate aspect ratio from template dimensions
+            const aspectRatio = template.width && template.height
+              ? `${template.width}/${template.height}`
+              : '16/9';
+
+            return (
+              <Link key={template.id} to={`/editor/${template.id}`}>
+                <div className="card" style={{ overflow: 'hidden' }}>
+                  <div style={{ aspectRatio, background: 'var(--bg-tertiary)', position: 'relative' }}>
+                    {thumbnailUrl ? (
+                      <img
+                        src={thumbnailUrl}
+                        alt={template.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Palette style={{ width: 32, height: 32, color: 'var(--text-tertiary)' }} />
+                      </div>
+                    )}
+                    <div style={{
+                      position: 'absolute',
+                      top: 8,
+                      right: 8,
+                      padding: '4px 8px',
+                      borderRadius: 6,
+                      background: 'rgba(0,0,0,0.6)',
+                      color: 'white',
+                      fontSize: 11
+                    }}>
+                      {template.width}×{template.height}
                     </div>
-                  )}
-                  <div style={{ 
-                    position: 'absolute', 
-                    top: 8, 
-                    right: 8, 
-                    padding: '4px 8px', 
-                    borderRadius: 6, 
-                    background: 'rgba(0,0,0,0.6)', 
-                    color: 'white', 
-                    fontSize: 11 
-                  }}>
-                    {template.width}×{template.height}
+                  </div>
+                  <div style={{ padding: '12px' }}>
+                    <h3 style={{ fontWeight: 500, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {template.name}
+                    </h3>
+                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
+                      {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
+                    </p>
                   </div>
                 </div>
-                <div style={{ padding: '12px' }}>
-                  <h3 style={{ fontWeight: 500, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {template.name}
-                  </h3>
-                  <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                    {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
-                  </p>
-                </div>
-              </div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       )}
     </div>
