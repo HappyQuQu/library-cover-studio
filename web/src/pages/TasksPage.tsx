@@ -15,11 +15,16 @@ import {
 import {
   useTasks,
   useCreateTask,
+  useUpdateTask,
+  useDeleteTask,
   useRunTask,
+  useTaskLogs,
   useServers,
   useTemplates,
   useServerLibraries,
-  MediaLibrary
+  MediaLibrary,
+  Task,
+  TaskLog
 } from '@/api';
 import { toast } from '@/components/ui/use-toast';
 
@@ -31,6 +36,8 @@ interface LibraryConfig {
   templateId: string;
   primaryTitle: string;
   secondaryTitle: string;
+  sortBy: string;
+  maxItems: string;
   enabled: boolean;
 }
 
@@ -46,6 +53,8 @@ function getLibraryIcon(type: string) {
 
 export function TasksPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [logsTaskId, setLogsTaskId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     type: 'manual' as 'manual' | 'scheduled',
@@ -60,7 +69,10 @@ export function TasksPage() {
   const { data: librariesData, isLoading: loadingLibraries } = useServerLibraries(formData.serverId);
 
   const createMutation = useCreateTask();
+  const updateMutation = useUpdateTask();
+  const deleteMutation = useDeleteTask();
   const runMutation = useRunTask();
+  const { data: taskLogs = [], isLoading: logsLoading } = useTaskLogs(logsTaskId || '');
 
   // Get first template ID as default (stable reference)
   const defaultTemplateId = templates.length > 0 ? templates[0].id : '';
@@ -75,6 +87,8 @@ export function TasksPage() {
         templateId: defaultTemplateId,
         primaryTitle: lib.name,
         secondaryTitle: '',
+        sortBy: 'DateCreated',
+        maxItems: '',
         enabled: true
       })));
     } else {
@@ -108,6 +122,62 @@ export function TasksPage() {
       setLibraryConfigs([]);
     } catch (error: any) {
       toast({ title: '创建失败', description: '请检查输入', variant: 'destructive' });
+    }
+  };
+
+  const handleEdit = (task: Task) => {
+    setEditingTask(task);
+    setFormData({
+      name: task.name,
+      type: task.type,
+      serverId: task.serverId || '',
+      cronExpression: task.cronExpression || ''
+    });
+    // Parse existing library configs
+    if (task.libraryConfigs) {
+      try {
+        setLibraryConfigs(JSON.parse(task.libraryConfigs));
+      } catch (e) {
+        console.error('Failed to parse libraryConfigs', e);
+      }
+    }
+    setIsDialogOpen(true);
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTask) {
+      return handleCreate(e);
+    }
+
+    const enabledConfigs = libraryConfigs.filter(c => c.enabled);
+    try {
+      await updateMutation.mutateAsync({
+        id: editingTask.id,
+        name: formData.name,
+        type: formData.type,
+        serverId: formData.serverId,
+        cronExpression: formData.cronExpression,
+        isEnabled: formData.type === 'scheduled',
+        libraryConfigs: JSON.stringify(enabledConfigs)
+      } as any);
+      toast({ title: '任务更新成功 ✅', description: `任务 "${formData.name}" 已更新` });
+      setIsDialogOpen(false);
+      setEditingTask(null);
+      setFormData({ name: '', type: 'manual', serverId: '', cronExpression: '' });
+      setLibraryConfigs([]);
+    } catch (error: any) {
+      toast({ title: '更新失败', description: '请检查输入', variant: 'destructive' });
+    }
+  };
+
+  const handleDelete = async (taskId: string) => {
+    if (!confirm('确定要删除这个任务吗？')) return;
+    try {
+      await deleteMutation.mutateAsync(taskId);
+      toast({ title: '任务已删除' });
+    } catch (error) {
+      toast({ title: '删除失败', variant: 'destructive' });
     }
   };
 
@@ -158,12 +228,12 @@ export function TasksPage() {
                 <Zap style={{ width: 24, height: 24, color: 'white' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>配置新任务</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{editingTask ? '编辑任务' : '配置新任务'}</h2>
                 <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>为每个媒体库选择模板和配置变量</p>
               </div>
             </div>
 
-            <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Task Name */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>任务名称</label>
@@ -342,6 +412,28 @@ export function TasksPage() {
                                     style={{ height: 32, fontSize: 12, padding: '0 10px' }}
                                   />
                                 </div>
+
+                                {/* Sorting */}
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                  <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>抓取排序</label>
+                                  <select
+                                    className="input"
+                                    value={config.sortBy}
+                                    onChange={e => updateLibraryConfig(config.libraryId, { sortBy: e.target.value })}
+                                    style={{ height: 32, fontSize: 12, padding: '0 8px' }}
+                                  >
+                                    <option value="Name">名称</option>
+                                    <option value="Random">随机</option>
+                                    <option value="CommunityRating">公众评分</option>
+                                    <option value="CriticRating">影评人评分</option>
+                                    <option value="DateCreated">加入日期</option>
+                                    <option value="DateLastPlayed">播放日期</option>
+                                    <option value="OfficialRating">家长分级</option>
+                                    <option value="PlayCount">播放次数</option>
+                                    <option value="PremiereDate">发行日期</option>
+                                    <option value="Runtime">播放时长</option>
+                                  </select>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -501,8 +593,21 @@ export function TasksPage() {
                       {runMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
                       立即执行
                     </Button>
-                    <button className="btn-ghost" style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      className="btn-ghost"
+                      style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                      onClick={() => handleEdit(task)}
+                      title="编辑任务"
+                    >
                       <Settings2 style={{ width: 18, height: 18 }} />
+                    </button>
+                    <button
+                      className="btn-ghost"
+                      style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}
+                      onClick={() => handleDelete(task.id)}
+                      title="删除任务"
+                    >
+                      <AlertCircle style={{ width: 18, height: 18 }} />
                     </button>
                   </div>
                 </div>
@@ -514,7 +619,10 @@ export function TasksPage() {
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
                     <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>后端服务正常轮询中</span>
                   </div>
-                  <button style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button
+                    style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setLogsTaskId(task.id)}
+                  >
                     查看历史日志
                     <ChevronRight style={{ width: 12, height: 12 }} />
                   </button>
@@ -524,6 +632,76 @@ export function TasksPage() {
           })
         )}
       </div>
+
+      {/* Logs Dialog */}
+      <Dialog open={!!logsTaskId} onOpenChange={(open) => !open && setLogsTaskId(null)}>
+        <DialogContent style={{ maxWidth: 600, maxHeight: '80vh', overflowY: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+            <div
+              className="gradient-primary"
+              style={{
+                width: 40, height: 40, borderRadius: 12,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}
+            >
+              <Clock style={{ width: 20, height: 20, color: 'white' }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>执行记录</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>任务运行历史日志</p>
+            </div>
+          </div>
+
+          {logsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
+              <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: 'var(--text-tertiary)' }} />
+            </div>
+          ) : taskLogs.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
+              暂无执行记录
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {taskLogs.map((log: TaskLog) => (
+                <div
+                  key={log.id}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-color)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      background: log.status === 'completed' ? 'rgba(34, 197, 94, 0.1)' : log.status === 'failed' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)',
+                      color: log.status === 'completed' ? 'var(--success)' : log.status === 'failed' ? 'var(--error)' : 'var(--primary)'
+                    }}>
+                      {log.status === 'completed' ? '已完成' : log.status === 'failed' ? '失败' : '运行中'}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
+                      {log.startedAt ? new Date(log.startedAt).toLocaleString() : '-'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <span>处理: {log.itemsProcessed || 0} 项</span>
+                    <span>失败: {log.itemsFailed || 0} 项</span>
+                  </div>
+                  {log.errorMessage && (
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--error)', background: 'rgba(239, 68, 68, 0.05)', padding: 8, borderRadius: 4 }}>
+                      {log.errorMessage}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Warning/Info Banner */}
       <div style={{

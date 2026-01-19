@@ -198,6 +198,46 @@ export function useRunTask(): UseMutationResult<any, Error, string> {
   });
 }
 
+export function useUpdateTask(): UseMutationResult<any, Error, Partial<Task> & { id: string }> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: Partial<Task> & { id: string }) =>
+      apiClient.put(`/tasks/${id}`, data).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    }
+  });
+}
+
+export function useDeleteTask(): UseMutationResult<any, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiClient.delete(`/tasks/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    }
+  });
+}
+
+export interface TaskLog {
+  id: string;
+  taskId: string;
+  status: 'running' | 'completed' | 'failed';
+  itemsProcessed?: number;
+  itemsFailed?: number;
+  errorMessage?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export function useTaskLogs(taskId: string): UseQueryResult<TaskLog[], Error> {
+  return useQuery({
+    queryKey: ['tasks', taskId, 'logs'],
+    queryFn: () => apiClient.get<TaskLog[]>(`/tasks/${taskId}/logs`).then((r) => r.data),
+    enabled: !!taskId
+  });
+}
+
 // ==================== Settings ====================
 
 export function useSettings(): UseQueryResult<Record<string, string>, Error> {

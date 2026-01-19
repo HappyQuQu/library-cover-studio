@@ -16,6 +16,7 @@ interface MediaItem {
   imageUrl?: string;
   genres?: string[];
   rating?: number;
+  imageTags?: Record<string, string>; // Add ImageTags support
 }
 
 // 测试媒体服务器连接
@@ -25,7 +26,7 @@ export async function testConnection(
   apiKey: string
 ): Promise<boolean> {
   try {
-    const endpoint = serverType === 'jellyfin' 
+    const endpoint = serverType === 'jellyfin'
       ? `${url}/System/Info`
       : `${url}/emby/System/Info`;
 
@@ -64,7 +65,7 @@ export async function getLibraries(
         name: lib.Name,
         type: lib.CollectionType || 'unknown',
         itemCount: lib.ItemCount,
-        imageUrl: `${url}/Items/${id}/Images/Primary`
+        imageUrl: `${url}/Items/${id}/Images/Primary?maxWidth=1000&quality=90`
       };
     });
   } catch (error) {
@@ -83,6 +84,7 @@ export async function getLibraryItems(
     limit?: number;
     startIndex?: number;
     sortBy?: string;
+    sortOrder?: string;
     filter?: string;
   } = {}
 ): Promise<{ items: MediaItem[]; totalCount: number }> {
@@ -92,8 +94,8 @@ export async function getLibraryItems(
       Limit: String(options.limit || 50),
       StartIndex: String(options.startIndex || 0),
       SortBy: options.sortBy || 'DateCreated',
-      SortOrder: 'Descending',
-      Fields: 'Genres,Overview,Rating,Year',
+      SortOrder: options.sortOrder || 'Descending',
+      Fields: 'Genres,Overview,Rating,Year,ImageTags',
       Recursive: 'true',
       IncludeItemTypes: 'Movie,Series'
     });
@@ -116,11 +118,12 @@ export async function getLibraryItems(
       name: item.Name,
       year: item.ProductionYear,
       type: item.Type,
-      imageUrl: item.ImageTags?.Primary 
+      imageUrl: item.ImageTags?.Primary
         ? `${url}/Items/${item.Id}/Images/Primary`
         : undefined,
       genres: item.Genres,
-      rating: item.CommunityRating
+      rating: item.CommunityRating,
+      imageTags: item.ImageTags
     })) || [];
 
     return {
@@ -143,10 +146,13 @@ export async function uploadCover(
 ): Promise<boolean> {
   try {
     const endpoint = serverType === 'jellyfin'
-      ? `${url}/Items/${itemId}/Images/Primary`
-      : `${url}/emby/Items/${itemId}/Images/Primary`;
+      ? `${url}/Items/${itemId}/Images/Primary?maxWidth=1000&quality=90`
+      : `${url}/emby/Items/${itemId}/Images/Primary?maxWidth=1000&quality=90`;
 
-    const response = await axios.post(endpoint, imageBuffer, {
+    // Emby/Jellyfin API requires Base64 encoded image data
+    const base64Image = imageBuffer.toString('base64');
+
+    const response = await axios.post(endpoint, base64Image, {
       headers: {
         ...getAuthHeaders(serverType, apiKey),
         'Content-Type': 'image/png'
@@ -166,12 +172,15 @@ export async function downloadCover(
   serverType: string,
   url: string,
   apiKey: string,
-  itemId: string
+  itemId: string,
+  type: string = 'Primary'
 ): Promise<Buffer | null> {
   try {
     const endpoint = serverType === 'jellyfin'
-      ? `${url}/Items/${itemId}/Images/Primary`
-      : `${url}/emby/Items/${itemId}/Images/Primary`;
+      ? `${url}/Items/${itemId}/Images/${type}`
+      : `${url}/emby/Items/${itemId}/Images/${type}`;
+
+    console.log(`  📡 Downloading from: ${endpoint}`);
 
     const response = await axios.get(endpoint, {
       headers: getAuthHeaders(serverType, apiKey),
@@ -179,9 +188,14 @@ export async function downloadCover(
       timeout: 30000
     });
 
+    console.log(`  📡 Response status: ${response.status}, content-type: ${response.headers['content-type']}, size: ${response.data?.length || 0}`);
+
     return Buffer.from(response.data);
-  } catch (error) {
-    console.error('Failed to download cover:', error);
+  } catch (error: any) {
+    console.error('Failed to download cover:', error.message);
+    if (error.response) {
+      console.error(`  Status: ${error.response.status}, Data: ${Buffer.from(error.response.data || '').toString().slice(0, 200)}`);
+    }
     return null;
   }
 }
@@ -195,11 +209,9 @@ export function getAuthHeaders(serverType: string, apiKey: string): Record<strin
 
   if (serverType === 'jellyfin') {
     return {
-      ...headers,
-      'X-MediaBrowser-Token': apiKey,
-      'Authorization': `MediaBrowser Token="${apiKey}", Client="LibraryCoverStudio", Device="Web", DeviceId="unique-device-id", Version="1.3.0"`
+      'Authorization': `MediaBrowser Token="${apiKey}"`
     };
   }
-  
+
   return headers;
 }

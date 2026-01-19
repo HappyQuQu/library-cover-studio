@@ -52,24 +52,6 @@ export async function runTask(taskId: string) {
       console.error('Failed to parse libraryConfigs', e);
     }
 
-    // Fallback to old behavior if no configs
-    if (configs.length === 0) {
-      const templateId = task.templateId;
-      const libraryIds = task.libraryIds ? JSON.parse(task.libraryIds) : [];
-
-      // If no libraries specified, we don't know what to do in the new system
-      // But for backward compatibility, maybe we stick to what was there
-      // Actually, let's just use the specified libraries with the task's template
-      if (templateId) {
-        configs = libraryIds.map((id: string) => ({
-          libraryId: id,
-          templateId: templateId,
-          primaryTitle: '',
-          secondaryTitle: ''
-        }));
-      }
-    }
-
     if (configs.length === 0) {
       console.log('⚠️ No libraries configured to process');
       progress.status = 'completed';
@@ -85,84 +67,196 @@ export async function runTask(taskId: string) {
       return t;
     };
 
-    // 2. Iterate through each library configuration
+    progress.total = configs.length;
+
+    // 2. 每个媒体库生成一张封面
     for (const config of configs) {
-      console.log(`📂 Processing Library: ${config.libraryName || config.libraryId}`);
+      try {
+        progress.current++;
+        const libraryName = config.libraryName || config.libraryId;
+        console.log(`📂 Processing Library [${progress.current}/${progress.total}]: ${libraryName}`);
 
-      const templateDetail = getTemplate(config.templateId);
-      if (!templateDetail) {
-        console.warn(`⚠️ Template ${config.templateId} not found for library ${config.libraryId}, skipping...`);
-        continue;
-      }
+        const templateDetail = getTemplate(config.templateId);
+        if (!templateDetail) {
+          console.warn(`⚠️ Template ${config.templateId} not found for library ${libraryName}, skipping...`);
+          progress.failed++;
+          continue;
+        }
 
-      // Fetch items for this library
-      const { items } = await mediaClient.getLibraryItems(
-        serverDetail.type,
-        serverDetail.url,
-        apiKey,
-        config.libraryId,
-        { limit: 2000 }
-      );
+        // b. 下载每个媒体项的封面（直到凑齐9个有效海报）
+        const posterBuffers: Buffer[] = [];
+        let startIndex = 0;
+        let hasMoreItems = true;
+        const BATCH_SIZE = 10; // 每次获取少量数据，按需加载
+        const sortBy = config.sortBy || 'DateCreated'; // Define sortBy here for the loop
 
-      progress.total += items.length;
-      console.log(`📦 Found ${items.length} items in ${config.libraryName}`);
+        while (posterBuffers.length < 9 && hasMoreItems) {
+          console.log(`  🔄 Fetching batch of items (Start: ${startIndex}, Limit: ${BATCH_SIZE})...`);
 
-      // 3. Process items in this library
-      for (const item of items) {
-        try {
-          progress.current++;
-          console.log(`🎨 Processing [${progress.current}/${progress.total}]: ${item.name}`);
-
-          // a. 下载原始封面
-          const originalPoster = await mediaClient.downloadCover(
+          const itemsResult = await mediaClient.getLibraryItems(
             serverDetail.type,
             serverDetail.url,
             apiKey,
-            item.id
+            config.libraryId,
+            {
+              limit: BATCH_SIZE,
+              startIndex: startIndex,
+              sortBy,
+              sortOrder: sortBy === 'Name' ? 'Ascending' : 'Descending'
+            }
           );
 
-          if (!originalPoster) {
-            console.warn(`⚠️ Skipped ${item.name}: No original poster found`);
-            progress.failed++;
-            continue;
+          const batchItems = itemsResult.items.filter(item =>
+            item.imageTags && Object.keys(item.imageTags).length > 0
+          );
+
+          if (itemsResult.items.length < BATCH_SIZE) {
+            hasMoreItems = false; // 没有更多数据了
+          }
+          // 即便这次 fetch 的 items 少于 batch size，依然要处理这批数据
+          if (batchItems.length === 0 && hasMoreItems) {
+            startIndex += BATCH_SIZE;
+            continue; // 这批没有带封面的，继续下一批
+          }
+          if (batchItems.length === 0 && !hasMoreItems) {
+            break; // 这批没有且没更多了，退出
           }
 
-          // b. 渲染新封面
-          const metadata = {
-            title: item.name,
-            year: item.year,
-            rating: item.rating,
-            genres: item.genres,
-            primaryTitle: config.primaryTitle || item.name,
-            secondaryTitle: config.secondaryTitle || ''
-          };
 
-          const renderedBuffer = await renderer.renderTemplate(
-            templateDetail.canvasJson || '{}',
-            metadata,
-            originalPoster,
-            { width: templateDetail.width || 900, height: templateDetail.height || 600 }
-          );
+          console.log(`  📦 Processing batch: Found ${batchItems.length} items with potential cover`);
 
-          // c. 上传新封面
-          const success = await mediaClient.uploadCover(
-            serverDetail.type,
-            serverDetail.url,
-            apiKey,
-            item.id,
-            renderedBuffer
-          );
+          for (const item of batchItems) {
+            if (posterBuffers.length >= 9) break;
 
-          if (success) {
-            progress.success++;
-          } else {
-            progress.failed++;
+            console.log(`  🖼️ Processing item: ${item.name}`);
+
+            const imageTypes = ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile'];
+            let validPoster: Buffer | null = null;
+
+            for (const type of imageTypes) {
+              const tag = item.imageTags?.[type];
+              if (!tag) continue;
+
+              // console.log(`    Trying image type: ${type} (tag: ${tag})`);
+              const poster = await mediaClient.downloadCover(
+                serverDetail.type,
+                serverDetail.url,
+                apiKey,
+                item.id,
+                type
+              );
+
+              // 验证海报有效性
+              if (!poster || poster.length === 0) continue;
+
+              // 1. 快速检查：已知黑图大小
+              if (poster.length === 11488) {
+                console.warn(`    ⚠️ Skipping invalid black image for type: ${type} (size: 11488 bytes)`);
+                continue;
+              }
+
+              // 2. 深度检查：像素分析
+              const { isBlackImage } = await import('../utils/imageUtils.js');
+              const isBlack = await isBlackImage(poster);
+              if (isBlack) {
+                console.warn(`    ⚠️ Skipping invalid black image for type: ${type} (pixel analysis detected >98% black)`);
+                continue;
+              }
+
+              validPoster = poster;
+              console.log(`    ✅ Found valid cover using type: ${type} (${poster.length} bytes)`);
+              break;
+            }
+
+            if (!validPoster) {
+              console.warn(`  ⚠️ No valid cover found for item: ${item.name} (checked all types)`);
+              continue;
+            }
+
+            posterBuffers.push(validPoster);
+
+            // 保存海报到本地
+            try {
+              const fs = await import('fs');
+              const path = await import('path');
+              const postersDir = path.join(process.cwd(), 'output', 'posters', libraryName);
+
+              if (!fs.existsSync(postersDir)) {
+                fs.mkdirSync(postersDir, { recursive: true });
+              }
+
+              const cleanName = item.name.replace(/[<>:"/\\|?*]/g, '_');
+              const posterPath = path.join(postersDir, `${posterBuffers.length}_${cleanName}.jpg`);
+              fs.writeFileSync(posterPath, validPoster);
+            } catch (err) {
+              console.error('  Failed to save poster locally:', err);
+            }
           }
 
-        } catch (err) {
-          console.error(`❌ Error processing item ${item.name}:`, err);
+          startIndex += BATCH_SIZE;
+        }
+
+        if (posterBuffers.length === 0) {
+          console.warn(`⚠️ No valid posters found for library ${libraryName}, skipping...`);
+          progress.failed++;
+          continue;
+        }
+
+        // 如果不足9个，用已有的填充
+        while (posterBuffers.length < 9) {
+          const index = posterBuffers.length % Math.max(posterBuffers.filter(p => p !== null).length, 1);
+          posterBuffers.push(posterBuffers[index]);
+        }
+
+        // c. 使用模板渲染媒体库封面
+        console.log(`  🎨 Rendering library cover for ${libraryName}...`);
+        const metadata = {
+          title: libraryName,
+          primaryTitle: config.primaryTitle || libraryName,
+          secondaryTitle: config.secondaryTitle || ''
+        };
+
+        const renderedBuffer = await renderer.renderLibraryCover(
+          templateDetail.canvasJson || '{}',
+          metadata,
+          posterBuffers.filter((p): p is Buffer => p !== null),
+          { width: templateDetail.width || 1920, height: templateDetail.height || 1080 }
+        );
+
+        // 保存到本地目录留存
+        const outputDir = './output/library-covers';
+        const fs = await import('fs');
+        const path = await import('path');
+        if (!fs.existsSync(outputDir)) {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const safeLibraryName = libraryName.replace(/[<>:"/\\|?*]/g, '_');
+        const outputPath = path.join(outputDir, `${safeLibraryName}_${timestamp}.png`);
+        fs.writeFileSync(outputPath, renderedBuffer);
+        console.log(`  💾 Saved cover to: ${outputPath}`);
+
+        // d. 上传封面到媒体库（注意：是上传到媒体库，不是媒体项）
+        console.log(`  📤 Uploading library cover for ${libraryName}...`);
+        const success = await mediaClient.uploadCover(
+          serverDetail.type,
+          serverDetail.url,
+          apiKey,
+          config.libraryId,  // 这里使用的是媒体库ID，不是媒体项ID
+          renderedBuffer
+        );
+
+        if (success) {
+          console.log(`  ✅ Successfully updated cover for ${libraryName}`);
+          progress.success++;
+        } else {
+          console.log(`  ❌ Failed to upload cover for ${libraryName}`);
           progress.failed++;
         }
+
+      } catch (err) {
+        console.error(`❌ Error processing library ${config.libraryName}:`, err);
+        progress.failed++;
       }
     }
 
