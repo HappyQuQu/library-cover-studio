@@ -4,10 +4,13 @@ import * as template from '../controllers/template.controller.js';
 import multer from 'multer';
 import fs from 'fs';
 
+import { TEMP_DIR } from '../config/paths.js';
+import path from 'path';
+
 const router = Router();
 
 // Ensure temp directory for imports
-const tempDir = 'backend/data/temp/imports';
+const tempDir = path.join(TEMP_DIR, 'imports');
 if (!fs.existsSync(tempDir)) {
     fs.mkdirSync(tempDir, { recursive: true });
 }

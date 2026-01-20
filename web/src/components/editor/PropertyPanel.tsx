@@ -13,6 +13,22 @@ interface PropertyPanelProps {
   customFonts?: any[];
 }
 
+// Helper to ensure color is hex
+function toHex(color: any): string {
+  if (!color) return '#000000';
+  if (typeof color !== 'string') return '#000000';
+  if (color.startsWith('#')) return color;
+
+  // Handle rgb(r, g, b)
+  const match = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+  if (match) {
+    const [_, r, g, b] = match;
+    return "#" +
+      (1 << 24 | parseInt(r) << 16 | parseInt(g) << 8 | parseInt(b)).toString(16).slice(1);
+  }
+  return '#000000';
+}
+
 export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onClone, customFonts = [] }: PropertyPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'style' | 'shadow'>('style');
@@ -104,6 +120,25 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               readOnly
             />
           </div>
+          <div className="col-span-2 space-y-1.5">
+            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.rotation', '旋转角度')}</label>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={Math.round(selectedObject.angle || 0) % 360}
+                className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
+                onChange={(e) => onPropertyChange('angle', parseInt(e.target.value))}
+              />
+              <input
+                type="range"
+                min="0"
+                max="360"
+                value={Math.round(selectedObject.angle || 0) % 360}
+                onChange={(e) => onPropertyChange('angle', parseInt(e.target.value))}
+                className="flex-1 h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary)"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -142,7 +177,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                   <span className="text-[10px] font-mono text-(--text-tertiary) uppercase">{selectedObject.fill?.toString()}</span>
                   <input
                     type="color"
-                    value={selectedObject.fill as string}
+                    value={toHex(selectedObject.fill)}
                     className="w-5 h-5 p-0 border-none bg-transparent cursor-pointer rounded overflow-hidden"
                     onChange={(e) => onPropertyChange('fill', e.target.value)}
                   />
@@ -171,23 +206,30 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-(--text-secondary)">圆角</span>
-                  <span className="text-[10px] font-medium text-(--text-tertiary)">{selectedObject.clipPath?.rx || 0}px</span>
+                  <span className="text-[10px] font-medium text-(--text-tertiary)">
+                    {Math.round((selectedObject.clipPath?.rx || 0) * (selectedObject.scaleX || 1))}px
+                  </span>
                 </div>
                 <input
                   type="range"
                   min="0"
-                  max="50"
+                  max="100"
                   step="1"
-                  value={selectedObject.clipPath?.rx || 0}
+                  value={Math.round((selectedObject.clipPath?.rx || 0) * (selectedObject.scaleX || 1))}
                   className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
                   onChange={(e) => {
-                    const radius = parseInt(e.target.value);
+                    const visualRadius = parseInt(e.target.value);
+                    const scaleX = selectedObject.scaleX || 1;
+                    const scaleY = selectedObject.scaleY || 1;
+                    const internalRx = visualRadius / scaleX;
+                    const internalRy = visualRadius / scaleY; // Assuming circular corners visual means equal rx/ry visual.
+
                     onPropertyChange('clipPath', {
                       type: 'rect',
                       width: selectedObject.width,
                       height: selectedObject.height,
-                      rx: radius,
-                      ry: radius,
+                      rx: internalRx,
+                      ry: internalRy,
                       originX: 'center',
                       originY: 'center',
                     });
@@ -318,16 +360,35 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 {Array.from({ length: 9 }).map((_, i) => {
                   const varName = `post${i + 1}`;
                   const isActive = selectedObject.posterVar === varName;
+                  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+                  const imgUrl = `${baseUrl}/templates/posters/${i + 1}.jpg`;
+
                   return (
                     <button
                       key={varName}
                       onClick={() => onPropertyChange('posterVar', varName)}
-                      className={`px-2 py-1.5 rounded-lg border text-center transition-all ${isActive
-                        ? 'bg-(--primary) text-white border-(--primary)'
-                        : 'bg-white border-(--border-color) hover:border-(--primary) hover:shadow-sm'
-                        }`}
+                      className={cn(
+                        "relative aspect-[2/3] rounded-lg border overflow-hidden transition-all group",
+                        isActive
+                          ? "ring-2 ring-(--primary) border-transparent"
+                          : "border-(--border-color) hover:border-(--primary) hover:shadow-sm"
+                      )}
+                      title={`切换到海报 ${i + 1}`}
                     >
-                      <code className={`text-[10px] font-mono ${isActive ? 'text-white' : 'text-(--primary)'}`}>{`{{${varName}}}`}</code>
+                      <img
+                        src={imgUrl}
+                        alt={`Poster ${i + 1}`}
+                        className="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      <div className={cn(
+                        "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity",
+                        isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      )}>
+                        <span className="text-[10px] font-mono text-white font-bold bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm">
+                          {`{{${varName}}}`}
+                        </span>
+                      </div>
                     </button>
                   );
                 })}
@@ -391,7 +452,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
-                    value={typeof selectedObject.shadow.color === 'string' ? selectedObject.shadow.color : '#000000'}
+                    value={toHex(selectedObject.shadow.color)}
                     onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, color: e.target.value })}
                     className="w-full h-8 rounded cursor-pointer border border-(--border-color)"
                   />

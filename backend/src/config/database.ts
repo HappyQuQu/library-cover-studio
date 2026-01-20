@@ -3,7 +3,10 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from './schema.js';
 
-import { DB_FILE } from './paths.js';
+import { DB_FILE, ensureDataDirs } from './paths.js';
+
+// Ensure data directories exist before connecting
+ensureDataDirs();
 
 // 创建 SQLite 连接
 const sqlite = new Database(DB_FILE);

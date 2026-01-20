@@ -109,6 +109,7 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
     const zipBuffer = zip.toBuffer();
     // Prettier ZIP name: Only strip characters that are forbidden in filenames
     const safeName = template.name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    // Use a timestamp in zip name to avoid conflict? No, browser handles downloads.
     const zipFileName = `${safeName}_${template.width}x${template.height}.zip`;
 
     res.set('Content-Type', 'application/zip');
@@ -144,7 +145,7 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
 
     if (previewEntry) {
       const buffer = previewEntry.getData();
-      const filename = `${id}.jpg`;
+      const filename = `${id}-${Date.now()}.jpg`;
       fs.writeFileSync(path.join(THUMBNAILS_DIR, filename), buffer);
       thumbnailPath = `/thumbnails/${filename}`;
     }
@@ -198,7 +199,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       }
       const base64Data = thumbnail.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `${id}.jpg`;
+      const filename = `${id}-${Date.now()}.jpg`;
       fs.writeFileSync(path.join(uploadsDir, filename), buffer);
       thumbnailPath = `/thumbnails/${filename}`;
     }
@@ -257,9 +258,23 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       if (!fs.existsSync(uploadsDir)) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
+
+      // cleanup old thumbnail if exists
+      if (existing.thumbnailPath) {
+        try {
+          const oldFileName = path.basename(existing.thumbnailPath);
+          const oldFullPath = path.join(uploadsDir, oldFileName);
+          if (fs.existsSync(oldFullPath)) {
+            fs.unlinkSync(oldFullPath);
+          }
+        } catch (e) {
+          console.warn('Failed to delete old thumbnail:', e);
+        }
+      }
+
       const base64Data = updates.thumbnail.replace(/^data:image\/\w+;base64,/, '');
       const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `${id}.jpg`;
+      const filename = `${id}-${Date.now()}.jpg`;
       fs.writeFileSync(path.join(uploadsDir, filename), buffer);
       updateData.thumbnailPath = `/thumbnails/${filename}`;
     }

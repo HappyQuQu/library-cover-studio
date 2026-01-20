@@ -11,6 +11,7 @@ interface LayerPanelProps {
   onToggleLock: (id: string) => void;
   onReorder: (id: string, direction: 'up' | 'down') => void;
   onRename: (id: string, name: string) => void;
+  onMove?: (dragIndex: number, hoverIndex: number) => void;
 }
 
 export function LayerPanel({
@@ -20,11 +21,34 @@ export function LayerPanel({
   onToggleVisibility,
   onToggleLock,
   onReorder,
-  onRename
+  onRename,
+  onMove
 }: LayerPanelProps) {
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = "move";
+    // Set a transparent drag image if desired, or let browser handle it
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault(); // Necessary to allow dropping
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+    if (onMove) {
+      onMove(draggedIndex, dropIndex);
+    }
+    setDraggedIndex(null);
+  };
 
   return (
     <div className="flex flex-col h-full animate-fade-in p-2">
@@ -46,21 +70,27 @@ export function LayerPanel({
         ) : (
           layers.map((layer, index) => {
             const isSelected = selectedId === layer.id;
+            const isDragging = draggedIndex === index;
 
             return (
               <div
                 key={layer.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={(e) => handleDrop(e, index)}
                 onClick={() => onSelect(layer.id)}
                 className={cn(
-                  "group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border border-transparent hover:scale-[1.01] duration-200",
+                  "group flex items-center gap-3 p-2.5 rounded-xl cursor-pointer transition-all border border-transparent duration-200",
                   isSelected
                     ? "bg-white shadow-sm border-(--primary)/20 shadow-glow"
-                    : "hover:bg-white/60 hover:shadow-sm hover:border-(--border-color)"
+                    : "hover:bg-white/60 hover:shadow-sm hover:border-(--border-color)",
+                  isDragging ? "opacity-30 border-dashed border-(--primary) scale-95" : "hover:scale-[1.01]"
                 )}
               >
                 {/* Drag Handle (Visual) */}
                 <div className="text-(--text-tertiary)/30 group-hover:text-(--text-tertiary) cursor-grab active:cursor-grabbing">
-                  <GripVertical className="w-3.5 h-3.5" />
+                  <GripVertical className="w-3.5 h-3.5 result-handle" />
                 </div>
 
                 {/* Layer Preview / Icon */}

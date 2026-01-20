@@ -105,13 +105,19 @@ export function EditorPage() {
   // Helper to sync layers from canvas
   const syncLayers = useCallback(() => {
     if (!canvas) return;
-    const objs = canvas.getObjects().slice().reverse().map((obj: any) => ({
-      id: obj.id || Math.random().toString(36).substr(2, 9),
-      type: obj.type,
-      name: obj.name || `${obj.type}`,
-      visible: obj.visible !== false,
-      locked: obj.lockMovementX || false
-    }));
+    const objs = canvas.getObjects().slice().reverse().map((obj: any) => {
+      // Ensure object has an ID
+      if (!obj.id) {
+        obj.id = Math.random().toString(36).substr(2, 9);
+      }
+      return {
+        id: obj.id,
+        type: obj.type,
+        name: obj.name || `${obj.type}`,
+        visible: obj.visible !== false,
+        locked: !obj.selectable // Use the selectable flag as the truth for locking status since we set selectable=false when locked
+      };
+    });
     setLayers(objs);
   }, [canvas]);
 
@@ -915,8 +921,106 @@ export function EditorPage() {
             <PropertyPanel
               selectedObject={selectedObject}
               customFonts={customFonts}
-              onPropertyChange={(prop, val) => {
+              onPropertyChange={async (prop, val) => {
                 if (!selectedObject || !canvas) return;
+
+                // SPECIAL HANDLING: Poster Variant Switching
+                // Allow if it is marked as poster OR if it is an image/rect that we are turning into a poster
+                const canBePoster = (selectedObject as any).isPoster || selectedObject.type === 'image' || selectedObject.type === 'rect';
+
+                if (prop === 'posterVar' && canBePoster) {
+                  // val format: "postN" (e.g. "post1", "post5")
+                  const match = val.match(/post(\d+)/);
+                  if (match) {
+                    const posterIndex = match[1];
+                    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+                    const sampleUrl = `${baseUrl}/templates/posters/${posterIndex}.jpg`;
+
+                    try {
+                      // CAPTURE STATE BEFORE LOADING
+                      const currentWidth = selectedObject.getScaledWidth();
+                      const currentHeight = selectedObject.getScaledHeight();
+                      const { left, top, angle, opacity, originX, originY } = selectedObject;
+
+                      const imgEl = document.createElement('img');
+                      imgEl.src = sampleUrl;
+                      imgEl.crossOrigin = 'anonymous';
+                      await new Promise((resolve, reject) => {
+                        imgEl.onload = resolve;
+                        imgEl.onerror = reject;
+                      });
+
+                      // RACE CONDITION CHECK
+                      if (!canvas || !canvas.getObjects().includes(selectedObject as any)) return;
+
+                      // CREATE NEW TARGET OBJECT
+                      const fabricImg = new fabric.FabricImage(imgEl, {
+                        left, top, angle, opacity, originX, originY,
+                        // Scale to match EXACTLY the previous visual dimensions
+                        scaleX: currentWidth / (imgEl.naturalWidth || 1),
+                        scaleY: currentHeight / (imgEl.naturalHeight || 1)
+                      });
+
+                      // MIGRATE PROPERTIES
+                      (fabricImg as any).id = (selectedObject as any).id;
+                      (fabricImg as any).name = (selectedObject as any).name || 'Poster';
+                      (fabricImg as any).isPoster = true;
+                      (fabricImg as any).posterVar = val;
+
+                      // HANDLE CLIPPATH (Rounded Corners)
+                      // logic: Preserving the VALID visual radius
+                      let currentVisualRx = 0;
+                      let currentVisualRy = 0;
+
+                      if (selectedObject.type === 'rect') {
+                        // For Rect, visual radius = rx * scaleX
+                        const r = selectedObject as fabric.Rect;
+                        currentVisualRx = (r.rx || 0) * (r.scaleX || 1);
+                        currentVisualRy = (r.ry || 0) * (r.scaleY || 1);
+                      } else if (selectedObject.clipPath && selectedObject.clipPath instanceof fabric.Rect) {
+                        // For Image, visual radius = clipPath.rx * image.scaleX
+                        // Note: clipPath usually has scaleX=1 relative to image content unscaled? 
+                        // Fabric docs: clipPath is positioned/scaled relative to object center. 
+                        // If clipPath has width=naturalWidth, it scales with the object.
+                        const cp = selectedObject.clipPath as fabric.Rect;
+                        currentVisualRx = (cp.rx || 0) * (selectedObject.scaleX || 1);
+                        currentVisualRy = (cp.ry || 0) * (selectedObject.scaleY || 1);
+                      }
+
+                      // Apply to new object if radius > 0
+                      if (currentVisualRx > 0 || currentVisualRy > 0) {
+                        const effectiveScaleX = fabricImg.scaleX || 1;
+                        const effectiveScaleY = fabricImg.scaleY || 1;
+
+                        fabricImg.set('clipPath', new fabric.Rect({
+                          width: imgEl.naturalWidth,
+                          height: imgEl.naturalHeight,
+                          // Calculate internal Rx needed to achieve the target Visual Rx
+                          // internalRx * scaleX = visualRx  => internalRx = visualRx / scaleX
+                          rx: currentVisualRx / effectiveScaleX,
+                          ry: currentVisualRy / effectiveScaleY,
+                          originX: 'center',
+                          originY: 'center',
+                        }));
+                      }
+
+                      // REPLACE IN CANVAS
+                      const index = canvas.getObjects().indexOf(selectedObject);
+                      if (index !== -1) {
+                        canvas.remove(selectedObject);
+                        canvas.insertAt(index, fabricImg);
+                        canvas.setActiveObject(fabricImg);
+                        setSelectedObject(fabricImg);
+
+                        canvas.renderAll();
+                        saveToHistory();
+                      }
+                      return;
+                    } catch (e) {
+                      console.warn('Failed to load sample poster:', e);
+                    }
+                  }
+                }
 
                 // Special handling for clipPath (rounded corners)
                 if (prop === 'clipPath' && val) {
@@ -975,7 +1079,15 @@ export function EditorPage() {
                 const obj = canvas?.getObjects().find((o: any) => (o as any).id === id);
                 if (obj) {
                   const isLocked = !obj.lockMovementX;
-                  obj.set({ lockMovementX: isLocked, lockMovementY: isLocked, lockScalingX: isLocked, lockScalingY: isLocked, lockRotation: isLocked });
+                  obj.set({
+                    lockMovementX: isLocked,
+                    lockMovementY: isLocked,
+                    lockScalingX: isLocked,
+                    lockScalingY: isLocked,
+                    lockRotation: isLocked,
+                    selectable: !isLocked,
+                    evented: !isLocked
+                  });
                   canvas?.renderAll();
                   syncLayers();
                 }
@@ -994,6 +1106,26 @@ export function EditorPage() {
                 if (obj) {
                   (obj as any).name = name;
                   syncLayers();
+                }
+              }}
+              onMove={(fromIndex, toIndex) => {
+                if (!canvas) return;
+                // 'layers' is reversed (index 0 = top).
+                // Fabric objects (index 0 = bottom).
+                const total = layers.length;
+
+                // Convert UI indices to Fabric indices
+                // UI: 0(Top) -> N-1(Bottom)
+                // Fabric: N-1(Top) -> 0(Bottom)
+                const fabricFromIndex = total - 1 - fromIndex;
+                const fabricToIndex = total - 1 - toIndex;
+
+                const obj = canvas.item(fabricFromIndex);
+                if (obj) {
+                  canvas.moveObjectTo(obj, fabricToIndex);
+                  canvas.renderAll();
+                  syncLayers();
+                  saveToHistory();
                 }
               }}
             />
