@@ -66,6 +66,7 @@ export async function initDatabase() {
       cron_expression TEXT,
       template_id TEXT,
       server_id TEXT,
+      user_id TEXT,
       library_ids TEXT,
       library_configs TEXT,
       options TEXT,
@@ -75,7 +76,8 @@ export async function initDatabase() {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL,
-      FOREIGN KEY (server_id) REFERENCES media_servers(id) ON DELETE CASCADE
+      FOREIGN KEY (server_id) REFERENCES media_servers(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
     -- 检查并添加 library_configs 列 (如果表已存在但列不存在)
@@ -91,7 +93,7 @@ export async function initDatabase() {
       sqlite.exec('ALTER TABLE tasks ADD COLUMN library_configs TEXT;');
       console.log('⚡ Added library_configs column to tasks table');
     } catch (err) {
-      console.warn('⚠️ Could not add library_configs column (it might already exist):', err);
+      console.warn('⚠️ Could not add library_configs column:', err);
     }
   }
 
@@ -121,10 +123,28 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_templates_user ON templates(user_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_template ON tasks(template_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_server ON tasks(server_id);
+    CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
     CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id);
   `);
 
-  console.log('📦 Database tables created');
+  // 初始化系统设置
+  const defaultSettings = [
+    { key: 'storage.savePosters', value: 'false' },
+    { key: 'storage.saveCovers', value: 'false' },
+    { key: 'rendering.outputFormat', value: 'PNG' },
+    { key: 'rendering.outputQuality', value: '90' },
+    { key: 'rendering.concurrency', value: '3' }
+  ];
+
+  for (const setting of defaultSettings) {
+    const existing = sqlite.prepare("SELECT key FROM system_settings WHERE key = ?").get(setting.key);
+    if (!existing) {
+      sqlite.prepare("INSERT INTO system_settings (key, value) VALUES (?, ?)").run(setting.key, setting.value);
+      console.log(`✅ Seeded default setting: ${setting.key} = ${setting.value}`);
+    }
+  }
+
+  console.log('📦 Database initialized');
 }
 
 

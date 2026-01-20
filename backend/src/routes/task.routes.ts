@@ -25,6 +25,9 @@ router.delete('/:id', task.remove);
 // 立即执行任务
 router.post('/:id/run', task.runNow);
 
+// 切换状态
+router.post('/:id/toggle', task.toggleStatus);
+
 // 获取任务日志
 router.get('/:id/logs', task.getLogs);
 

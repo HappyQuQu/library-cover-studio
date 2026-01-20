@@ -18,6 +18,7 @@ import {
   useUpdateTask,
   useDeleteTask,
   useRunTask,
+  useToggleTask,
   useTaskLogs,
   useServers,
   useTemplates,
@@ -51,6 +52,175 @@ function getLibraryIcon(type: string) {
   }
 }
 
+// Cron expression parser and next execution time calculator
+function parseCronExpression(cronExpr: string): { isValid: boolean; description: string } {
+  if (!cronExpr || cronExpr.trim() === '') return { isValid: false, description: '' };
+
+  const parts = cronExpr.trim().split(/\s+/);
+  if (parts.length !== 5) return { isValid: false, description: '格式错误：需要5个字段 (分 时 日 月 周)' };
+
+  const [minute, hour, day, month, weekday] = parts;
+
+  // Validate basic format
+  const cronPartRegex = /^(\*|(\d+(-\d+)?)(,(\d+(-\d+)?))*)(\/([\d]+))?$/;
+  for (const part of parts) {
+    if (!cronPartRegex.test(part) && part !== '*') {
+      return { isValid: false, description: '表达式格式无效' };
+    }
+  }
+
+  // Generate human-readable description
+  let desc = '';
+
+  // Time part
+  if (minute === '0' && hour !== '*') {
+    if (hour.includes('/')) {
+      const interval = hour.split('/')[1];
+      desc = `每 ${interval} 小时整点`;
+    } else if (hour.includes(',')) {
+      desc = `每天 ${hour.split(',').map(h => `${h}:00`).join(', ')}`;
+    } else {
+      desc = `每天 ${hour.padStart(2, '0')}:00`;
+    }
+  } else if (minute === '*' && hour === '*') {
+    desc = '每分钟';
+  } else if (minute === '0' && hour === '*') {
+    desc = '每小时整点';
+  } else if (hour.includes('/')) {
+    const interval = hour.split('/')[1];
+    desc = `每 ${interval} 小时`;
+  } else if (minute.includes('/')) {
+    const interval = minute.split('/')[1];
+    desc = `每 ${interval} 分钟`;
+  } else {
+    desc = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
+  }
+
+  // Day part
+  if (day !== '*' && month !== '*') {
+    desc += ` 在 ${month} 月 ${day} 日`;
+  } else if (day !== '*') {
+    desc += ` 每月 ${day} 日`;
+  }
+
+  // Weekday part
+  const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  if (weekday !== '*') {
+    const days = weekday.split(',').map(d => weekdayNames[parseInt(d)] || d).join(', ');
+    desc += ` (${days})`;
+  }
+
+  return { isValid: true, description: desc };
+}
+
+// Calculate next N execution times from a cron expression
+function getNextExecutions(cronExpr: string, count: number = 10): Date[] {
+  if (!cronExpr || cronExpr.trim() === '') return [];
+
+  const parts = cronExpr.trim().split(/\s+/);
+  if (parts.length !== 5) return [];
+
+  const [minuteExpr, hourExpr, dayExpr, monthExpr, weekdayExpr] = parts;
+
+  const results: Date[] = [];
+  const now = new Date();
+  let current = new Date(now.getTime());
+  current.setSeconds(0);
+  current.setMilliseconds(0);
+
+  // Helper to parse cron field
+  const parseField = (expr: string, min: number, max: number): number[] => {
+    const values: number[] = [];
+
+    if (expr === '*') {
+      for (let i = min; i <= max; i++) values.push(i);
+      return values;
+    }
+
+    if (expr.includes('/')) {
+      const [range, step] = expr.split('/');
+      const stepVal = parseInt(step);
+      const startVal = range === '*' ? min : parseInt(range);
+      for (let i = startVal; i <= max; i += stepVal) values.push(i);
+      return values;
+    }
+
+    if (expr.includes(',')) {
+      return expr.split(',').map(v => parseInt(v)).filter(v => !isNaN(v));
+    }
+
+    if (expr.includes('-')) {
+      const [start, end] = expr.split('-').map(v => parseInt(v));
+      for (let i = start; i <= end; i++) values.push(i);
+      return values;
+    }
+
+    const num = parseInt(expr);
+    if (!isNaN(num)) values.push(num);
+    return values;
+  };
+
+  const minutes = parseField(minuteExpr, 0, 59);
+  const hours = parseField(hourExpr, 0, 23);
+  const days = parseField(dayExpr, 1, 31);
+  const months = parseField(monthExpr, 1, 12);
+  const weekdays = parseField(weekdayExpr, 0, 6);
+
+  const isValidDate = (date: Date): boolean => {
+    const m = date.getMinutes();
+    const h = date.getHours();
+    const d = date.getDate();
+    const mo = date.getMonth() + 1;
+    const wd = date.getDay();
+
+    return minutes.includes(m) && hours.includes(h) &&
+      (dayExpr === '*' || days.includes(d)) &&
+      (monthExpr === '*' || months.includes(mo)) &&
+      (weekdayExpr === '*' || weekdays.includes(wd));
+  };
+
+  // Advance minute by minute (with smarter jumps)
+  const maxIterations = 525600; // 1 year in minutes
+  let iterations = 0;
+
+  while (results.length < count && iterations < maxIterations) {
+    current = new Date(current.getTime() + 60000);
+    iterations++;
+
+    if (isValidDate(current)) {
+      results.push(new Date(current));
+    }
+  }
+
+  return results;
+}
+
+// Lazy configurator options
+interface LazyConfig {
+  frequency: 'minutely' | 'hourly' | 'daily' | 'weekly' | 'monthly';
+  minute: string;
+  hour: string;
+  dayOfMonth: string;
+  dayOfWeek: string;
+}
+
+function buildCronFromLazyConfig(config: LazyConfig): string {
+  switch (config.frequency) {
+    case 'minutely':
+      return '* * * * *';
+    case 'hourly':
+      return `${config.minute} * * * *`;
+    case 'daily':
+      return `${config.minute} ${config.hour} * * *`;
+    case 'weekly':
+      return `${config.minute} ${config.hour} * * ${config.dayOfWeek}`;
+    case 'monthly':
+      return `${config.minute} ${config.hour} ${config.dayOfMonth} * *`;
+    default:
+      return '0 4 * * *';
+  }
+}
+
 export function TasksPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
@@ -63,6 +233,13 @@ export function TasksPage() {
     cronExpression: ''
   });
   const [libraryConfigs, setLibraryConfigs] = useState<LibraryConfig[]>([]);
+  const [lazyConfig, setLazyConfig] = useState<LazyConfig>({
+    frequency: 'daily',
+    minute: '0',
+    hour: '4',
+    dayOfMonth: '1',
+    dayOfWeek: '1'
+  });
 
   const { data: tasks = [], isLoading } = useTasks();
   const { data: servers = [] } = useServers();
@@ -73,6 +250,7 @@ export function TasksPage() {
   const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
   const runMutation = useRunTask();
+  const toggleMutation = useToggleTask();
   const { data: taskLogs = [], isLoading: logsLoading } = useTaskLogs(logsTaskId || '');
 
   // Sort logs by time descending
@@ -198,6 +376,16 @@ export function TasksPage() {
     }
   };
 
+  const handleToggle = async (id: string) => {
+    try {
+      await toggleMutation.mutateAsync(id);
+      // Toast is handled by hook's success? No, let's add it here.
+      toast({ title: '状态已更新' });
+    } catch (error) {
+      toast({ title: '操作失败', variant: 'destructive' });
+    }
+  };
+
   const updateLibraryConfig = (libraryId: string, updates: Partial<LibraryConfig>) => {
     setLibraryConfigs(prev => prev.map(c =>
       c.libraryId === libraryId ? { ...c, ...updates } : c
@@ -222,59 +410,58 @@ export function TasksPage() {
               新建任务
             </Button>
           </DialogTrigger>
-          <DialogContent style={{ maxWidth: 900, height: '70vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {/* Custom Header with Icon and Tabs */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, flexShrink: 0, paddingRight: 40 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div
-                  className="gradient-orange"
-                  style={{
-                    width: 44, height: 44, borderRadius: 12,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)'
-                  }}
-                >
-                  <Zap style={{ width: 22, height: 22, color: 'white' }} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{editingTask ? '编辑任务' : '配置新任务'}</h2>
-                  <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>为每个媒体库选择模板和配置变量</p>
-                </div>
+          <DialogContent style={{ maxWidth: 1100, height: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            {/* Custom Header with Icon */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, flexShrink: 0 }}>
+              <div
+                className="gradient-orange"
+                style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)'
+                }}
+              >
+                <Zap style={{ width: 22, height: 22, color: 'white' }} />
               </div>
-              {/* Tab Switcher */}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  onClick={() => setActiveDialogTab('basic')}
-                  style={{
-                    padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                    border: 'none', cursor: 'pointer',
-                    background: activeDialogTab === 'basic' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                    color: activeDialogTab === 'basic' ? 'white' : 'var(--text-secondary)',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <Palette style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                  基本设置
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveDialogTab('schedule')}
-                  style={{
-                    padding: '8px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                    border: 'none', cursor: 'pointer',
-                    background: activeDialogTab === 'schedule' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                    color: activeDialogTab === 'schedule' ? 'white' : 'var(--text-secondary)',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <Clock style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                  定时调度
-                  {formData.type === 'scheduled' && (
-                    <span style={{ marginLeft: 6, background: 'var(--success)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10 }}>已启用</span>
-                  )}
-                </button>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{editingTask ? '编辑任务' : '配置新任务'}</h2>
+                <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>为每个媒体库选择模板和配置变量</p>
               </div>
+            </div>
+
+            {/* Tab Switcher - Moved below header to avoid close button */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexShrink: 0 }}>
+              <button
+                type="button"
+                onClick={() => setActiveDialogTab('basic')}
+                style={{
+                  padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                  border: 'none', cursor: 'pointer',
+                  background: activeDialogTab === 'basic' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                  color: activeDialogTab === 'basic' ? 'white' : 'var(--text-secondary)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Palette style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                基本设置
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveDialogTab('schedule')}
+                style={{
+                  padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500,
+                  border: 'none', cursor: 'pointer',
+                  background: activeDialogTab === 'schedule' ? 'var(--primary)' : 'var(--bg-tertiary)',
+                  color: activeDialogTab === 'schedule' ? 'white' : 'var(--text-secondary)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Clock style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
+                定时调度
+                {formData.type === 'scheduled' && (
+                  <span style={{ marginLeft: 6, background: 'var(--success)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10 }}>已启用</span>
+                )}
+              </button>
             </div>
 
             {/* Tab Content */}
@@ -539,7 +726,233 @@ export function TasksPage() {
 
                   {formData.type === 'scheduled' && (
                     <>
-                      {/* Quick Presets */}
+                      {/* Lazy Configurator - 懒人配置器 */}
+                      <div style={{
+                        padding: 20,
+                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05))',
+                        borderRadius: 16,
+                        border: '1px solid rgba(99, 102, 241, 0.2)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                          <Zap style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+                          <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>懒人配置器</h4>
+                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>快速生成 Cron 表达式</span>
+                        </div>
+
+                        {/* Frequency Selector */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>执行频率</label>
+                            <select
+                              className="input"
+                              value={lazyConfig.frequency}
+                              onChange={e => {
+                                const freq = e.target.value as LazyConfig['frequency'];
+                                setLazyConfig({ ...lazyConfig, frequency: freq });
+                                setFormData({ ...formData, cronExpression: buildCronFromLazyConfig({ ...lazyConfig, frequency: freq }) });
+                              }}
+                              style={{ flex: 1, height: 36, fontSize: 13 }}
+                            >
+                              <option value="minutely">每分钟</option>
+                              <option value="hourly">每小时</option>
+                              <option value="daily">每天</option>
+                              <option value="weekly">每周</option>
+                              <option value="monthly">每月</option>
+                            </select>
+                          </div>
+
+                          {/* Minute Selector (for hourly+) */}
+                          {lazyConfig.frequency !== 'minutely' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>分钟</label>
+                              <select
+                                className="input"
+                                value={lazyConfig.minute}
+                                onChange={e => {
+                                  const newConfig = { ...lazyConfig, minute: e.target.value };
+                                  setLazyConfig(newConfig);
+                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
+                                }}
+                                style={{ flex: 1, height: 36, fontSize: 13 }}
+                              >
+                                {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
+                                  <option key={m} value={m.toString()}>{m.toString().padStart(2, '0')} 分</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Hour Selector (for daily+) */}
+                          {['daily', 'weekly', 'monthly'].includes(lazyConfig.frequency) && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>小时</label>
+                              <select
+                                className="input"
+                                value={lazyConfig.hour}
+                                onChange={e => {
+                                  const newConfig = { ...lazyConfig, hour: e.target.value };
+                                  setLazyConfig(newConfig);
+                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
+                                }}
+                                style={{ flex: 1, height: 36, fontSize: 13 }}
+                              >
+                                {Array.from({ length: 24 }, (_, i) => (
+                                  <option key={i} value={i.toString()}>{i.toString().padStart(2, '0')}:00</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Day of Week Selector (for weekly) */}
+                          {lazyConfig.frequency === 'weekly' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>星期</label>
+                              <select
+                                className="input"
+                                value={lazyConfig.dayOfWeek}
+                                onChange={e => {
+                                  const newConfig = { ...lazyConfig, dayOfWeek: e.target.value };
+                                  setLazyConfig(newConfig);
+                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
+                                }}
+                                style={{ flex: 1, height: 36, fontSize: 13 }}
+                              >
+                                <option value="0">周日</option>
+                                <option value="1">周一</option>
+                                <option value="2">周二</option>
+                                <option value="3">周三</option>
+                                <option value="4">周四</option>
+                                <option value="5">周五</option>
+                                <option value="6">周六</option>
+                              </select>
+                            </div>
+                          )}
+
+                          {/* Day of Month Selector (for monthly) */}
+                          {lazyConfig.frequency === 'monthly' && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>日期</label>
+                              <select
+                                className="input"
+                                value={lazyConfig.dayOfMonth}
+                                onChange={e => {
+                                  const newConfig = { ...lazyConfig, dayOfMonth: e.target.value };
+                                  setLazyConfig(newConfig);
+                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
+                                }}
+                                style={{ flex: 1, height: 36, fontSize: 13 }}
+                              >
+                                {Array.from({ length: 28 }, (_, i) => (
+                                  <option key={i + 1} value={(i + 1).toString()}>每月 {i + 1} 日</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Custom Cron Expression */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>自定义 Cron 表达式</label>
+                          <a href="https://crontab.guru/" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--primary)' }}>在线帮助 →</a>
+                        </div>
+                        <Input
+                          placeholder="分 时 日 月 周 (例: 0 4 * * *)"
+                          value={formData.cronExpression}
+                          onChange={e => setFormData({ ...formData, cronExpression: e.target.value })}
+                          className="input"
+                          style={{ fontFamily: 'monospace', fontSize: 14 }}
+                        />
+                      </div>
+
+                      {/* Cron Expression Result & Next Executions */}
+                      {formData.cronExpression && (
+                        <div style={{
+                          padding: 20,
+                          background: 'var(--bg-tertiary)',
+                          borderRadius: 16,
+                          border: '1px solid var(--border-color)'
+                        }}>
+                          {/* Expression Display */}
+                          <div style={{ marginBottom: 16 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Crontab 表达式</div>
+                            <code style={{
+                              fontSize: 18,
+                              fontWeight: 700,
+                              color: 'var(--primary)',
+                              fontFamily: 'Consolas, Monaco, monospace',
+                              letterSpacing: '0.05em'
+                            }}>
+                              {formData.cronExpression}
+                            </code>
+                            {(() => {
+                              const parsed = parseCronExpression(formData.cronExpression);
+                              return parsed.isValid ? (
+                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+                                  📅 {parsed.description}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 13, color: 'var(--error)', marginTop: 6 }}>
+                                  ⚠️ {parsed.description || '无效的表达式'}
+                                </div>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Next 10 Executions */}
+                          <div>
+                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>未来 10 次执行时间</div>
+                            <div style={{
+                              display: 'grid',
+                              gridTemplateColumns: 'repeat(2, 1fr)',
+                              gap: '6px 24px',
+                              fontFamily: 'Consolas, Monaco, monospace',
+                              fontSize: 13
+                            }}>
+                              {getNextExecutions(formData.cronExpression, 10).map((date, i) => (
+                                <div
+                                  key={i}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    padding: '4px 0',
+                                    color: 'var(--text-primary)'
+                                  }}
+                                >
+                                  <span style={{
+                                    width: 18,
+                                    height: 18,
+                                    borderRadius: 4,
+                                    background: 'var(--primary)',
+                                    color: 'white',
+                                    fontSize: 10,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontWeight: 600
+                                  }}>
+                                    {i + 1}
+                                  </span>
+                                  {date.getFullYear()}-
+                                  {(date.getMonth() + 1).toString().padStart(2, '0')}-
+                                  {date.getDate().toString().padStart(2, '0')} {' '}
+                                  {date.getHours().toString().padStart(2, '0')}:
+                                  {date.getMinutes().toString().padStart(2, '0')}:00
+                                </div>
+                              ))}
+                              {getNextExecutions(formData.cronExpression, 10).length === 0 && (
+                                <div style={{ gridColumn: '1 / -1', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
+                                  无法计算执行时间（请检查表达式）
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Quick Presets - Moved to bottom */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                         <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>快速选择</label>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
@@ -572,26 +985,6 @@ export function TasksPage() {
                             </button>
                           ))}
                         </div>
-                      </div>
-
-                      {/* Custom Cron Expression */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>自定义 Cron 表达式</label>
-                          <a href="https://crontab.guru/" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--primary)' }}>在线帮助 →</a>
-                        </div>
-                        <Input
-                          placeholder="分 时 日 月 周 (例: 0 4 * * *)"
-                          value={formData.cronExpression}
-                          onChange={e => setFormData({ ...formData, cronExpression: e.target.value })}
-                          className="input"
-                          style={{ fontFamily: 'monospace', fontSize: 14 }}
-                        />
-                        {formData.cronExpression && (
-                          <div style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: 8 }}>
-                            当前设置: <code style={{ color: 'var(--primary)', fontWeight: 600 }}>{formData.cronExpression}</code>
-                          </div>
-                        )}
                       </div>
                     </>
                   )}
@@ -675,9 +1068,13 @@ export function TasksPage() {
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <h3 style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 16 }}>{task.name}</h3>
-                      {task.isEnabled ? (
-                        <span className={`badge ${isJellyfin ? 'badge-primary' : 'badge-success'}`}>定时启用</span>
+                      <h3 style={{ fontWeight: 600, color: task.isEnabled ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 16 }}>{task.name}</h3>
+                      {task.type === 'scheduled' ? (
+                        task.isEnabled ? (
+                          <span className={`badge ${isJellyfin ? 'badge-primary' : 'badge-success'}`}>定时启用</span>
+                        ) : (
+                          <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}>已暂停</span>
+                        )
                       ) : (
                         <span className="badge">手动触发</span>
                       )}
@@ -700,38 +1097,110 @@ export function TasksPage() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ textAlign: 'right', marginRight: 8 }}>
-                      <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>最后执行</div>
-                      <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                        {task.lastRunAt ? new Date(task.lastRunAt).toLocaleString() : '从未执行'}
+                  {/* Actions Group */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    background: 'var(--bg-tertiary)',
+                    padding: '6px 8px',
+                    borderRadius: 14,
+                    border: '1px solid var(--border-color)',
+                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                  }}>
+                    {/* Last Run Info (Compact) */}
+                    <div style={{ padding: '0 12px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>最后执行</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {task.lastRunAt ? new Date(task.lastRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '从未'}
                       </div>
                     </div>
-                    <Button
-                      className="btn btn-primary"
-                      style={{ height: 38, padding: '0 16px' }}
-                      onClick={() => handleRun(task.id)}
-                      disabled={runMutation.isPending}
-                    >
-                      {runMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-                      立即执行
-                    </Button>
-                    <button
-                      className="btn-ghost"
-                      style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                      onClick={() => handleEdit(task)}
-                      title="编辑任务"
-                    >
-                      <Edit style={{ width: 18, height: 18 }} />
-                    </button>
-                    <button
-                      className="btn-ghost"
-                      style={{ width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--error)' }}
-                      onClick={() => handleDelete(task.id)}
-                      title="删除任务"
-                    >
-                      <Trash2 style={{ width: 18, height: 18 }} />
-                    </button>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {/* Toggle Button */}
+                      <button
+                        className={`btn-icon ${task.isEnabled ? 'text-amber-500' : 'text-emerald-500'}`}
+                        style={{
+                          width: 36, height: 36, borderRadius: 10,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          background: 'var(--bg-primary)',
+                          border: '1px solid var(--border-color)',
+                          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleToggle(task.id)}
+                        disabled={toggleMutation.isPending}
+                        title={task.isEnabled ? "暂停任务" : "启动任务"}
+                      >
+                        {toggleMutation.isPending ? (
+                          <Loader2 style={{ width: 16, height: 16, animation: 'spin 1.5s linear infinite' }} />
+                        ) : task.isEnabled ? (
+                          <Zap style={{ width: 16, height: 16, fill: 'currentColor' }} />
+                        ) : (
+                          <Play style={{ width: 16, height: 16, fill: 'currentColor' }} />
+                        )}
+                      </button>
+
+                      {/* Run Now Button - Enhanced with Gradient */}
+                      <button
+                        onClick={() => handleRun(task.id)}
+                        disabled={runMutation.isPending}
+                        style={{
+                          height: 36,
+                          padding: '0 16px',
+                          borderRadius: 10,
+                          border: 'none',
+                          color: 'white',
+                          background: 'var(--primary)',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(99, 102, 241, 0.2)',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {runMutation.isPending ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Play style={{ width: 16, height: 16 }} />}
+                        立即执行
+                      </button>
+
+                      <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 2px' }} />
+
+                      {/* Edit/Delete Group */}
+                      <button
+                        className="btn-icon"
+                        style={{
+                          width: 36, height: 36, borderRadius: 10,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--text-secondary)',
+                          background: 'transparent',
+                          transition: 'all 0.2s',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => handleEdit(task)}
+                        title="编辑配置"
+                      >
+                        <Edit style={{ width: 16, height: 16 }} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        style={{
+                          width: 36, height: 36, borderRadius: 10,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--error)',
+                          background: 'transparent',
+                          transition: 'all 0.2s',
+                          cursor: 'pointer',
+                          opacity: 0.7
+                        }}
+                        onClick={() => handleDelete(task.id)}
+                        title="删除任务"
+                      >
+                        <Trash2 style={{ width: 16, height: 16 }} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 

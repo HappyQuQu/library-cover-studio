@@ -11,6 +11,7 @@ export const DB_DIR = path.join(DATA_DIR, 'db');
 export const COVERS_DIR = path.join(DATA_DIR, 'covers');
 export const POSTERS_DIR = path.join(DATA_DIR, 'posters');
 export const THUMBNAILS_DIR = path.join(DATA_DIR, 'thumbnails');
+export const FONTS_DIR = path.join(UPLOADS_DIR, 'fonts');
 export const TEMP_DIR = path.join(DATA_DIR, 'temp');
 
 // Files
@@ -29,6 +30,7 @@ export function ensureDataDirs() {
         COVERS_DIR,
         POSTERS_DIR,
         THUMBNAILS_DIR,
+        FONTS_DIR,
         TEMP_DIR
     ];
 

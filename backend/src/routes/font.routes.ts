@@ -3,22 +3,19 @@ import { uploadFont, getFonts, deleteFont } from '../controllers/font.controller
 import { authenticate } from '../middleware/auth.js';
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 
-// Ensure fonts directory exists
-const fontsDir = 'uploads/fonts';
-if (!fs.existsSync(fontsDir)) {
-    fs.mkdirSync(fontsDir, { recursive: true });
-}
+import { FONTS_DIR } from '../config/paths.js';
 
 // Configure multer for font uploads
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-        cb(null, fontsDir);
+        cb(null, FONTS_DIR);
     },
     filename: (_req, file, cb) => {
+        // Fix encoding for CJK characters (multer default is latin1)
+        const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8');
         // Use timestamp + original name to avoid conflicts
-        const uniqueName = `${Date.now()}-${file.originalname}`;
+        const uniqueName = `${Date.now()}-${originalName}`;
         cb(null, uniqueName);
     }
 });
@@ -35,7 +32,7 @@ const upload = multer({
         }
     },
     limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB max
+        fileSize: 50 * 1024 * 1024 // 50MB max
     }
 });
 

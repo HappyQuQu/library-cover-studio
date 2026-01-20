@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom';
-import { 
-  Server, 
-  Palette, 
-  Clock, 
-  TrendingUp, 
+import {
+  Server,
+  Palette,
+  Clock,
+  TrendingUp,
   ArrowRight,
   Sparkles,
   Zap,
@@ -11,18 +11,19 @@ import {
   Play
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useServers, useTemplates, useTasks } from '@/api';
+import { useServers, useTemplates, useTasks, useStats } from '@/api';
 
 export function DashboardPage() {
   const { data: servers = [] } = useServers();
   const { data: templates = [] } = useTemplates();
   const { data: tasks = [] } = useTasks();
+  const { data: statsData } = useStats();
 
   const stats = [
     { title: '媒体源', value: servers.length, icon: Server, color: '#6366f1' },
     { title: '设计模板', value: templates.length, icon: Palette, color: '#ec4899' },
     { title: '自动化任务', value: tasks.length, icon: Clock, color: '#f59e0b' },
-    { title: '本月生成', value: '0', icon: TrendingUp, color: '#22c55e' },
+    { title: '本月生成', value: statsData?.monthlyGenerated ?? '0', icon: TrendingUp, color: '#22c55e' },
   ];
 
   const quickActions = [
@@ -73,7 +74,7 @@ export function DashboardPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         {stats.map((stat, i) => (
           <div key={i} className="stat-card group">
-            <div 
+            <div
               className="stat-icon"
               style={{ background: `${stat.color}15` }}
             >
@@ -94,15 +95,15 @@ export function DashboardPage() {
           {quickActions.map((action, i) => (
             <Link key={i} to={action.to}>
               <div className="action-card h-full group">
-                <div 
+                <div
                   className={`${action.gradient}`}
-                  style={{ 
-                    width: 56, 
-                    height: 56, 
-                    borderRadius: 16, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
                     marginBottom: 24,
                     boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
                     transition: 'transform 0.3s'
@@ -128,28 +129,28 @@ export function DashboardPage() {
 
       {/* Feature Banner */}
       <div className="glass-panel" style={{ padding: 32, position: 'relative', overflow: 'hidden' }}>
-        <div 
-          style={{ 
-            position: 'absolute', 
-            top: -80, 
-            right: -80, 
-            width: 240, 
-            height: 240, 
-            borderRadius: '50%', 
+        <div
+          style={{
+            position: 'absolute',
+            top: -80,
+            right: -80,
+            width: 240,
+            height: 240,
+            borderRadius: '50%',
             filter: 'blur(60px)',
             opacity: 0.5,
             background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.2))'
           }}
         />
         <div style={{ position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', gap: 32 }}>
-          <div 
+          <div
             className="gradient-pink"
-            style={{ 
-              width: 80, 
-              height: 80, 
-              borderRadius: 24, 
-              display: 'flex', 
-              alignItems: 'center', 
+            style={{
+              width: 80,
+              height: 80,
+              borderRadius: 24,
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 12px 32px rgba(236, 72, 153, 0.3)',
               flexShrink: 0
@@ -191,10 +192,10 @@ export function DashboardPage() {
                       const isJellyfin = server?.type === 'jellyfin';
                       const brandColor = isJellyfin ? 'var(--jellyfin)' : 'var(--emby)';
                       return (
-                        <div style={{ 
-                          width: 36, height: 36, borderRadius: 10, 
-                          background: task.isEnabled ? (isJellyfin ? 'rgba(170, 92, 195, 0.1)' : 'rgba(82, 181, 75, 0.1)') : 'var(--bg-tertiary)', 
-                          display: 'flex', alignItems: 'center', justifyContent: 'center' 
+                        <div style={{
+                          width: 36, height: 36, borderRadius: 10,
+                          background: task.isEnabled ? (isJellyfin ? 'rgba(170, 92, 195, 0.1)' : 'rgba(82, 181, 75, 0.1)') : 'var(--bg-tertiary)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center'
                         }}>
                           <Clock style={{ width: 18, height: 18, color: task.isEnabled ? brandColor : 'var(--text-tertiary)' }} />
                         </div>

@@ -3,10 +3,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
 import { tasks, taskLogs } from '../config/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import { scheduleTask, removeScheduledTask } from '../services/scheduler.service.js';
 import { runTask } from '../services/taskRunner.service.js';
+import { getLocalISOString } from '../utils/time.js';
 
 // 验证 Schema
 export const createTaskSchema = z.object({
@@ -27,9 +28,14 @@ export const createTaskSchema = z.object({
 export const updateTaskSchema = createTaskSchema.partial();
 
 // 获取任务列表
-export async function list(_req: Request, res: Response, next: NextFunction) {
+export async function list(req: Request, res: Response, next: NextFunction) {
   try {
-    const taskList = db.select({
+    const userId = req.user?.userId;
+    const role = req.user?.role;
+
+    console.log(`[Task] Listing tasks for user: ${userId} (Role: ${role})`);
+
+    let query = db.select({
       id: tasks.id,
       name: tasks.name,
       type: tasks.type,
@@ -42,8 +48,11 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
       nextRunAt: tasks.nextRunAt,
       createdAt: tasks.createdAt
     })
-      .from(tasks)
-      .all();
+      .from(tasks);
+
+    const taskList = role === 'admin'
+      ? query.all()
+      : query.where(sql`${tasks.userId} = ${userId} OR ${tasks.userId} IS NULL`).all();
 
     res.json(taskList);
   } catch (error) {
@@ -74,11 +83,10 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
 // 创建任务
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
-    console.log('📝 Creating task with body:', JSON.stringify(req.body, null, 2));
     const { name, type, cronExpression, templateId, serverId, libraryIds, libraryConfigs, options } = req.body;
-
-    const now = new Date().toISOString();
+    const now = getLocalISOString();
     const id = uuidv4();
+    const userId = req.user?.userId;
 
     db.insert(tasks).values({
       id,
@@ -87,6 +95,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       cronExpression,
       templateId,
       serverId,
+      userId,
       libraryIds: libraryIds ? JSON.stringify(libraryIds) : (libraryConfigs ? '[]' : null),
       libraryConfigs: libraryConfigs || null,
       options: options ? JSON.stringify(options) : null,
@@ -119,7 +128,7 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     const { id } = req.params;
     const updates = req.body;
     console.log(`📝 Updating task ${id} with body:`, JSON.stringify(updates, null, 2));
-    const now = new Date().toISOString();
+    const now = getLocalISOString();
 
     const idStr = id as string;
     const existing = db.select().from(tasks).where(eq(tasks.id, idStr)).get();
@@ -127,7 +136,21 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
     }
 
-    const updateData: Record<string, unknown> = { updatedAt: now };
+    console.log(`[Permission Check] Task Owner: ${existing.userId}, Request User: ${req.user?.userId}, Request Role: ${req.user?.role}`);
+
+    // Permission check: Admin or Owner
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      console.warn(`[Permission Denied] User ${req.user?.userId} (${req.user?.role}) tried to update task ${id} owned by ${existing.userId}`);
+      return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
+    }
+
+    const updateData: Record<string, any> = { updatedAt: now };
+
+    // 如果任务之前没有归属 (旧数据)，在更新时关联到当前用户
+    if (!existing.userId) {
+      updateData.userId = req.user?.userId;
+      console.log(`🔗 Associating legacy task ${id} with user ${req.user?.userId}`);
+    }
 
     if (updates.name !== undefined) updateData.name = updates.name;
     if (updates.type !== undefined) updateData.type = updates.type;
@@ -161,13 +184,20 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
     const idStr = id as string;
-    removeScheduledTask(idStr);
-
-    const result = db.delete(tasks).where(eq(tasks.id, idStr)).run();
-
-    if (result.changes === 0) {
+    const existing = db.select().from(tasks).where(eq(tasks.id, idStr)).get();
+    if (!existing) {
       return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
     }
+
+    // Permission check: Admin or Owner
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      console.warn(`[Permission Denied] User ${req.user?.userId} (${req.user?.role}) tried to delete task ${id} owned by ${existing.userId}`);
+      return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
+    }
+
+    removeScheduledTask(idStr);
+
+    db.delete(tasks).where(eq(tasks.id, idStr)).run();
 
     res.json({ message: 'Task deleted successfully' });
   } catch (error) {
@@ -185,9 +215,15 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
       return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
     }
 
+    // Permission check: Admin or Owner
+    if (req.user?.role !== 'admin' && task.userId !== req.user?.userId) {
+      console.warn(`[Permission Denied] User ${req.user?.userId} (${req.user?.role}) tried to run task ${id} owned by ${task.userId}`);
+      return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
+    }
+
     // 创建任务日志
     const logId = uuidv4();
-    const now = new Date().toISOString();
+    const now = getLocalISOString();
 
     db.insert(taskLogs).values({
       id: logId,
@@ -204,7 +240,7 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
         db.update(taskLogs).set({
           status: 'failed',
           errorMessage: (err as any).message || String(err),
-          completedAt: new Date().toISOString()
+          completedAt: getLocalISOString()
         }).where(eq(taskLogs.id, logId)).run();
       } catch (e) {
         console.error('Failed to update log status on catastrophic failure', e);
@@ -224,13 +260,64 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
 export async function getLogs(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
+    const idStr = id as string;
+
+    const task = db.select().from(tasks).where(eq(tasks.id, idStr)).get();
+    if (!task) {
+      return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
+
+    // Permission check
+    if (req.user?.role !== 'admin' && task.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
+    }
 
     const logs = db.select()
       .from(taskLogs)
-      .where(eq(taskLogs.taskId, id as string))
+      .where(eq(taskLogs.taskId, idStr))
       .all();
 
     res.json(logs);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 切换任务状态 (启用/禁用)
+export async function toggleStatus(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const idStr = id as string;
+
+    const existing = db.select().from(tasks).where(eq(tasks.id, idStr)).get();
+    if (!existing) {
+      return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
+    }
+
+    // Permission check
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
+    }
+
+    const newStatus = existing.isEnabled ? 0 : 1;
+    const now = getLocalISOString();
+
+    db.update(tasks)
+      .set({ isEnabled: newStatus, updatedAt: now })
+      .where(eq(tasks.id, idStr))
+      .run();
+
+    // 更新调度器
+    if (newStatus === 1 && existing.type === 'scheduled' && existing.cronExpression) {
+      scheduleTask(idStr, existing.cronExpression);
+    } else {
+      removeScheduledTask(idStr);
+    }
+
+    res.json({
+      message: `Task ${newStatus ? 'enabled' : 'disabled'} successfully`,
+      isEnabled: !!newStatus
+    });
   } catch (error) {
     next(error);
   }

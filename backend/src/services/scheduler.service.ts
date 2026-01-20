@@ -1,8 +1,10 @@
 import cron from 'node-cron';
+import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/database.js';
-import { tasks } from '../config/schema.js';
+import { tasks, taskLogs } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
 import { runTask } from './taskRunner.service.js';
+import { getLocalISOString } from '../utils/time.js';
 
 // 存储活跃的 cron 任务
 const scheduledJobs = new Map<string, cron.ScheduledTask>();
@@ -48,7 +50,7 @@ export function scheduleTask(taskId: string, cronExpression: string): boolean {
 
   scheduledJobs.set(taskId, job);
   console.log(`✅ Scheduled task ${taskId} with cron: ${cronExpression}`);
-  
+
   return true;
 }
 
@@ -68,7 +70,7 @@ export function removeScheduledTask(taskId: string): boolean {
 async function executeScheduledTask(taskId: string) {
   try {
     const task = db.select().from(tasks).where(eq(tasks.id, taskId)).get();
-    
+
     if (!task) {
       console.error(`Task not found: ${taskId}`);
       removeScheduledTask(taskId);
@@ -81,14 +83,23 @@ async function executeScheduledTask(taskId: string) {
     }
 
     // 更新最后运行时间
-    const now = new Date().toISOString();
+    const now = getLocalISOString();
     db.update(tasks)
       .set({ lastRunAt: now, updatedAt: now })
       .where(eq(tasks.id, taskId))
       .run();
 
-    // 执行任务逻辑
-    await runTask(taskId);
+    // 创建任务日志（与手动执行保持一致）
+    const logId = uuidv4();
+    db.insert(taskLogs).values({
+      id: logId,
+      taskId: taskId,
+      status: 'running',
+      startedAt: now
+    }).run();
+
+    // 执行任务逻辑，传入 logId 以便记录结果
+    await runTask(taskId, logId);
     console.log(`Task ${taskId} executed successfully`);
 
   } catch (error) {

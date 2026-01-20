@@ -7,6 +7,7 @@ import { settingsRouter } from './settings.routes.js';
 import { fontRouter } from './font.routes.js';
 import { logRouter } from './log.routes.js';
 import { userRouter } from './user.routes.js';
+import { statsRouter } from './stats.routes.js';
 
 const router = Router();
 
@@ -19,5 +20,6 @@ router.use('/settings', settingsRouter);
 router.use('/fonts', fontRouter);
 router.use('/logs', logRouter);
 router.use('/users', userRouter);
+router.use('/stats', statsRouter);
 
 export { router };

@@ -4,11 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
 import { templates } from '../config/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import fs from 'fs';
 import path from 'path';
 import { THUMBNAILS_DIR } from '../config/paths.js';
+import AdmZip from 'adm-zip';
 
 const d: any = db;
 
@@ -26,9 +27,12 @@ export const createTemplateSchema = z.object({
 export const updateTemplateSchema = createTemplateSchema.partial();
 
 // 获取模板列表
-export async function list(_req: Request, res: Response, next: NextFunction) {
+export async function list(req: Request, res: Response, next: NextFunction) {
   try {
-    const templateList = d.select({
+    const userId = req.user?.userId;
+    const role = req.user?.role;
+
+    let query = d.select({
       id: templates.id,
       name: templates.name,
       description: templates.description,
@@ -39,8 +43,11 @@ export async function list(_req: Request, res: Response, next: NextFunction) {
       createdAt: templates.createdAt,
       updatedAt: templates.updatedAt
     })
-      .from(templates)
-      .all();
+      .from(templates);
+
+    const templateList = role === 'admin'
+      ? query.all()
+      : query.where(sql`${templates.userId} = ${userId} OR ${templates.isPublic} = 1`).all();
 
     res.json(templateList);
   } catch (error) {
@@ -61,6 +68,113 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
     }
 
     res.json(template);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 导出模板 (ZIP)
+export async function exportTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { id } = req.params;
+    const template = (d.select().from(templates).all() as any[]).find(t => t.id === id);
+
+    if (!template) {
+      return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
+    }
+
+    const zip = new AdmZip();
+
+    // Add template JSON
+    const templateData = {
+      name: template.name,
+      description: template.description,
+      width: template.width,
+      height: template.height,
+      canvasJson: template.canvasJson,
+      isPublic: template.isPublic === 1
+    };
+    zip.addFile('template.json', Buffer.from(JSON.stringify(templateData, null, 2), 'utf8'));
+
+    // Add thumbnail if exists
+    if (template.thumbnailPath) {
+      const fileName = path.basename(template.thumbnailPath);
+      const fullPath = path.join(THUMBNAILS_DIR, fileName);
+      if (fs.existsSync(fullPath)) {
+        // Use a standardized name inside the zip
+        zip.addLocalFile(fullPath, '', 'preview.jpg');
+      }
+    }
+
+    const zipBuffer = zip.toBuffer();
+    // Prettier ZIP name: Only strip characters that are forbidden in filenames
+    const safeName = template.name.replace(/[\\/:*?"<>|]/g, '_').trim();
+    const zipFileName = `${safeName}_${template.width}x${template.height}.zip`;
+
+    res.set('Content-Type', 'application/zip');
+    res.set('Content-Disposition', `attachment; filename="${encodeURIComponent(zipFileName)}"`);
+    res.send(zipBuffer);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 导入模板 (ZIP)
+export async function importTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.file) {
+      return next(createError('No file uploaded', 400, 'NO_FILE'));
+    }
+
+    const zip = new AdmZip(req.file.path);
+    const jsonEntry = zip.getEntry('template.json');
+    if (!jsonEntry) {
+      return next(createError('Invalid template: missing template.json', 400, 'INVALID_TEMPLATE'));
+    }
+
+    const templateData = JSON.parse(jsonEntry.getData().toString('utf8'));
+    const { name, description, width, height, canvasJson, isPublic } = templateData;
+    const userId = req.user?.userId;
+    const id = uuidv4();
+    const now = new Date().toISOString();
+
+    // Look for preview.jpg or other images
+    let thumbnailPath = null;
+    const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png)$/i));
+
+    if (previewEntry) {
+      const buffer = previewEntry.getData();
+      const filename = `${id}.jpg`;
+      fs.writeFileSync(path.join(THUMBNAILS_DIR, filename), buffer);
+      thumbnailPath = `/thumbnails/${filename}`;
+    }
+
+    d.insert(templates).values({
+      id,
+      name: `${name} (Imported)`,
+      description,
+      canvasJson,
+      thumbnailPath,
+      width,
+      height,
+      userId,
+      isPublic: isPublic ? 1 : 0,
+      createdAt: now,
+      updatedAt: now
+    }).run();
+
+    // Clean up uploaded file
+    try {
+      fs.unlinkSync(req.file.path);
+    } catch (e) {
+      console.error('Failed to cleanup imported zip:', e);
+    }
+
+    res.status(201).json({
+      id,
+      name: `${name} (Imported)`,
+      thumbnailPath
+    });
   } catch (error) {
     next(error);
   }
@@ -130,6 +244,11 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }
 
+    // Permission check
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this template', 403, 'FORBIDDEN'));
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: now };
 
     // Handle thumbnail update
@@ -167,12 +286,17 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
-
-    const result = (d.delete(templates).where(eq(templates.id, id)) as any).run();
-
-    if (!result || result.changes === 0) {
+    const existing = (d.select().from(templates).all() as any[]).find(t => t.id === id);
+    if (!existing) {
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }
+
+    // Permission check
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this template', 403, 'FORBIDDEN'));
+    }
+
+    d.delete(templates).where(eq(templates.id, id)).run();
 
     res.json({ message: 'Template deleted successfully' });
   } catch (error) {

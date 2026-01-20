@@ -10,9 +10,10 @@ interface PropertyPanelProps {
   onPropertyChange: (prop: string, value: any) => void;
   onDelete: () => void;
   onClone: () => void;
+  customFonts?: any[];
 }
 
-export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onClone }: PropertyPanelProps) {
+export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onClone, customFonts = [] }: PropertyPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<'style' | 'shadow'>('style');
 
@@ -231,6 +232,13 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                     <option value="Impact">Impact</option>
                     <option value="Comic Sans MS">Comic Sans MS</option>
                   </optgroup>
+                  {customFonts.length > 0 && (
+                    <optgroup label="上传字体">
+                      {customFonts.map(font => (
+                        <option key={font.filename} value={font.name}>{font.name}</option>
+                      ))}
+                    </optgroup>
+                  )}
                 </select>
               </div>
 

@@ -1,11 +1,81 @@
 import { Link } from 'react-router-dom';
-import { Plus, Palette, Loader2 } from 'lucide-react';
+import { Plus, Palette, Loader2, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTemplates } from '@/api';
+import { useTemplates, apiClient } from '@/api';
+import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 export function TemplatesPage() {
   const { data: templates = [], isLoading } = useTemplates();
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const queryClient = useQueryClient();
+
+  const handleExport = async (e: React.MouseEvent, id: string, name: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const response = await apiClient.get(`/templates/${id}/export`, {
+        responseType: 'blob'
+      });
+
+      // Get filename from header if possible
+      const disposition = response.headers['content-disposition'];
+      let filename = `${name.replace(/[\\/:*?"<>|]/g, '_').trim()}.zip`;
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const matches = /filename="([^"]+)"/.exec(disposition);
+        if (matches && matches[1]) {
+          filename = decodeURIComponent(matches[1]);
+        }
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('导出失败');
+    }
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.zip')) {
+      alert('请上传 ZIP 格式的模板包');
+      return;
+    }
+
+    setIsImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      await apiClient.post('/templates/import', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      alert('导入成功');
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+    } catch (error) {
+      console.error('Import failed:', error);
+      alert('导入失败，请检查文件格式');
+    } finally {
+      setIsImporting(false);
+      if (e.target) e.target.value = '';
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -17,12 +87,33 @@ export function TemplatesPage() {
             管理您的海报设计模板
           </p>
         </div>
-        <Link to="/editor">
-          <Button className="btn btn-primary">
-            <Plus style={{ width: 16, height: 16 }} />
-            新建模板
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".zip"
+            onChange={handleFileChange}
+          />
+          <Button
+            className="btn btn-secondary"
+            onClick={handleImportClick}
+            disabled={isImporting}
+          >
+            {isImporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            导入模板
           </Button>
-        </Link>
+          <Link to="/editor">
+            <Button className="btn btn-primary">
+              <Plus style={{ width: 16, height: 16 }} />
+              新建模板
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Template Grid */}
@@ -49,7 +140,7 @@ export function TemplatesPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
           {templates.map((template) => {
             // Use backend URL for thumbnail
             const thumbnailUrl = template.thumbnailPath
@@ -61,43 +152,45 @@ export function TemplatesPage() {
               : '16/9';
 
             return (
-              <Link key={template.id} to={`/editor/${template.id}`}>
-                <div className="card" style={{ overflow: 'hidden' }}>
-                  <div style={{ aspectRatio, background: 'var(--bg-tertiary)', position: 'relative' }}>
-                    {thumbnailUrl ? (
-                      <img
-                        src={thumbnailUrl}
-                        alt={template.name}
-                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Palette style={{ width: 32, height: 32, color: 'var(--text-tertiary)' }} />
+              <div key={template.id} className="group relative">
+                <Link to={`/editor/${template.id}`}>
+                  <div className="card h-full overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
+                    <div style={{ aspectRatio, background: 'var(--bg-tertiary)', position: 'relative' }}>
+                      {thumbnailUrl ? (
+                        <img
+                          src={thumbnailUrl}
+                          alt={template.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Palette style={{ width: 32, height: 32, color: 'var(--text-tertiary)' }} />
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2 px-2 py-1 rounded bg-black/60 text-white text-[10px] backdrop-blur-sm">
+                        {template.width}×{template.height}
                       </div>
-                    )}
-                    <div style={{
-                      position: 'absolute',
-                      top: 8,
-                      right: 8,
-                      padding: '4px 8px',
-                      borderRadius: 6,
-                      background: 'rgba(0,0,0,0.6)',
-                      color: 'white',
-                      fontSize: 11
-                    }}>
-                      {template.width}×{template.height}
+
+                      {/* Export Button Overlay */}
+                      <button
+                        onClick={(e) => handleExport(e, template.id, template.name)}
+                        className="absolute bottom-2 right-2 p-2 rounded-lg bg-white/90 text-gray-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-white hover:text-primary shadow-md"
+                        title="导出 ZIP"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="p-3">
+                      <h3 className="font-medium text-sm text-(--text-primary) truncate">
+                        {template.name}
+                      </h3>
+                      <p className="text-[10px] text-(--text-tertiary) mt-1">
+                        {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
+                      </p>
                     </div>
                   </div>
-                  <div style={{ padding: '12px' }}>
-                    <h3 style={{ fontWeight: 500, fontSize: 14, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {template.name}
-                    </h3>
-                    <p style={{ fontSize: 12, color: 'var(--text-tertiary)', marginTop: 4 }}>
-                      {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
-                    </p>
-                  </div>
-                </div>
-              </Link>
+                </Link>
+              </div>
             );
           })}
         </div>

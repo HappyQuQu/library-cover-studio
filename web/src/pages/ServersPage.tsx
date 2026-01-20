@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { 
-  Plus, 
-  Server, 
-  Trash2, 
-  RefreshCw, 
-  CheckCircle2, 
-  XCircle, 
+import {
+  Plus,
+  Server,
+  Trash2,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
   Loader2,
   ExternalLink,
   ChevronDown,
@@ -26,6 +26,7 @@ import {
   DialogTrigger
 } from '@/components/ui/dialog';
 import { useServers, useCreateServer, useDeleteServer, useServerLibraries, MediaServer } from '@/api';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '@/components/ui/use-toast';
 
 // 获取媒体库类型图标
@@ -43,6 +44,8 @@ function getLibraryIcon(type: string) {
 // 服务器卡片组件
 function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: string) => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const queryClient = useQueryClient();
   const { data: libraries = [], isLoading: loadingLibraries } = useServerLibraries(
     isExpanded ? server.id : ''
   );
@@ -53,13 +56,13 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
       <div style={{ padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div 
+            <div
               className={server.type === 'jellyfin' ? 'gradient-jellyfin' : 'gradient-emby'}
-              style={{ 
-                width: 52, height: 52, borderRadius: 14, 
+              style={{
+                width: 52, height: 52, borderRadius: 14,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: server.type === 'jellyfin' 
-                  ? '0 8px 24px rgba(170, 92, 195, 0.25)' 
+                boxShadow: server.type === 'jellyfin'
+                  ? '0 8px 24px rgba(170, 92, 195, 0.25)'
                   : '0 8px 24px rgba(82, 181, 75, 0.25)'
               }}
             >
@@ -125,18 +128,20 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
 
       {/* Libraries */}
       {isExpanded && (
-        <div style={{ 
-          background: 'var(--bg-tertiary)', 
+        <div style={{
+          background: 'var(--bg-tertiary)',
           borderTop: '1px solid var(--border-color)',
           padding: '16px 20px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>检测到的媒体库</span>
-            <button 
-              className="btn-ghost" 
+            <button
+              className="btn-ghost"
               style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4 }}
               onClick={() => {
-                // React Query will automatically refetch when invalidating
+                queryClient.invalidateQueries({ queryKey: ['servers', server.id, 'libraries'] });
+                setRefreshKey(prev => prev + 1);
+                toast({ title: '刷新成功', description: '媒体库列表已更新' });
               }}
             >
               <RefreshCw style={{ width: 12, height: 12 }} />
@@ -159,86 +164,86 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
               {libraries.map((lib) => {
                 const Icon = getLibraryIcon(lib.type);
                 return (
-                    <div 
-                      key={lib.id}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 12,
-                        padding: '12px',
-                        background: 'var(--bg-secondary)',
-                        borderRadius: 16,
-                        border: '1px solid var(--border-color)',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        cursor: 'pointer',
-                        position: 'relative'
-                      }}
-                      className="group/lib hover:border-(--primary)/50 hover:translate-y-[-4px]"
-                    >
-                      <div style={{
-                        width: '100%',
-                        aspectRatio: '16 / 9',
-                        borderRadius: 12,
-                        background: 'var(--bg-tertiary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        overflow: 'hidden',
-                        border: '1px solid var(--border-color)',
-                        flexShrink: 0,
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-                        position: 'relative'
-                      }}>
-                        {lib.imageUrl ? (
-                          <img 
-                            src={lib.imageUrl} 
-                            alt={lib.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }}
-                            className="group-hover/lib:scale-110"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.style.display = 'none';
-                            }}
-                          />
-                        ) : (
-                          <Icon style={{ width: 56, height: 56, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)', opacity: 0.8 }} />
-                        )}
-                        {/* Fallback pattern / Icon background */}
-                        <div style={{ position: 'absolute', zIndex: -1, opacity: 0.1 }}>
-                           <Icon style={{ width: 80, height: 80, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)' }} />
-                        </div>
-                      </div>
-                      
-                      <div style={{ padding: '0 4px 4px 4px' }}>
-                        <div style={{ 
-                          fontSize: 14, 
-                          fontWeight: 600, 
-                          color: 'var(--text-primary)', 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis', 
-                          whiteSpace: 'nowrap',
-                        }}>
-                          {lib.name}
-                        </div>
-                        <div style={{ 
-                          fontSize: 12, 
-                          color: 'var(--text-tertiary)', 
-                          marginTop: 4,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 6
-                        }}>
-                          <span style={{ 
-                            width: 6, 
-                            height: 6, 
-                            borderRadius: '50%', 
-                            background: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)',
-                            opacity: 0.8
-                          }} />
-                          {lib.itemCount !== undefined ? `${lib.itemCount} 项` : lib.type}
-                        </div>
+                  <div
+                    key={lib.id}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12,
+                      padding: '12px',
+                      background: 'var(--bg-secondary)',
+                      borderRadius: 16,
+                      border: '1px solid var(--border-color)',
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      cursor: 'pointer',
+                      position: 'relative'
+                    }}
+                    className="group/lib hover:border-(--primary)/50 hover:translate-y-[-4px]"
+                  >
+                    <div style={{
+                      width: '100%',
+                      aspectRatio: '16 / 9',
+                      borderRadius: 12,
+                      background: 'var(--bg-tertiary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      overflow: 'hidden',
+                      border: '1px solid var(--border-color)',
+                      flexShrink: 0,
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      position: 'relative'
+                    }}>
+                      {lib.imageUrl ? (
+                        <img
+                          src={`${lib.imageUrl}${lib.imageUrl.includes('?') ? '&' : '?'}_t=${refreshKey}`}
+                          alt={lib.name}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }}
+                          className="group-hover/lib:scale-110"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                          }}
+                        />
+                      ) : (
+                        <Icon style={{ width: 56, height: 56, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)', opacity: 0.8 }} />
+                      )}
+                      {/* Fallback pattern / Icon background */}
+                      <div style={{ position: 'absolute', zIndex: -1, opacity: 0.1 }}>
+                        <Icon style={{ width: 80, height: 80, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)' }} />
                       </div>
                     </div>
+
+                    <div style={{ padding: '0 4px 4px 4px' }}>
+                      <div style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {lib.name}
+                      </div>
+                      <div style={{
+                        fontSize: 12,
+                        color: 'var(--text-tertiary)',
+                        marginTop: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}>
+                        <span style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          background: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)',
+                          opacity: 0.8
+                        }} />
+                        {lib.itemCount !== undefined ? `${lib.itemCount} 项` : lib.type}
+                      </div>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -308,14 +313,14 @@ export function ServersPage() {
           <DialogContent>
             {/* Header with Icon */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
-              <div 
+              <div
                 className="gradient-purple-blue"
-                style={{ 
-                  width: 48, 
-                  height: 48, 
-                  borderRadius: 14, 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: 14,
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   boxShadow: '0 8px 24px rgba(99, 102, 241, 0.25)'
                 }}
@@ -331,7 +336,7 @@ export function ServersPage() {
                 </p>
               </div>
             </div>
-            
+
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>服务器名称</label>
@@ -343,7 +348,7 @@ export function ServersPage() {
                   className="input"
                 />
               </div>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>服务器类型</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -356,11 +361,11 @@ export function ServersPage() {
                         padding: '14px',
                         borderRadius: '12px',
                         border: `1px solid ${formData.type === type ? (type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)') : 'var(--border-color)'}`,
-                        background: formData.type === type 
-                          ? (type === 'jellyfin' ? 'rgba(170, 92, 195, 0.1)' : 'rgba(82, 181, 75, 0.1)') 
+                        background: formData.type === type
+                          ? (type === 'jellyfin' ? 'rgba(170, 92, 195, 0.1)' : 'rgba(82, 181, 75, 0.1)')
                           : 'var(--bg-primary)',
-                        color: formData.type === type 
-                          ? (type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)') 
+                        color: formData.type === type
+                          ? (type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)')
                           : 'var(--text-secondary)',
                         fontSize: '14px',
                         fontWeight: 600,

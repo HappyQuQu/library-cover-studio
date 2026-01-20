@@ -44,12 +44,16 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
     // 验证用户是否在数据库中存在 (防止数据库重置后 Token 依然有效但关联失败)
-    const user = db.select().from(users).where(eq(users.id, decoded.userId)).get();
+    const user = db.select().from(users).where(eq(users.id, decoded.userId)).get() as any;
     if (!user) {
       return next(createError('User not found or database reset', 401, 'USER_NOT_FOUND'));
     }
 
-    req.user = decoded;
+    // 确保从数据库获取最新的角色，防止 Token 中的角色过期
+    req.user = {
+      ...decoded,
+      role: user.role
+    };
     next();
   } catch (error) {
     if (error instanceof jwt.TokenExpiredError) {

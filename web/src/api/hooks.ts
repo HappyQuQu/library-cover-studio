@@ -68,7 +68,9 @@ export function useServerLibraries(id: string): UseQueryResult<MediaLibrary[], E
     queryKey: ['servers', id, 'libraries'],
     queryFn: () =>
       apiClient.get<MediaLibrary[]>(`/servers/${id}/libraries`).then((r) => r.data),
-    enabled: !!id
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always'
   });
 }
 
@@ -198,6 +200,17 @@ export function useRunTask(): UseMutationResult<any, Error, string> {
   });
 }
 
+export function useToggleTask(): UseMutationResult<any, Error, string> {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiClient.post(`/tasks/${id}/toggle`).then((r) => r.data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    }
+  });
+}
+
 export function useUpdateTask(): UseMutationResult<any, Error, Partial<Task> & { id: string }> {
   const queryClient = useQueryClient();
   return useMutation({
@@ -234,7 +247,9 @@ export function useTaskLogs(taskId: string): UseQueryResult<TaskLog[], Error> {
   return useQuery({
     queryKey: ['tasks', taskId, 'logs'],
     queryFn: () => apiClient.get<TaskLog[]>(`/tasks/${taskId}/logs`).then((r) => r.data),
-    enabled: !!taskId
+    enabled: !!taskId,
+    refetchOnMount: 'always',
+    staleTime: 0
   });
 }
 
@@ -321,3 +336,17 @@ export function useDeleteUser(): UseMutationResult<any, Error, string> {
     }
   });
 }
+
+// ==================== Stats ====================
+
+export interface DashboardStats {
+  monthlyGenerated: number;
+}
+
+export function useStats(): UseQueryResult<DashboardStats, Error> {
+  return useQuery({
+    queryKey: ['stats'],
+    queryFn: () => apiClient.get<DashboardStats>('/stats').then((r) => r.data)
+  });
+}
+

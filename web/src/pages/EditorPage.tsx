@@ -13,6 +13,13 @@ import * as fabric from 'fabric';
 import { PropertyPanel } from '@/components/editor/PropertyPanel';
 import { LayerPanel } from '@/components/editor/LayerPanel';
 import { ToolboxPanel } from '@/components/editor/ToolboxPanel';
+import { apiClient } from '@/api/client';
+
+interface Font {
+  filename: string;
+  name: string;
+  url: string;
+}
 
 export function EditorPage() {
   const { id } = useParams();
@@ -31,6 +38,7 @@ export function EditorPage() {
   const [canvasReady, setCanvasReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [customFonts, setCustomFonts] = useState<Font[]>([]);
 
   const [randomOnGeneration, setRandomOnGeneration] = useState(false);
 
@@ -38,6 +46,52 @@ export function EditorPage() {
     canvas, setCanvas, selectedObject, setSelectedObject,
     zoom, setZoom, undo, redo, saveToHistory
   } = useCanvasStore();
+
+  // Fetch and inject custom fonts
+  useEffect(() => {
+    const loadFonts = async () => {
+      try {
+        const res = await apiClient.get('/fonts');
+        const fonts: Font[] = res.data.fonts || [];
+        setCustomFonts(fonts);
+
+        // Inject @font-face rules
+        const styleId = 'custom-fonts-style';
+        let styleEl = document.getElementById(styleId) as HTMLStyleElement;
+        if (!styleEl) {
+          styleEl = document.createElement('style');
+          styleEl.id = styleId;
+          document.head.appendChild(styleEl);
+        }
+
+        const baseUrl = import.meta.env.VITE_API_URL || '';
+        const fontRules = fonts.map(font => {
+          const fontUrl = font.url.startsWith('http') ? font.url : `${baseUrl}${font.url}`;
+          return `
+            @font-face {
+              font-family: "${font.name}";
+              src: url("${fontUrl}");
+              font-display: swap;
+            }
+          `;
+        }).join('\n');
+
+        styleEl.textContent = fontRules;
+
+        // Wait for fonts to load
+        if (fonts.length > 0) {
+          // @ts-ignore
+          document.fonts.ready.then(() => {
+            if (canvas) canvas.renderAll();
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load custom fonts:', err);
+      }
+    };
+
+    loadFonts();
+  }, [canvas]);
 
   // Initialize Zoom to fit
   useEffect(() => {
@@ -857,9 +911,10 @@ export function EditorPage() {
           </button>
         </div>
         <div className="flex-1 overflow-auto p-1">
-          {activePanel === 'properties' ? (
+          {activePanel === 'properties' && (
             <PropertyPanel
               selectedObject={selectedObject}
+              customFonts={customFonts}
               onPropertyChange={(prop, val) => {
                 if (!selectedObject || !canvas) return;
 
@@ -879,16 +934,18 @@ export function EditorPage() {
                 }
 
                 canvas.renderAll();
-                // Don't spread Fabric objects as they lose their prototype methods
                 // Just pass the object as is; the state update below will trigger re-render
                 setSelectedObject(selectedObject);
                 setLayers([...layers]); // This triggers a re-render and syncs layer state
+                saveToHistory();
               }}
               onDelete={() => {
                 if (!selectedObject || !canvas) return;
                 canvas.remove(selectedObject);
                 canvas.discardActiveObject();
                 canvas.renderAll();
+                setSelectedObject(null);
+                saveToHistory();
               }}
               onClone={async () => {
                 if (!selectedObject || !canvas) return;
@@ -898,9 +955,11 @@ export function EditorPage() {
                 canvas.add(cloned);
                 canvas.setActiveObject(cloned);
                 canvas.renderAll();
+                saveToHistory();
               }}
             />
-          ) : (
+          )}
+          {activePanel === 'layers' && (
             <LayerPanel
               layers={layers}
               selectedId={selectedObject?.id ?? null}
@@ -945,9 +1004,9 @@ export function EditorPage() {
 
       {/* Preview Modal */}
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="relative max-w-[90vw] max-h-[90vh] bg-(--bg-primary) rounded-2xl shadow-2xl overflow-hidden border border-(--border-color)">
-            <div className="flex items-center justify-between p-4 border-b border-(--border-color)">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
+          <div className="relative w-full max-w-4xl max-h-full bg-(--bg-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-(--border-color)">
+            <div className="flex items-center justify-between p-4 border-b border-(--border-color) shrink-0">
               <h3 className="font-bold text-(--text-primary)">{t('common.preview')}</h3>
               <button
                 onClick={() => setPreviewOpen(false)}
@@ -956,12 +1015,13 @@ export function EditorPage() {
                 <X className="w-4 h-4 text-(--text-secondary)" />
               </button>
             </div>
-            <div className="p-6 flex items-center justify-center" style={{ maxHeight: 'calc(90vh - 80px)' }}>
+            <div className="flex-1 min-h-0 w-full flex items-center justify-center p-6 bg-black/20">
               {previewImage && (
                 <img
                   src={previewImage}
                   alt="Preview"
-                  className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+                  style={{ width: 'auto', height: 'auto' }}
                 />
               )}
             </div>

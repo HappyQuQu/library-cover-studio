@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
@@ -28,9 +29,13 @@ export function SettingsPage() {
   const updateSettings = useUpdateSettings();
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [activeSection, setActiveSection] = useState<'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users'>('appearance');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users') || 'appearance';
+  const setActiveSection = (tab: string) => setSearchParams({ tab });
+
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [storageSettings, setStorageSettings] = useState({ savePosters: false, saveCovers: false });
+  const [renderingSettings, setRenderingSettings] = useState({ outputFormat: 'PNG', outputQuality: '90', concurrency: '3' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logsEndRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +66,8 @@ export function SettingsPage() {
   useEffect(() => {
     // 1. Initial Load
     loadFonts();
-    loadStorageSettings(); // Load storage settings
+    loadStorageSettings();
+    loadRenderingSettings();
 
     // 2. Capture Console Logs (Local)
     const originalLog = console.log;
@@ -205,6 +211,32 @@ export function SettingsPage() {
       console.error('Failed to save storage setting', error);
       // Revert on error
       setStorageSettings(prev => ({ ...prev, [key]: !newValue }));
+    }
+  };
+
+  const loadRenderingSettings = async () => {
+    try {
+      const res = await apiClient.get('/settings');
+      const settings = res.data || {};
+      setRenderingSettings({
+        outputFormat: settings['rendering.outputFormat'] || 'PNG',
+        outputQuality: settings['rendering.outputQuality'] || '90',
+        concurrency: settings['rendering.concurrency'] || '3'
+      });
+    } catch (error) {
+      console.error('Failed to load rendering settings', error);
+    }
+  };
+
+  const saveRenderingSetting = async (key: 'outputFormat' | 'outputQuality' | 'concurrency', value: string) => {
+    const oldValue = renderingSettings[key];
+    setRenderingSettings(prev => ({ ...prev, [key]: value }));
+    try {
+      await apiClient.post('/settings', { [`rendering.${key}`]: value });
+    } catch (error) {
+      console.error('Failed to save rendering setting', error);
+      // Revert on error
+      setRenderingSettings(prev => ({ ...prev, [key]: oldValue }));
     }
   };
 
@@ -427,10 +459,15 @@ export function SettingsPage() {
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出格式</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>生成海报的图片格式</p>
                 </div>
-                <select className="input" style={{ width: 140 }}>
-                  <option>PNG</option>
-                  <option>JPEG</option>
-                  <option>WebP</option>
+                <select
+                  className="input"
+                  style={{ width: 140 }}
+                  value={renderingSettings.outputFormat}
+                  onChange={e => saveRenderingSetting('outputFormat', e.target.value)}
+                >
+                  <option value="PNG">PNG</option>
+                  <option value="JPEG">JPEG</option>
+                  <option value="WebP">WebP</option>
                 </select>
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
@@ -438,14 +475,32 @@ export function SettingsPage() {
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出质量</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>压缩质量 (1-100)</p>
                 </div>
-                <Input type="number" defaultValue="90" className="input" style={{ width: 120 }} />
+                <Input
+                  type="number"
+                  value={renderingSettings.outputQuality}
+                  onChange={e => setRenderingSettings(prev => ({ ...prev, outputQuality: e.target.value }))}
+                  onBlur={e => saveRenderingSetting('outputQuality', e.target.value)}
+                  min="1"
+                  max="100"
+                  className="input"
+                  style={{ width: 120 }}
+                />
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>并发数量</h3>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>同时处理任务数</p>
                 </div>
-                <Input type="number" defaultValue="3" className="input" style={{ width: 120 }} />
+                <Input
+                  type="number"
+                  value={renderingSettings.concurrency}
+                  onChange={e => setRenderingSettings(prev => ({ ...prev, concurrency: e.target.value }))}
+                  onBlur={e => saveRenderingSetting('concurrency', e.target.value)}
+                  min="1"
+                  max="10"
+                  className="input"
+                  style={{ width: 120 }}
+                />
               </div>
             </div>
           </div>
@@ -704,7 +759,11 @@ export function SettingsPage() {
                     </thead>
                     <tbody>
                       {userList.map((u) => (
-                        <tr key={u.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }} className="hover:bg-muted/50">
+                        <tr
+                          key={u.id}
+                          style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}
+                          className="hover:bg-(--bg-tertiary) transition-colors"
+                        >
                           <td style={{ padding: '16px 24px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div className="avatar" style={{ width: 32, height: 32, fontSize: 12, borderRadius: 8 }}>

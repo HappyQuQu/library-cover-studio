@@ -23,8 +23,9 @@ export const updateServerSchema = createServerSchema.partial();
 export async function list(req: Request, res: Response, next: NextFunction) {
   try {
     const userId = req.user?.userId;
-    console.log(`[Server] Listing servers for user: ${userId}`);
-    
+    const role = req.user?.role;
+    console.log(`[Server] Listing servers for user: ${userId} (Role: ${role})`);
+
     let query = db.select({
       id: mediaServers.id,
       name: mediaServers.name,
@@ -34,11 +35,11 @@ export async function list(req: Request, res: Response, next: NextFunction) {
       lastSyncAt: mediaServers.lastSyncAt,
       createdAt: mediaServers.createdAt
     })
-    .from(mediaServers);
+      .from(mediaServers);
 
-    const servers = userId 
-      ? query.where(eq(mediaServers.userId, userId)).all()
-      : query.all();
+    const servers = role === 'admin'
+      ? query.all()
+      : query.where(eq(mediaServers.userId, userId as string)).all();
 
     console.log(`[Server] Found ${servers.length} servers`);
     res.json(servers);
@@ -52,7 +53,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
 export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
-    
+
     const server = db.select({
       id: mediaServers.id,
       name: mediaServers.name,
@@ -62,9 +63,9 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
       lastSyncAt: mediaServers.lastSyncAt,
       createdAt: mediaServers.createdAt
     })
-    .from(mediaServers)
-    .where(eq(mediaServers.id, id as string))
-    .get();
+      .from(mediaServers)
+      .where(eq(mediaServers.id, id as string))
+      .get();
 
     if (!server) {
       return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
@@ -86,7 +87,7 @@ export async function create(req: Request, res: Response, next: NextFunction) {
     // 测试连接
     const cleanUrl = url.replace(/\/$/, '');
     const isConnected = await testConnection(type, cleanUrl, apiKey);
-    
+
     if (!isConnected) {
       console.warn(`[Server] Connection test failed for ${cleanUrl}`);
       return next(createError('Failed to connect to media server', 400, 'CONNECTION_FAILED'));
@@ -136,8 +137,13 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
     }
 
+    // Permission check
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this server', 403, 'FORBIDDEN'));
+    }
+
     const updateData: Record<string, unknown> = { updatedAt: now };
-    
+
     if (updates.name) updateData.name = updates.name;
     if (updates.type) updateData.type = updates.type;
     if (updates.url) updateData.url = updates.url.replace(/\/$/, '');
@@ -159,11 +165,17 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
 
-    const result = db.delete(mediaServers).where(eq(mediaServers.id, id as string)).run();
-    
-    if (result.changes === 0) {
+    const existing = db.select().from(mediaServers).where(eq(mediaServers.id, id as string)).get();
+    if (!existing) {
       return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
     }
+
+    // Permission check
+    if (req.user?.role !== 'admin' && existing.userId !== req.user?.userId) {
+      return next(createError('Forbidden: Access denied to this server', 403, 'FORBIDDEN'));
+    }
+
+    db.delete(mediaServers).where(eq(mediaServers.id, id as string)).run();
 
     res.json({ message: 'Server deleted successfully' });
   } catch (error) {

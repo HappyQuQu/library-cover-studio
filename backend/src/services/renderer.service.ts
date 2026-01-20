@@ -1,6 +1,9 @@
 import sharp from 'sharp';
 import pLimit from 'p-limit';
 import fs from 'fs';
+import path from 'path';
+import { GlobalFonts, createCanvas } from '@napi-rs/canvas';
+import { FONTS_DIR } from '../config/paths.js';
 
 interface RenderOptions {
   width: number;
@@ -54,6 +57,46 @@ const limit = pLimit(MAX_CONCURRENT);
 const TEMP_DIR = './temp';
 if (!fs.existsSync(TEMP_DIR)) {
   fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
+
+// 已注册的字体
+const registeredFonts = new Set<string>();
+
+/**
+ * 确保自定义字体已注册到 GlobalFonts
+ */
+function ensureFontRegistered(fontFamily: string): boolean {
+  if (registeredFonts.has(fontFamily)) return true;
+
+  if (!fs.existsSync(FONTS_DIR)) return false;
+
+  const files = fs.readdirSync(FONTS_DIR);
+  const fontFile = files.find(file => {
+    const ext = path.extname(file).toLowerCase();
+    if (!['.ttf', '.otf', '.woff', '.woff2'].includes(ext)) return false;
+
+    const nameParts = file.split('-');
+    const originalNameWithExt = nameParts.length > 1 ? nameParts.slice(1).join('-') : file;
+    const fontName = path.basename(originalNameWithExt, ext);
+
+    return fontName.toLowerCase() === fontFamily.toLowerCase() || file.toLowerCase() === fontFamily.toLowerCase();
+  });
+
+  if (!fontFile) return false;
+
+  try {
+    const filePath = path.join(FONTS_DIR, fontFile);
+    console.log(`    🔤 Registering font: ${fontFamily} from ${fontFile}`);
+    const success = GlobalFonts.registerFromPath(filePath, fontFamily);
+    if (success) {
+      registeredFonts.add(fontFamily);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`Failed to register font ${fontFamily}:`, error);
+    return false;
+  }
 }
 
 // 渲染模板
@@ -566,7 +609,7 @@ async function renderPolygon(
   }
 }
 
-// 渲染文本 (使用 SVG)
+// 渲染文本 (使用 @napi-rs/canvas)
 async function renderText(
   obj: CanvasObject,
   left: number,
@@ -586,54 +629,65 @@ async function renderText(
   const textAlign = (obj as any).textAlign || 'left';
   const angle = obj.angle || 0;
 
-  // Calculate width based on text length and fontSize
+  // 确保字体已注册
+  const isRegistered = ensureFontRegistered(fontFamily);
+  if (!isRegistered) {
+    console.log(`    ⚠️ Font "${fontFamily}" not found, using fallback`);
+  }
+
+  // 计算大致所需的画布大小
+  // 注意：Canvas 渲染文本需要一定的 Padding 避免被切掉
   const baseWidth = obj.width || 200;
-  const width = Math.round(baseWidth * scaleX);
-  const lineHeight = (obj as any).lineHeight || 1.16;
-  const height = Math.round(fontSize * lineHeight * 1.5);
+  const width = Math.round(baseWidth * scaleX * 1.5) + 100;
+  const height = Math.round(fontSize * 2) + 100;
 
-  // Escape XML special characters
-  const escapedText = escapeXml(obj.text);
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
 
-  // Calculate x position based on alignment
-  let textX = 0;
-  let textAnchor = 'start';
+  // 设置字体
+  ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}"`;
+  ctx.fillStyle = fill;
+  ctx.textBaseline = 'top';
+
+  // 测量文字
+  const metrics = ctx.measureText(obj.text);
+  const textWidth = metrics.width;
+
+  // 根据对齐方式调整绘制位置 (在画布内部居中或偏移)
+  let drawX = 50;
   if (textAlign === 'center') {
-    textX = width / 2;
-    textAnchor = 'middle';
+    drawX = (width - textWidth) / 2;
   } else if (textAlign === 'right') {
-    textX = width;
-    textAnchor = 'end';
+    drawX = width - textWidth - 50;
   }
 
-  // 使用 SVG 渲染文本
-  let svg = `
-    <svg width="${width}" height="${height}">
-      <text 
-        x="${textX}" 
-        y="${fontSize}" 
-        font-size="${fontSize}" 
-        font-family="${fontFamily}"
-        font-weight="${fontWeight}"
-        fill="${fill}"
-        text-anchor="${textAnchor}"
-      >${escapedText}</text>
-    </svg>
-  `;
+  // 绘制文字
+  ctx.fillText(obj.text, drawX, 50);
 
-  let textBuffer = await sharp(Buffer.from(svg))
-    .png()
-    .toBuffer();
+  let textBuffer = await canvas.encode('png');
 
-  // Apply rotation if needed
+  // 如果有旋转或需要裁剪透明像素，可以使用 sharp 处理
+  let sharpInstance = sharp(textBuffer);
+
+  // 裁剪周围多余的透明像素 (Trim)
+  sharpInstance = sharpInstance.trim();
+
+  // 旋转
   if (angle !== 0) {
-    textBuffer = await sharp(textBuffer)
-      .rotate(angle, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .png()
-      .toBuffer();
+    sharpInstance = sharpInstance.rotate(angle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
   }
 
-  return { input: textBuffer, left, top };
+  const finalBuffer = await sharpInstance.png().toBuffer();
+
+  // 获取处理后的尺寸以便重新校准位置
+  await sharp(finalBuffer).metadata();
+
+  // 调整 left/top 使得渲染后的文字中心与原始位置对齐
+  // 因为 Canvas 渲染时带了 Padding，且经过了 Trim
+  // 这里简化处理：直接使用原始 left/top，因为 Fabric 的坐标已经由 calculateTopLeft 处理过
+  // 如果需要极其精确的对齐，这里可能需要根据 Trim 后的偏移量进行修正
+
+  return { input: finalBuffer, left, top };
 }
 
 // 判断是否为渐变对象
@@ -784,13 +838,4 @@ function parseColor(colorInput: any): { r: number; g: number; b: number; alpha: 
   return { r: 0, g: 0, b: 0, alpha: 1 };
 }
 
-// 转义 XML 字符
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
 

@@ -5,6 +5,7 @@ import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { logger } from '../utils/logger.js';
+import { getLocalISOString, getLocalTimestampForFile } from '../utils/time.js';
 import fs from 'fs';
 import path from 'path';
 import { POSTERS_DIR, COVERS_DIR } from '../config/paths.js';
@@ -87,7 +88,7 @@ export async function runTask(taskId: string, logId?: string) {
       if (logId) {
         db.update(taskLogs).set({
           status: 'completed',
-          completedAt: new Date().toISOString()
+          completedAt: getLocalISOString()
         }).where(eq(taskLogs.id, logId)).run();
       }
       return;
@@ -210,7 +211,7 @@ export async function runTask(taskId: string, logId?: string) {
 
             // Save poster if enabled
             if (savePosters) {
-              const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+              const timestamp = getLocalTimestampForFile();
               await saveFile('posters', `${libraryName}_${item.name}_${usedType}_${timestamp}.jpg`, validPoster);
             }
           }
@@ -271,7 +272,7 @@ export async function runTask(taskId: string, logId?: string) {
 
         // Save generated cover if enabled
         if (saveCovers) {
-          const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+          const timestamp = getLocalTimestampForFile();
           await saveFile('covers', `${libraryName}_${timestamp}.png`, renderedBuffer);
         }
 
@@ -308,7 +309,7 @@ export async function runTask(taskId: string, logId?: string) {
     progress.status = 'completed';
     logger.info(`✅ Task ${task.name} finished. Success: ${progress.success}, Failed: ${progress.failed}`);
 
-    const now = new Date().toISOString();
+    const now = getLocalISOString();
     db.update(tasks).set({ lastRunAt: now }).where(eq(tasks.id, taskId)).run();
 
     if (logId) {
@@ -326,7 +327,7 @@ export async function runTask(taskId: string, logId?: string) {
     if (logId) {
       db.update(taskLogs).set({
         status: 'failed',
-        completedAt: new Date().toISOString(),
+        completedAt: getLocalISOString(),
         errorMessage: (error as any).message || String(error)
       }).where(eq(taskLogs.id, logId)).run();
     }

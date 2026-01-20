@@ -47,6 +47,7 @@ export const tasks = sqliteTable('tasks', {
   cronExpression: text('cron_expression'),
   templateId: text('template_id').references(() => templates.id),
   serverId: text('server_id').references(() => mediaServers.id),
+  userId: text('user_id').references(() => users.id),
   libraryIds: text('library_ids'), // Deprecated in favor of libraryConfigs
   libraryConfigs: text('library_configs'), // JSON list of LibraryConfig
   options: text('options'), // JSON

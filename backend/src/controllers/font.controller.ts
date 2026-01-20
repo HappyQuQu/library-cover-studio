@@ -1,8 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
+import { FONTS_DIR } from '../config/paths.js';
 
-const fontsDir = 'uploads/fonts';
+const fontsDir = FONTS_DIR;
 
 // Get list of uploaded fonts
 export async function getFonts(_req: Request, res: Response, next: NextFunction) {
@@ -18,7 +19,17 @@ export async function getFonts(_req: Request, res: Response, next: NextFunction)
                 const stats = fs.statSync(path.join(fontsDir, file));
                 // Extract font name from filename (remove timestamp prefix and extension)
                 const nameParts = file.split('-');
-                const originalName = nameParts.length > 1 ? nameParts.slice(1).join('-') : file;
+                let originalName = nameParts.length > 1 ? nameParts.slice(1).join('-') : file;
+
+                // Try to fix encoding if it looks like garbled Latin1
+                if (/[\u0080-\u00ff]/.test(originalName)) {
+                    try {
+                        originalName = Buffer.from(originalName, 'latin1').toString('utf8');
+                    } catch (e) {
+                        // Ignore if conversion fails
+                    }
+                }
+
                 const fontName = path.basename(originalName, path.extname(originalName));
 
                 return {
@@ -26,7 +37,7 @@ export async function getFonts(_req: Request, res: Response, next: NextFunction)
                     name: fontName,
                     size: stats.size,
                     uploadedAt: stats.mtime,
-                    url: `/uploads/fonts/${file}`
+                    url: `/api/uploads/fonts/${file}`
                 };
             });
 
@@ -43,7 +54,9 @@ export async function uploadFont(req: Request, res: Response, next: NextFunction
             return res.status(400).json({ error: 'No font file uploaded' });
         }
 
-        const fontName = path.basename(req.file.originalname, path.extname(req.file.originalname));
+        // Fix encoding for originalname (multer default is latin1)
+        const originalName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
+        const fontName = path.basename(originalName, path.extname(originalName));
 
         res.json({
             message: 'Font uploaded successfully',
@@ -51,7 +64,7 @@ export async function uploadFont(req: Request, res: Response, next: NextFunction
                 filename: req.file.filename,
                 name: fontName,
                 size: req.file.size,
-                url: `/uploads/fonts/${req.file.filename}`
+                url: `/api/uploads/fonts/${req.file.filename}`
             }
         });
     } catch (error) {

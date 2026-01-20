@@ -7,8 +7,8 @@ import {
   Settings,
   LogOut,
   PenTool,
-  Sparkles,
-  ChevronDown
+  ChevronDown,
+  Users
 } from 'lucide-react';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { useSettings } from '@/api/hooks';
@@ -19,22 +19,23 @@ interface MainLayoutProps {
   children: React.ReactNode;
 }
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: '仪表盘' },
-  { to: '/servers', icon: Server, label: '媒体源' },
-  { to: '/templates', icon: Palette, label: '模板库' },
-  { to: '/editor', icon: PenTool, label: '设计器' },
-  { to: '/tasks', icon: Clock, label: '自动化' },
-  { to: '/settings', icon: Settings, label: '设置' }
-];
-
 export function MainLayout({ children }: MainLayoutProps) {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const { setMode, setBrand } = useThemeStore();
+  const { setMode, setBrand, resolvedMode } = useThemeStore();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const navItems = [
+    { to: '/', icon: LayoutDashboard, label: '仪表盘' },
+    { to: '/servers', icon: Server, label: '媒体源' },
+    { to: '/templates', icon: Palette, label: '模板库' },
+    { to: '/editor', icon: PenTool, label: '设计器' },
+    { to: '/tasks', icon: Clock, label: '自动化' },
+    ...(user?.role === 'admin' ? [{ to: '/settings?tab=users', icon: Users, label: '用户管理' }] : []),
+    { to: '/settings', icon: Settings, label: '设置' }
+  ];
 
   const handleLogout = () => {
     logout();
@@ -64,24 +65,22 @@ export function MainLayout({ children }: MainLayoutProps) {
   return (
     <div className="flex flex-col min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       {/* Top Navigation Bar */}
-      <header 
+      <header
         className="h-14 shrink-0 flex items-center px-6 gap-6"
-        style={{ 
-          background: 'var(--bg-primary)', 
+        style={{
+          background: 'var(--bg-primary)',
           borderBottom: '1px solid var(--border-color)',
           position: 'sticky',
           top: 0,
           zIndex: 100
         }}
       >
-        {/* Logo */}
         <div className="flex items-center gap-3 shrink-0">
-          <div 
-            className="w-9 h-9 rounded-xl gradient-purple-blue flex items-center justify-center"
-            style={{ boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)' }}
-          >
-            <Sparkles className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src={resolvedMode === 'light' ? '/logo-l.png' : '/logo-d.png'}
+            alt="CoverStudio"
+            className="w-9 h-9 object-contain"
+          />
           <div>
             <div className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
               CoverStudio
@@ -91,24 +90,38 @@ export function MainLayout({ children }: MainLayoutProps) {
 
         {/* Navigation Links */}
         <nav className="flex items-center gap-1 flex-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                cn(
-                  'h-9 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-all',
-                  isActive 
-                    ? 'bg-(--primary) text-white shadow-md' 
-                    : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)'
-                )
-              }
-            >
-              <item.icon className="w-4 h-4" />
-              <span>{item.label}</span>
-            </NavLink>
-          ))}
+          {navItems.map((item) => {
+            const isSettings = item.to.startsWith('/settings');
+            const isUserMgmt = item.to.includes('tab=users');
+
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => {
+                  // Custom activation logic to handle search params
+                  let active = isActive;
+                  const search = window.location.search;
+
+                  if (isUserMgmt) {
+                    active = isActive && search.includes('tab=users');
+                  } else if (isSettings && item.to === '/settings') {
+                    active = isActive && !search.includes('tab=users');
+                  }
+
+                  return cn(
+                    'h-9 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-all',
+                    active
+                      ? 'bg-(--primary) text-white shadow-md'
+                      : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)'
+                  );
+                }}
+              >
+                <item.icon className="w-4 h-4" />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
         </nav>
 
         {/* Right Side - User Menu */}
@@ -119,8 +132,8 @@ export function MainLayout({ children }: MainLayoutProps) {
               onClick={() => setShowUserMenu(!showUserMenu)}
               className="flex items-center gap-2 h-9 pl-1 pr-2 rounded-lg transition-all hover:bg-(--bg-tertiary)"
             >
-              <div 
-                className="avatar" 
+              <div
+                className="avatar"
                 style={{ width: 28, height: 28, fontSize: 11, borderRadius: 8 }}
               >
                 {user?.username?.[0]?.toUpperCase() || 'U'}
@@ -132,10 +145,10 @@ export function MainLayout({ children }: MainLayoutProps) {
             </button>
 
             {showUserMenu && (
-              <div 
+              <div
                 className="absolute right-0 top-full mt-2 w-48 py-2 rounded-xl shadow-lg"
-                style={{ 
-                  background: 'var(--bg-primary)', 
+                style={{
+                  background: 'var(--bg-primary)',
                   border: '1px solid var(--border-color)',
                   zIndex: 1000
                 }}
