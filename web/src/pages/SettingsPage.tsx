@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { useUpdateSettings, useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
-import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key, Settings } from 'lucide-react';
+import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/api/client';
