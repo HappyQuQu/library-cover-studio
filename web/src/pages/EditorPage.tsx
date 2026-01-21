@@ -163,6 +163,51 @@ export function EditorPage() {
 
     setCanvasRef.current(fabricCanvas);
 
+    // ===== SNAPPING CONFIGURATION =====
+    const SNAP_THRESHOLD = 8; // pixels for position snapping
+    const ANGLE_SNAP_THRESHOLD = 5; // degrees for rotation snapping
+    const SNAP_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315, 360];
+
+    // Store for guide lines
+    let horizontalGuides: fabric.Line[] = [];
+    let verticalGuides: fabric.Line[] = [];
+
+    // Helper: Create a guide line
+    const createGuideLine = (points: [number, number, number, number]): fabric.Line => {
+      const line = new fabric.Line(points, {
+        stroke: '#6366f1',
+        strokeWidth: 1,
+        strokeDashArray: [5, 5],
+        selectable: false,
+        evented: false,
+        excludeFromExport: true,
+      });
+      (line as any).isGuideLine = true;
+      return line;
+    };
+
+    // Helper: Clear all guide lines
+    const clearGuides = () => {
+      [...horizontalGuides, ...verticalGuides].forEach(line => {
+        fabricCanvas.remove(line);
+      });
+      horizontalGuides = [];
+      verticalGuides = [];
+    };
+
+    // Helper: Get object snap points
+    const getSnapPoints = (obj: fabric.FabricObject) => {
+      const bound = obj.getBoundingRect();
+      return {
+        left: bound.left,
+        right: bound.left + bound.width,
+        centerX: bound.left + bound.width / 2,
+        top: bound.top,
+        bottom: bound.top + bound.height,
+        centerY: bound.top + bound.height / 2,
+      };
+    };
+
     // Event Listeners
     fabricCanvas.on('selection:created', (e: any) => setSelectedObjectRef.current(e.selected?.[0]));
     fabricCanvas.on('selection:updated', (e: any) => setSelectedObjectRef.current(e.selected?.[0]));
@@ -170,10 +215,128 @@ export function EditorPage() {
 
     fabricCanvas.on('object:added', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
     fabricCanvas.on('object:removed', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
-    fabricCanvas.on('object:modified', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
-    fabricCanvas.on('object:moving', (e: any) => { setSelectedObjectRef.current(e.target); });
+    fabricCanvas.on('object:modified', () => {
+      clearGuides();
+      syncLayersRef.current();
+      saveToHistoryRef.current();
+    });
+
+    // ===== ANGLE SNAPPING =====
+    fabricCanvas.on('object:rotating', (e: any) => {
+      const obj = e.target;
+      if (!obj) return;
+      setSelectedObjectRef.current(obj);
+
+      let angle = obj.angle % 360;
+      if (angle < 0) angle += 360;
+
+      for (const snapAngle of SNAP_ANGLES) {
+        if (Math.abs(angle - snapAngle) < ANGLE_SNAP_THRESHOLD) {
+          obj.angle = snapAngle === 360 ? 0 : snapAngle;
+          break;
+        }
+      }
+    });
+
     fabricCanvas.on('object:scaling', (e: any) => { setSelectedObjectRef.current(e.target); });
-    fabricCanvas.on('object:rotating', (e: any) => { setSelectedObjectRef.current(e.target); });
+
+    // ===== POSITION SNAPPING (SMART GUIDES) =====
+    fabricCanvas.on('object:moving', (e: any) => {
+      const movingObj = e.target;
+      if (!movingObj) return;
+      setSelectedObjectRef.current(movingObj);
+
+      clearGuides();
+
+      const movingPoints = getSnapPoints(movingObj);
+      const canvasW = fabricCanvas.getWidth();
+      const canvasH = fabricCanvas.getHeight();
+
+      let snapX: number | null = null;
+      let snapY: number | null = null;
+
+      // Check against canvas center
+      const canvasCenterX = canvasW / 2;
+      const canvasCenterY = canvasH / 2;
+
+      if (Math.abs(movingPoints.centerX - canvasCenterX) < SNAP_THRESHOLD) {
+        snapX = canvasCenterX;
+        const line = createGuideLine([canvasCenterX, 0, canvasCenterX, canvasH]);
+        verticalGuides.push(line);
+        fabricCanvas.add(line);
+      }
+
+      if (Math.abs(movingPoints.centerY - canvasCenterY) < SNAP_THRESHOLD) {
+        snapY = canvasCenterY;
+        const line = createGuideLine([0, canvasCenterY, canvasW, canvasCenterY]);
+        horizontalGuides.push(line);
+        fabricCanvas.add(line);
+      }
+
+      // Check against other objects
+      const allObjects = fabricCanvas.getObjects().filter(
+        (obj: any) => obj !== movingObj && !obj.isGuideLine
+      );
+
+      for (const otherObj of allObjects) {
+        const otherPoints = getSnapPoints(otherObj as fabric.FabricObject);
+
+        // Vertical alignments (X axis)
+        const xChecks = [
+          { moving: 'left', other: 'left' },
+          { moving: 'left', other: 'right' },
+          { moving: 'right', other: 'left' },
+          { moving: 'right', other: 'right' },
+          { moving: 'centerX', other: 'centerX' },
+        ];
+
+        for (const check of xChecks) {
+          const movingVal = movingPoints[check.moving as keyof typeof movingPoints];
+          const otherVal = otherPoints[check.other as keyof typeof otherPoints];
+          if (snapX === null && Math.abs(movingVal - otherVal) < SNAP_THRESHOLD) {
+            snapX = otherVal;
+            const minY = Math.min(movingPoints.top, otherPoints.top);
+            const maxY = Math.max(movingPoints.bottom, otherPoints.bottom);
+            const line = createGuideLine([otherVal, minY - 20, otherVal, maxY + 20]);
+            verticalGuides.push(line);
+            fabricCanvas.add(line);
+            break;
+          }
+        }
+
+        // Horizontal alignments (Y axis)
+        const yChecks = [
+          { moving: 'top', other: 'top' },
+          { moving: 'top', other: 'bottom' },
+          { moving: 'bottom', other: 'top' },
+          { moving: 'bottom', other: 'bottom' },
+          { moving: 'centerY', other: 'centerY' },
+        ];
+
+        for (const check of yChecks) {
+          const movingVal = movingPoints[check.moving as keyof typeof movingPoints];
+          const otherVal = otherPoints[check.other as keyof typeof otherPoints];
+          if (snapY === null && Math.abs(movingVal - otherVal) < SNAP_THRESHOLD) {
+            snapY = otherVal;
+            const minX = Math.min(movingPoints.left, otherPoints.left);
+            const maxX = Math.max(movingPoints.right, otherPoints.right);
+            const line = createGuideLine([minX - 20, otherVal, maxX + 20, otherVal]);
+            horizontalGuides.push(line);
+            fabricCanvas.add(line);
+            break;
+          }
+        }
+      }
+
+      // NOTE: We intentionally do NOT apply snapping during drag to prevent jitter.
+      // The guide lines show where the object WOULD snap.
+      // Snapping is purely visual feedback during drag.
+    });
+
+    // Clean up guides on mouse up
+    fabricCanvas.on('mouse:up', () => {
+      clearGuides();
+    });
 
     return () => {
       fabricCanvas.dispose();
