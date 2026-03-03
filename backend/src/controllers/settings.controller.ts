@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { db } from '../config/database.js';
 import { systemSettings } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
+import { SYSTEM_PROMPT } from '../services/ai/prompts/templateGenerator.js';
 
 export const getSettings = async (_req: Request, res: Response) => {
   try {
@@ -48,4 +49,8 @@ export const updateSettings = async (req: Request, res: Response) => {
     console.error('Failed to update settings:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+};
+
+export const getDefaultPrompt = (_req: Request, res: Response) => {
+  res.json({ defaultPrompt: SYSTEM_PROMPT });
 };

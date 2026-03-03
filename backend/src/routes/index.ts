@@ -8,6 +8,8 @@ import { fontRouter } from './font.routes.js';
 import { logRouter } from './log.routes.js';
 import { userRouter } from './user.routes.js';
 import { statsRouter } from './stats.routes.js';
+import aiProviderRouter from './aiProvider.routes.js';
+import aiChatRouter from './aiChat.routes.js';
 
 const router = Router();
 
@@ -21,5 +23,7 @@ router.use('/fonts', fontRouter);
 router.use('/logs', logRouter);
 router.use('/users', userRouter);
 router.use('/stats', statsRouter);
+router.use('/ai-providers', aiProviderRouter);
+router.use('/ai-chat', aiChatRouter);
 
 export { router };

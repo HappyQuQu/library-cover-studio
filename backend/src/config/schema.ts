@@ -77,6 +77,33 @@ export const systemSettings = sqliteTable('system_settings', {
   updatedAt: text('updated_at').default('CURRENT_TIMESTAMP')
 });
 
+// AI 服务提供商配置表
+export const aiProviders = sqliteTable('ai_providers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').notNull(), // 'claude' | 'openai' | 'ollama' | 'custom'
+  apiUrl: text('api_url').notNull(),
+  apiKeyEncrypted: text('api_key_encrypted'),
+  model: text('model'),
+  isActive: integer('is_active').default(1),
+  isDefault: integer('is_default').default(0),
+  userId: text('user_id').references(() => users.id),
+  createdAt: text('created_at'),
+  updatedAt: text('updated_at')
+});
+
+// AI 对话历史表
+export const aiConversations = sqliteTable('ai_conversations', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id),
+  templateId: text('template_id').references(() => templates.id),
+  providerId: text('provider_id').references(() => aiProviders.id),
+  messages: text('messages').notNull(), // JSON 数组: [{role, content}]
+  generatedJson: text('generated_json'),
+  createdAt: text('created_at'),
+  updatedAt: text('updated_at')
+});
+
 // 类型导出
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -90,3 +117,7 @@ export type TaskLog = typeof taskLogs.$inferSelect;
 export type NewTaskLog = typeof taskLogs.$inferInsert;
 export type SystemSetting = typeof systemSettings.$inferSelect;
 export type NewSystemSetting = typeof systemSettings.$inferInsert;
+export type AIProvider = typeof aiProviders.$inferSelect;
+export type NewAIProvider = typeof aiProviders.$inferInsert;
+export type AIConversation = typeof aiConversations.$inferSelect;
+export type NewAIConversation = typeof aiConversations.$inferInsert;

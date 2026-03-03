@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X } from 'lucide-react';
+import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/stores/canvasStore';
@@ -13,7 +13,102 @@ import * as fabric from 'fabric';
 import { PropertyPanel } from '@/components/editor/PropertyPanel';
 import { LayerPanel } from '@/components/editor/LayerPanel';
 import { ToolboxPanel } from '@/components/editor/ToolboxPanel';
+import { AIChatPanel } from '@/components/ai/AIChatPanel';
 import { apiClient } from '@/api/client';
+
+// ── Background generation helpers ──────────────────────────────────────────
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return m ? { r: parseInt(m[1], 16), g: parseInt(m[2], 16), b: parseInt(m[3], 16) } : null;
+}
+
+/** Generate a mesh-gradient image as a data URL (small canvas, canvas scales it up). */
+function generateMeshGradientDataUrl(colors: string[], width: number, height: number): string {
+  // Render at 1/4 size — smooth gradients don't need full resolution
+  const w = Math.round(width / 4);
+  const h = Math.round(height / 4);
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d')!;
+
+  // Base fill
+  ctx.fillStyle = colors[0] || '#1a1a2e';
+  ctx.fillRect(0, 0, w, h);
+
+  // Blob positions (normalized): top-right, bottom-left, bottom-right, center
+  const positions = [[0.8, 0.15], [0.2, 0.85], [0.78, 0.8], [0.5, 0.5]];
+  colors.slice(1).forEach((color, i) => {
+    if (i >= positions.length) return;
+    const rgb = hexToRgb(color);
+    if (!rgb) return;
+    const [px, py] = positions[i];
+    const cx = px * w, cy = py * h;
+    const r = Math.max(w, h) * 0.72;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+    g.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0.88)`);
+    g.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, w, h);
+  });
+  return c.toDataURL('image/jpeg', 0.9);
+}
+
+/** Generate a striped background as an SVG data URL. */
+function generateStripesSvgDataUrl(
+  color1: string, color2: string,
+  angle: number, stripeWidth: number,
+  width: number, height: number
+): string {
+  const tw = stripeWidth * 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
+    <defs>
+      <pattern id="s" x="0" y="0" width="${tw}" height="${tw}"
+        patternUnits="userSpaceOnUse"
+        patternTransform="rotate(${angle},${width / 2},${height / 2})">
+        <rect width="${tw}" height="${tw}" fill="${color1}"/>
+        <rect width="${stripeWidth}" height="${tw}" fill="${color2}"/>
+      </pattern>
+    </defs>
+    <rect width="${width}" height="${height}" fill="url(#s)"/>
+  </svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+
+
+/** Generate a vignette image (transparent center → dark edges) as a data URL. */
+function generateVignetteDataUrl(width: number, height: number, intensity: number, spread: number, colorHex: string = '#000000'): string {
+  const c = document.createElement('canvas');
+  c.width = width; c.height = height;
+  const ctx = c.getContext('2d')!;
+  const cx = width / 2, cy = height / 2;
+  const r = Math.sqrt(cx * cx + cy * cy);
+  const innerR = r * (1 - spread);
+  const rgb = hexToRgb(colorHex) || { r: 0, g: 0, b: 0 };
+  const g = ctx.createRadialGradient(cx, cy, innerR, cx, cy, r);
+  g.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`);
+  g.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},${Math.min(intensity, 0.95)})`);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+  // PNG compresses solid-to-transparent gradients very well
+  return c.toDataURL('image/png');
+}
+
+/** Generate a tiled film-grain noise image as a data URL. */
+function generateGrainDataUrl(): string {
+  const size = 128;
+  const c = document.createElement('canvas');
+  c.width = size; c.height = size;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.floor(Math.random() * 255);
+    img.data[i] = v; img.data[i + 1] = v; img.data[i + 2] = v; img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  return c.toDataURL('image/jpeg', 0.5); // JPEG keeps noise tiles small
+}
 
 interface Font {
   filename: string;
@@ -29,9 +124,11 @@ export function EditorPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const [leftWidth, setLeftWidth] = useState(340);
+  const [rightWidth, setRightWidth] = useState(360);
   const [templateName, setTemplateName] = useState('');
   const [activeTool, setActiveTool] = useState('select');
-  const [activePanel, setActivePanel] = useState<'properties' | 'layers'>('properties');
+  const [activePanel, setActivePanel] = useState<'properties' | 'layers' | 'ai'>('properties');
   const [layers, setLayers] = useState<any[]>([]);
   const [canvasWidth, setCanvasWidth] = useState(1920);
   const [canvasHeight, setCanvasHeight] = useState(1080);
@@ -759,7 +856,7 @@ export function EditorPage() {
   };
 
   // Change background
-  const changeBackground = useCallback((bg: any) => {
+  const changeBackground = useCallback(async (bg: any) => {
     if (!canvas) {
       console.log('Canvas not ready for background change');
       return;
@@ -792,27 +889,47 @@ export function EditorPage() {
     };
 
     if (bg.type === 'color') {
+      canvas.backgroundImage = undefined as any;
       canvas.backgroundColor = bg.color;
     } else if (bg.type === 'gradient') {
-      const coords = getGradientCoords(bg.direction);
-      // Calculate color stops based on intensity
-      // intensity 0 = soft blend (0% to 100%)
-      // intensity 100 = sharp transition (nearly solid colors meeting in middle)
+      canvas.backgroundImage = undefined as any;
       const intensity = bg.intensity ?? 50;
       const midStart = (50 - intensity / 2) / 100;
       const midEnd = (50 + intensity / 2) / 100;
-      const gradient = new fabric.Gradient({
-        type: 'linear',
-        coords,
-        colorStops: [
-          { offset: 0, color: bg.color1 },
-          { offset: midStart, color: bg.color1 },
-          { offset: midEnd, color: bg.color2 },
-          { offset: 1, color: bg.color2 }
-        ]
-      });
-      canvas.backgroundColor = gradient as any;
+
+      if (bg.gradientStyle === 'radial') {
+        const width = canvas.getWidth();
+        const height = canvas.getHeight();
+        const cx = width / 2;
+        const cy = height / 2;
+        const r = Math.sqrt(cx * cx + cy * cy);
+        const gradient = new fabric.Gradient({
+          type: 'radial',
+          coords: { x1: cx, y1: cy, x2: cx, y2: cy, r1: 0, r2: r },
+          colorStops: [
+            { offset: 0, color: bg.color1 },
+            { offset: midStart, color: bg.color1 },
+            { offset: midEnd, color: bg.color2 },
+            { offset: 1, color: bg.color2 }
+          ]
+        });
+        canvas.backgroundColor = gradient as any;
+      } else {
+        const coords = getGradientCoords(bg.direction);
+        const gradient = new fabric.Gradient({
+          type: 'linear',
+          coords,
+          colorStops: [
+            { offset: 0, color: bg.color1 },
+            { offset: midStart, color: bg.color1 },
+            { offset: midEnd, color: bg.color2 },
+            { offset: 1, color: bg.color2 }
+          ]
+        });
+        canvas.backgroundColor = gradient as any;
+      }
     } else if (bg.type === 'random-gradient') {
+      canvas.backgroundImage = undefined as any;
       const h1 = Math.floor(Math.random() * 360);
       const s1 = Math.floor(40 + Math.random() * 40);
       const l1 = Math.floor(35 + Math.random() * 30);
@@ -822,7 +939,6 @@ export function EditorPage() {
       const color1 = `hsl(${h1},${s1}%,${l1}%)`;
       const color2 = `hsl(${h2},${s2}%,${l2}%)`;
       const coords = getGradientCoords(bg.direction);
-      // Apply intensity
       const intensity = bg.intensity ?? 50;
       const midStart = (50 - intensity / 2) / 100;
       const midEnd = (50 + intensity / 2) / 100;
@@ -837,10 +953,82 @@ export function EditorPage() {
         ]
       });
       canvas.backgroundColor = gradient as any;
+
+    } else if (bg.type === 'mesh') {
+      // Generate mesh gradient image and set as backgroundImage
+      const dataUrl = generateMeshGradientDataUrl(bg.colors, canvasWidth, canvasHeight);
+      const img = await fabric.FabricImage.fromURL(dataUrl);
+      img.set({
+        left: 0, top: 0, originX: 'left', originY: 'top',
+        scaleX: canvasWidth / (img.width || canvasWidth),
+        scaleY: canvasHeight / (img.height || canvasHeight),
+        selectable: false, evented: false
+      });
+      canvas.backgroundColor = '#000000';
+      canvas.backgroundImage = img as any;
+
+    } else if (bg.type === 'stripes') {
+      const svgUrl = generateStripesSvgDataUrl(bg.color1, bg.color2, bg.angle, bg.stripeWidth, canvasWidth, canvasHeight);
+      const img = await fabric.FabricImage.fromURL(svgUrl);
+      img.set({
+        left: 0, top: 0, originX: 'left', originY: 'top',
+        scaleX: canvasWidth / (img.width || canvasWidth),
+        scaleY: canvasHeight / (img.height || canvasHeight),
+        selectable: false, evented: false
+      });
+      canvas.backgroundColor = '';
+      canvas.backgroundImage = img as any;
+
+    } else if (bg.type === 'vignette') {
+      // Generate vignette image and add as a named Fabric object (so it appears in layers panel)
+      const dataUrl = generateVignetteDataUrl(canvasWidth, canvasHeight, bg.intensity, bg.spread, bg.color);
+      const img = await fabric.FabricImage.fromURL(dataUrl);
+      img.set({
+        left: 0, top: 0, originX: 'left', originY: 'top',
+        scaleX: canvasWidth / (img.width || canvasWidth),
+        scaleY: canvasHeight / (img.height || canvasHeight),
+        selectable: true, evented: true, name: '暗角效果'
+      } as any);
+      canvas.add(img);
+      canvas.sendObjectToBack(img);
+
+    } else if (bg.type === 'clear-vignette') {
+      canvas.getObjects().forEach(obj => {
+        if ((obj as any).name === '暗角效果') canvas.remove(obj);
+      });
+
+    } else if (bg.type === 'grain') {
+      // Generate a 128x128 noise tile and tile it via fabric.Pattern on a Rect
+      const tileDataUrl = generateGrainDataUrl();
+      const tileImg = new Image();
+      tileImg.src = tileDataUrl;
+      // Wait for image load (data URL is synchronous in most browsers, but be safe)
+      await new Promise<void>((resolve) => {
+        if (tileImg.complete) { resolve(); } else { tileImg.onload = () => resolve(); }
+      });
+      const pattern = new fabric.Pattern({ source: tileImg, repeat: 'repeat' });
+      const grainRect = new fabric.Rect({
+        left: 0, top: 0,
+        width: canvasWidth, height: canvasHeight,
+        fill: pattern,
+        opacity: bg.opacity,
+        globalCompositeOperation: 'overlay',
+        selectable: true, evented: true,
+        name: '噪点效果',
+        originX: 'left', originY: 'top',
+      } as any);
+      canvas.add(grainRect);
+      canvas.sendObjectToBack(grainRect);
+
+    } else if (bg.type === 'clear-grain') {
+      canvas.getObjects().forEach(obj => {
+        if ((obj as any).name === '噪点效果') canvas.remove(obj);
+      });
     }
+
     canvas.renderAll();
     saveToHistory();
-  }, [canvas, saveToHistory]);
+  }, [canvas, saveToHistory, canvasWidth, canvasHeight]);
 
   // Handle preview - export canvas to image and show in modal
   const handlePreview = useCallback(() => {
@@ -879,7 +1067,10 @@ export function EditorPage() {
   return (
     <div className="flex -mx-6 -mb-6 bg-(--bg-secondary) overflow-hidden" style={{ height: 'calc(100vh - 56px - 48px)' }}>
       {/* Left - Toolbox Panel */}
-      <aside className="w-[280px] shrink-0 bg-(--bg-primary) border-r border-(--border-color) overflow-hidden">
+      <aside
+        style={{ width: leftWidth, minWidth: 260, maxWidth: 540, flexShrink: 0 }}
+        className="bg-(--bg-primary) border-r border-(--border-color) overflow-hidden flex flex-col"
+      >
         <ToolboxPanel
           onAddText={() => addObject('text')}
           onAddImage={() => addObject('image')}
@@ -888,6 +1079,26 @@ export function EditorPage() {
           initialRandomOnGeneration={randomOnGeneration}
         />
       </aside>
+
+      {/* Left Resize Divider */}
+      <div
+        className="w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startWidth = leftWidth;
+          const onMove = (ev: MouseEvent) => {
+            const newW = Math.min(540, Math.max(260, startWidth + ev.clientX - startX));
+            setLeftWidth(newW);
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      />
 
       {/* Center - Canvas Area (Flexible) */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -1063,8 +1274,31 @@ export function EditorPage() {
         </main>
       </div>
 
+      {/* Right Resize Divider */}
+      <div
+        className="w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startWidth = rightWidth;
+          const onMove = (ev: MouseEvent) => {
+            const newW = Math.min(600, Math.max(300, startWidth - (ev.clientX - startX)));
+            setRightWidth(newW);
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        }}
+      />
+
       {/* Right Sidebar */}
-      <aside className="w-[280px] shrink-0 bg-(--bg-primary) border-l border-(--border-color) flex flex-col overflow-hidden">
+      <aside
+        style={{ width: rightWidth, minWidth: 300, maxWidth: 600, flexShrink: 0 }}
+        className="bg-(--bg-primary) border-l border-(--border-color) flex flex-col overflow-hidden"
+      >
         <div className="flex border-b border-(--border-color) p-1">
           <button
             className={cn("flex-1 py-2.5 text-xs font-bold rounded-lg transition-all", activePanel === 'properties' ? "bg-(--bg-secondary) text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)")}
@@ -1077,6 +1311,13 @@ export function EditorPage() {
             onClick={() => setActivePanel('layers')}
           >
             {t('designer.layers')}
+          </button>
+          <button
+            className={cn("flex-1 py-2.5 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1", activePanel === 'ai' ? "bg-(--bg-secondary) text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)")}
+            onClick={() => setActivePanel('ai')}
+          >
+            <Sparkles className="w-3 h-3" />
+            AI
           </button>
         </div>
         <div className="flex-1 overflow-auto p-1">
@@ -1292,6 +1533,9 @@ export function EditorPage() {
                 }
               }}
             />
+          )}
+          {activePanel === 'ai' && (
+            <AIChatPanel />
           )}
         </div>
 

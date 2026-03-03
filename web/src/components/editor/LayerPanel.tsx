@@ -35,7 +35,7 @@ export function LayerPanel({
     // Set a transparent drag image if desired, or let browser handle it
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
+  const handleDragOver = (e: React.DragEvent, _index: number) => {
     e.preventDefault(); // Necessary to allow dropping
     e.dataTransfer.dropEffect = "move";
   };

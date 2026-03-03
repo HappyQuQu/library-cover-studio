@@ -7,6 +7,7 @@ import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Serv
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { apiClient } from '@/api/client';
+import { AIProviderSettings } from '@/components/settings/AIProviderSettings';
 
 interface Font {
   filename: string;
@@ -30,7 +31,7 @@ export function SettingsPage() {
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users') || 'appearance';
+  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users' | 'ai') || 'appearance';
   const setActiveSection = (tab: string) => setSearchParams({ tab });
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -289,6 +290,7 @@ export function SettingsPage() {
     { id: 'rendering', label: '渲染设置', icon: Sparkles },
     { id: 'storage', label: '存储设置', icon: Server },
     { id: 'fonts', label: '字体管理', icon: Type },
+    { id: 'ai', label: 'AI 配置', icon: Sparkles },
     { id: 'data', label: '数据管理', icon: Database },
     { id: 'logs', label: '系统日志', icon: Terminal },
     ...(user?.role === 'admin' ? [{ id: 'users', label: '用户管理', icon: Users }] : []),
@@ -599,6 +601,19 @@ export function SettingsPage() {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        )}
+
+        {/* AI Configuration */}
+        {activeSection === 'ai' && (
+          <div className="card">
+            <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              AI 配置
+            </div>
+            <div className="card-body">
+              <AIProviderSettings />
             </div>
           </div>
         )}

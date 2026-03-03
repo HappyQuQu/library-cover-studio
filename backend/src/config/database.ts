@@ -121,6 +121,37 @@ export async function initDatabase() {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
+    -- AI 服务提供商配置表
+    CREATE TABLE IF NOT EXISTS ai_providers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('claude', 'openai', 'ollama', 'custom')),
+      api_url TEXT NOT NULL,
+      api_key_encrypted TEXT,
+      model TEXT,
+      is_active INTEGER DEFAULT 1,
+      is_default INTEGER DEFAULT 0,
+      user_id TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- AI 对话历史表
+    CREATE TABLE IF NOT EXISTS ai_conversations (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      template_id TEXT,
+      provider_id TEXT,
+      messages TEXT NOT NULL,
+      generated_json TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE SET NULL,
+      FOREIGN KEY (provider_id) REFERENCES ai_providers(id) ON DELETE SET NULL
+    );
+
     -- 索引
     CREATE INDEX IF NOT EXISTS idx_media_servers_user ON media_servers(user_id);
     CREATE INDEX IF NOT EXISTS idx_templates_user ON templates(user_id);
@@ -128,6 +159,9 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_tasks_server ON tasks(server_id);
     CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
     CREATE INDEX IF NOT EXISTS idx_task_logs_task ON task_logs(task_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_providers_user ON ai_providers(user_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations(user_id);
+    CREATE INDEX IF NOT EXISTS idx_ai_conversations_provider ON ai_conversations(provider_id);
   `);
 
   // 初始化系统设置
