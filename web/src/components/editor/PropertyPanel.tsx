@@ -201,42 +201,50 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               />
             </div>
 
-            {/* Rounded Corners for Poster/Image */}
-            {(selectedObject.isPoster || selectedObject.type === 'image') && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-(--text-secondary)">圆角</span>
-                  <span className="text-[10px] font-medium text-(--text-tertiary)">
-                    {Math.round((selectedObject.clipPath?.rx || 0) * (selectedObject.scaleX || 1))}px
-                  </span>
-                </div>
-                <input
-                  type="range"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={Math.round((selectedObject.clipPath?.rx || 0) * (selectedObject.scaleX || 1))}
-                  className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
-                  onChange={(e) => {
-                    const visualRadius = parseInt(e.target.value);
-                    const scaleX = selectedObject.scaleX || 1;
-                    const scaleY = selectedObject.scaleY || 1;
-                    const internalRx = visualRadius / scaleX;
-                    const internalRy = visualRadius / scaleY; // Assuming circular corners visual means equal rx/ry visual.
+            {/* Rounded Corners for Poster/Image/Rect */}
+            {(selectedObject.isPoster || selectedObject.type === 'image' || selectedObject.type === 'rect') && (() => {
+              const isRect = selectedObject.type === 'rect';
+              const scaleX = selectedObject.scaleX || 1;
+              const scaleY = selectedObject.scaleY || 1;
+              const currentRx = isRect ? (selectedObject.rx || 0) : (selectedObject.clipPath?.rx || 0);
+              const visualRadius = Math.round(currentRx * scaleX);
 
-                    onPropertyChange('clipPath', {
-                      type: 'rect',
-                      width: selectedObject.width,
-                      height: selectedObject.height,
-                      rx: internalRx,
-                      ry: internalRy,
-                      originX: 'center',
-                      originY: 'center',
-                    });
-                  }}
-                />
-              </div>
-            )}
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-medium text-(--text-secondary)">圆角</span>
+                    <span className="text-[10px] font-medium text-(--text-tertiary)">{visualRadius}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    value={visualRadius}
+                    className="w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md hover:[&::-webkit-slider-thumb]:scale-110 transition-all"
+                    onChange={(e) => {
+                      const newVisualRadius = parseInt(e.target.value);
+                      const internalRx = newVisualRadius / scaleX;
+                      const internalRy = newVisualRadius / scaleY;
+
+                      if (isRect) {
+                        onPropertyChange('rx_ry', { rx: internalRx, ry: internalRy });
+                      } else {
+                        onPropertyChange('clipPath', {
+                          type: 'rect',
+                          width: selectedObject.width,
+                          height: selectedObject.height,
+                          rx: internalRx,
+                          ry: internalRy,
+                          originX: 'center',
+                          originY: 'center',
+                        });
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })()}
           </section>
 
           {/* Text Styling */}

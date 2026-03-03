@@ -1427,7 +1427,10 @@ export function EditorPage() {
                 }
 
                 // Special handling for clipPath (rounded corners)
-                if (prop === 'clipPath' && val) {
+                if (prop === 'rx_ry' && val) {
+                  selectedObject.set('rx', val.rx);
+                  selectedObject.set('ry', val.ry);
+                } else if (prop === 'clipPath' && val) {
                   const clipRect = new fabric.Rect({
                     width: val.width,
                     height: val.height,
