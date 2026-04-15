@@ -141,7 +141,7 @@ export function EditorPage() {
 
   const {
     canvas, setCanvas, selectedObject, setSelectedObject,
-    zoom, setZoom, undo, redo, saveToHistory
+    zoom, setZoom, undo, redo, saveToHistory, setIsRestoring, resetHistory
   } = useCanvasStore();
 
   // Fetch and inject custom fonts
@@ -480,6 +480,7 @@ export function EditorPage() {
       });
       canvas.setZoom(initialZoom);
       setZoom(initialZoom);
+      resetHistory();
       setCanvasReady(true);
       return;
     }
@@ -505,6 +506,7 @@ export function EditorPage() {
       if (templateData.canvasJson) {
         try {
           const jsonData = JSON.parse(templateData.canvasJson);
+          setIsRestoring(true);
           await canvas.loadFromJSON(jsonData);
 
           // Restore randomOnGeneration setting
@@ -535,15 +537,20 @@ export function EditorPage() {
           canvas.setZoom(currentZoom);
           canvas.renderAll();
           syncLayersRef.current();
+          resetHistory(jsonData);
         } catch (err) {
           console.error('Failed to load canvas JSON:', err);
+        } finally {
+          setIsRestoring(false);
         }
+      } else {
+        resetHistory();
       }
       setCanvasReady(true);
     };
 
     loadTemplate();
-  }, [canvas, templateData, id, setZoom]);
+  }, [canvas, templateData, id, setZoom, setIsRestoring, resetHistory]);
 
   // Sync fabric zoom and dimensions when zoom state changes
   useEffect(() => {

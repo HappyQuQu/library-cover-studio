@@ -37,7 +37,9 @@ interface CanvasState {
   setCanvas: (canvas: fabric.Canvas | null) => void;
   setSelectedObject: (obj: fabric.FabricObject | null) => void;
   setZoom: (zoom: number) => void;
+  setIsRestoring: (isRestoring: boolean) => void;
   saveToHistory: () => void;
+  resetHistory: (snapshot?: any) => void;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
   clearCanvas: () => void;
@@ -58,6 +60,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   setZoom: (zoom) => set({ zoom }),
 
+  setIsRestoring: (isRestoring) => set({ isRestoring }),
+
   saveToHistory: () => {
     const { canvas, history, historyIndex, isRestoring } = get();
     // 正在撤销/重做时不保存历史，避免 object:added 事件覆盖历史
@@ -73,6 +77,18 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     set({
       history: newHistory,
       historyIndex: newHistory.length - 1
+    });
+  },
+
+  resetHistory: (snapshot) => {
+    const { canvas } = get();
+    if (!canvas) return;
+
+    const CUSTOM_PROPS = ['id', 'posterVar', 'isPoster', 'randomOnGeneration', 'textVar'];
+    const json = JSON.stringify(snapshot ?? (canvas as any).toJSON(CUSTOM_PROPS));
+    set({
+      history: [json],
+      historyIndex: 0
     });
   },
 
