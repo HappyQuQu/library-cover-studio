@@ -25,6 +25,8 @@ export class ClaudeProvider implements AIProvider {
     context?: TemplateContext
   ): AsyncGenerator<StreamChunk, void, unknown> {
     try {
+      const systemPrompt = context?.systemPrompt || SYSTEM_PROMPT;
+
       // 构建消息历史
       const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
@@ -46,7 +48,8 @@ export class ClaudeProvider implements AIProvider {
         content: buildUserPrompt(prompt, {
           currentCanvas: context?.currentCanvas,
           canvasSize: context?.canvasSize,
-          editMode: context?.editMode
+          editMode: context?.editMode,
+          runtimeConfig: context?.runtimeConfig
         })
       });
 
@@ -54,7 +57,7 @@ export class ClaudeProvider implements AIProvider {
       const stream = await this.client.messages.stream({
         model: this.model,
         max_tokens: 4096,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         messages
       });
 

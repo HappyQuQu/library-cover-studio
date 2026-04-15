@@ -274,10 +274,22 @@ Fabric.js linearGradient 示例（作为 backgroundImage 的 fill）：参考下
 }
 `;
 
+export function resolveSystemPrompt(runtimeConfig?: string): string {
+  const config = runtimeConfig?.trim();
+  if (!config) return SYSTEM_PROMPT;
+
+  return `${SYSTEM_PROMPT}
+
+## 七、运行时配置（用户实时修改）
+以下配置由用户在设置中实时调整，每次请求都可能变化。请将其作为附加约束执行：
+${config}`;
+}
+
 export function buildUserPrompt(description: string, context?: {
   currentCanvas?: any;
   canvasSize?: { width: number; height: number };
   editMode?: boolean;
+  runtimeConfig?: string;
 }): string {
   const isEditMode = context?.editMode && context?.currentCanvas;
 
@@ -288,6 +300,19 @@ export function buildUserPrompt(description: string, context?: {
 
   // 画布尺寸固定为 1920×1080，不受传入 canvasSize 影响
   prompt += `\n\n画布尺寸：1920×1080（固定，不可更改）`;
+
+  prompt += `
+
+## 本次任务模式
+- 当前模式：${isEditMode ? '优化当前模板（在现有结构上调整）' : '新建模板（从空白生成）'}
+- 调整目标：${description}
+
+## 运行时配置
+${context?.runtimeConfig?.trim() ? context.runtimeConfig : '(空配置)'}
+
+配置使用规则：
+- 若运行时配置为空，按系统默认规则执行
+- 若运行时配置非空，将其作为附加约束并体现在最终 JSON 中`;
 
   if (isEditMode && context?.currentCanvas) {
     prompt += `

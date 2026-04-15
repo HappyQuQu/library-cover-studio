@@ -2,10 +2,11 @@ import { Request, Response } from 'express';
 import { eq, and, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db } from '../config/database.js';
-import { aiProviders, aiConversations } from '../config/schema.js';
+import { aiProviders, aiConversations, systemSettings } from '../config/schema.js';
 import { decrypt } from '../utils/crypto.js';
 import { createAIProvider } from '../services/ai/aiClient.service.js';
 import type { Message } from '../services/ai/aiClient.service.js';
+import { resolveSystemPrompt } from '../services/ai/prompts/templateGenerator.js';
 
 // 生成模板（SSE 流式响应）
 export async function generateTemplate(req: Request, res: Response) {
@@ -72,6 +73,15 @@ export async function generateTemplate(req: Request, res: Response) {
       model: customModel || provider.model || undefined
     });
 
+    // 实时读取运行时配置（空值也要传入模型上下文）
+    const runtimeConfigSetting = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, 'ai.systemPrompt'))
+      .limit(1);
+    const runtimeConfig = runtimeConfigSetting[0]?.value || '';
+    const systemPrompt = resolveSystemPrompt(runtimeConfig);
+
     // 设置 SSE 响应头
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -92,7 +102,9 @@ export async function generateTemplate(req: Request, res: Response) {
         conversationHistory,
         currentCanvas,
         canvasSize,
-        editMode: !!editMode
+        editMode: !!editMode,
+        runtimeConfig,
+        systemPrompt
       })) {
         if (chunk.type === 'chunk') {
           fullResponse += chunk.content || '';

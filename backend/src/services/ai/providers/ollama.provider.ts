@@ -17,9 +17,11 @@ export class OllamaProvider implements AIProvider {
     context?: TemplateContext
   ): AsyncGenerator<StreamChunk, void, unknown> {
     try {
+      const systemPrompt = context?.systemPrompt || SYSTEM_PROMPT;
+
       // 构建消息历史
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-        { role: 'system', content: SYSTEM_PROMPT }
+        { role: 'system', content: systemPrompt }
       ];
 
       // 添加历史对话
@@ -38,7 +40,8 @@ export class OllamaProvider implements AIProvider {
         content: buildUserPrompt(prompt, {
           currentCanvas: context?.currentCanvas,
           canvasSize: context?.canvasSize,
-          editMode: context?.editMode
+          editMode: context?.editMode,
+          runtimeConfig: context?.runtimeConfig
         })
       });
 

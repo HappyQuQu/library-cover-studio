@@ -8,6 +8,8 @@ export interface TemplateContext {
   currentCanvas?: any;
   canvasSize?: { width: number; height: number };
   editMode?: boolean;
+  systemPrompt?: string;
+  runtimeConfig?: string;
 }
 
 export interface StreamChunk {
