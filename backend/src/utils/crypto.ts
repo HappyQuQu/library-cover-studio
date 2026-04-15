@@ -4,7 +4,7 @@ const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
 
 function getKey(): Buffer {
-  const key = process.env.ENCRYPTION_KEY || 'default-encryption-key-change-me';
+  const key = process.env.ENCRYPTION_KEY!;
   // 确保 key 是 32 字节
   return crypto.scryptSync(key, 'salt', 32);
 }

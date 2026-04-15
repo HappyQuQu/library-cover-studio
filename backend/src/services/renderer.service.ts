@@ -361,12 +361,15 @@ function replaceVariables(template: TemplateData, metadata: MediaMetadata): Temp
       .replace(/\{\{.*?\}\}/g, '');
   };
 
-  const processedObjects = template.objects.map(obj => {
+  const processedObjects = template.objects.map((obj: any) => {
     if (['text', 'i-text', 'itext', 'textbox'].includes(obj.type?.toLowerCase())) {
-      return {
-        ...obj,
-        text: obj.text ? replaceText(obj.text) : obj.text
-      };
+      // textVar 优先：直接用变量值替换整个文字，不影响画布中显示的原文
+      if (obj.textVar) {
+        const resolved = replaceText(obj.textVar);
+        return { ...obj, text: resolved };
+      }
+      // 回退：替换文字内容中的 {{}} 占位符
+      return { ...obj, text: obj.text ? replaceText(obj.text) : obj.text };
     }
     return obj;
   });

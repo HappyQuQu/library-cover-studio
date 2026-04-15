@@ -1,99 +1,110 @@
 import { create } from 'zustand';
 import * as fabric from 'fabric';
 
-interface CanvasObject {
-  id: string;
-  type: string;
-  data: any;
+/**
+ * Fabric.js 6 的 loadFromJSON 会把 gradient background 赋值为 plain object 而非 Gradient 实例，
+ * 导致 canvas 渲染时 ctx.fillStyle = "[object Object]" 无效 → 背景消失。
+ * 此函数在 loadFromJSON 之后补丁修复。
+ */
+async function reapplyBackground(canvas: fabric.Canvas, json: any) {
+  // 修复 gradient backgroundColor
+  const bg = (canvas as any).backgroundColor;
+  if (bg && typeof bg === 'object' && !(bg instanceof fabric.Gradient)) {
+    try {
+      (canvas as any).backgroundColor = new fabric.Gradient(json.background);
+    } catch {
+      // 构造失败就重置为白色，至少不会崩溃
+      (canvas as any).backgroundColor = '#ffffff';
+    }
+  }
+  // 修复 backgroundImage 未加载的情况
+  if (json.backgroundImage && !(canvas as any).backgroundImage) {
+    try {
+      const img = await fabric.FabricImage.fromObject(json.backgroundImage);
+      (canvas as any).backgroundImage = img;
+    } catch { /* ignore */ }
+  }
 }
 
 interface CanvasState {
   canvas: fabric.Canvas | null;
   selectedObject: fabric.FabricObject | null;
-  objects: CanvasObject[];
   history: string[];
   historyIndex: number;
   zoom: number;
+  isRestoring: boolean; // 正在执行撤销/重做，阻止事件触发 saveToHistory
 
   setCanvas: (canvas: fabric.Canvas | null) => void;
   setSelectedObject: (obj: fabric.FabricObject | null) => void;
-  addObject: (obj: CanvasObject) => void;
-  removeObject: (id: string) => void;
-  updateObject: (id: string, data: any) => void;
   setZoom: (zoom: number) => void;
   saveToHistory: () => void;
-  undo: () => void;
-  redo: () => void;
+  undo: () => Promise<void>;
+  redo: () => Promise<void>;
   clearCanvas: () => void;
+  applyCanvasJSON: (json: any) => Promise<void>;
 }
 
 export const useCanvasStore = create<CanvasState>((set, get) => ({
   canvas: null,
   selectedObject: null,
-  objects: [],
   history: [],
   historyIndex: -1,
   zoom: 1,
+  isRestoring: false,
 
   setCanvas: (canvas) => set({ canvas }),
 
   setSelectedObject: (obj) => set({ selectedObject: obj }),
 
-  addObject: (obj) => {
-    set((state) => ({
-      objects: [...state.objects, obj]
-    }));
-    get().saveToHistory();
-  },
-
-  removeObject: (id) => {
-    set((state) => ({
-      objects: state.objects.filter((o) => o.id !== id)
-    }));
-    get().saveToHistory();
-  },
-
-  updateObject: (id, data) => {
-    set((state) => ({
-      objects: state.objects.map((o) =>
-        o.id === id ? { ...o, data: { ...o.data, ...data } } : o
-      )
-    }));
-  },
-
   setZoom: (zoom) => set({ zoom }),
 
   saveToHistory: () => {
-    const { canvas, history, historyIndex } = get();
-    if (canvas) {
-      // Include background and custom properties in the saved JSON
-      const json = JSON.stringify((canvas as any).toJSON(['id', 'posterVar', 'isPoster', 'randomOnGeneration']));
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(json);
-      set({
-        history: newHistory,
-        historyIndex: newHistory.length - 1
-      });
-    }
+    const { canvas, history, historyIndex, isRestoring } = get();
+    // 正在撤销/重做时不保存历史，避免 object:added 事件覆盖历史
+    if (isRestoring || !canvas) return;
+
+    const CUSTOM_PROPS = ['id', 'posterVar', 'isPoster', 'randomOnGeneration', 'textVar'];
+    // toJSON 会自动包含 backgroundImage，传入自定义属性确保对象级别的属性也被序列化
+    const json = JSON.stringify((canvas as any).toJSON(CUSTOM_PROPS));
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(json);
+    // 最多保留 50 步历史，避免内存占用过大
+    if (newHistory.length > 50) newHistory.shift();
+    set({
+      history: newHistory,
+      historyIndex: newHistory.length - 1
+    });
   },
 
   undo: async () => {
     const { canvas, history, historyIndex } = get();
-    if (canvas && historyIndex > 0) {
-      const newIndex = historyIndex - 1;
-      set({ historyIndex: newIndex });
-      await canvas.loadFromJSON(JSON.parse(history[newIndex]));
+    if (!canvas || historyIndex <= 0) return;
+
+    const newIndex = historyIndex - 1;
+    const parsed = JSON.parse(history[newIndex]);
+    set({ isRestoring: true, historyIndex: newIndex });
+    try {
+      await canvas.loadFromJSON(parsed);
+      await reapplyBackground(canvas, parsed);
       canvas.renderAll();
+    } finally {
+      set({ isRestoring: false });
     }
   },
 
   redo: async () => {
     const { canvas, history, historyIndex } = get();
-    if (canvas && historyIndex < history.length - 1) {
-      const newIndex = historyIndex + 1;
-      set({ historyIndex: newIndex });
-      await canvas.loadFromJSON(JSON.parse(history[newIndex]));
+    if (!canvas || historyIndex >= history.length - 1) return;
+
+    const newIndex = historyIndex + 1;
+    const parsed = JSON.parse(history[newIndex]);
+    set({ isRestoring: true, historyIndex: newIndex });
+    try {
+      await canvas.loadFromJSON(parsed);
+      await reapplyBackground(canvas, parsed);
       canvas.renderAll();
+    } finally {
+      set({ isRestoring: false });
     }
   },
 
@@ -101,11 +112,23 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const { canvas } = get();
     if (canvas) {
       canvas.clear();
-      set({
-        objects: [],
-        selectedObject: null
-      });
+      set({ selectedObject: null });
       get().saveToHistory();
+    }
+  },
+
+  // 从 AI 生成结果等外部 JSON 应用到画布，保证历史正确且不被 object:added 覆盖
+  applyCanvasJSON: async (json: any) => {
+    const { canvas } = get();
+    if (!canvas) return;
+    get().saveToHistory();
+    set({ isRestoring: true });
+    try {
+      await canvas.loadFromJSON(json);
+      await reapplyBackground(canvas, json);
+      canvas.renderAll();
+    } finally {
+      set({ isRestoring: false });
     }
   }
 }));

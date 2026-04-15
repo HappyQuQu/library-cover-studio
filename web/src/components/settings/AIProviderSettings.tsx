@@ -9,6 +9,7 @@ import {
   useUpdateAIProvider,
   useDeleteAIProvider,
   useTestAIProvider,
+  useTestAIProviderConfig,
 } from '@/api/ai';
 import { apiClient } from '@/api/client';
 
@@ -48,6 +49,7 @@ export function AIProviderSettings() {
   const updateMutation = useUpdateAIProvider();
   const deleteMutation = useDeleteAIProvider();
   const testMutation = useTestAIProvider();
+  const testConfigMutation = useTestAIProviderConfig();
 
   // 'list' | 'add' | 'edit'
   const [formMode, setFormMode] = useState<'list' | 'add' | 'edit'>('list');
@@ -365,10 +367,33 @@ export function AIProviderSettings() {
               <p className="text-[10px] text-(--text-tertiary) mt-1.5 ml-1 leading-relaxed">多个模型请使用英文逗号 `,` 隔开。在聊天面板右侧会自动出现快捷切换这些模型的菜单。<br />如果不填，将使用服务商或 SDK 默认模型兜底请求。</p>
             </div>
 
-            <div className="flex gap-2 pt-4 border-t border-(--border-color)">
+            <div className="flex flex-wrap gap-2 pt-4 border-t border-(--border-color)">
               <Button onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending} className="h-9 px-5 bg-(--primary) hover:opacity-90 text-white font-medium">
                 <Check className="w-4 h-4 mr-2" />
                 {formMode === 'add' ? '新增并保存' : '保存修改'}
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 px-5 border-(--border-color) text-green-600 hover:text-green-700 hover:bg-green-50 hover:border-green-300"
+                disabled={testConfigMutation.isPending || !formData.apiUrl}
+                onClick={async () => {
+                  try {
+                    const result = await testConfigMutation.mutateAsync({
+                      type: formData.type,
+                      apiUrl: formData.apiUrl,
+                      apiKey: formData.apiKey || undefined,
+                      model: formData.model || undefined
+                    });
+                    toast({ title: result.success ? '连接成功 ✓' : '连接失败', variant: result.success ? 'default' : 'destructive' });
+                  } catch (error: any) {
+                    toast({ title: '测试失败', description: error.message, variant: 'destructive' });
+                  }
+                }}
+              >
+                {testConfigMutation.isPending
+                  ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  : <Zap className="w-4 h-4 mr-2" />}
+                测试连接
               </Button>
               <Button variant="outline" className="h-9 px-5 border-(--border-color) text-(--text-primary) hover:bg-(--bg-secondary)" onClick={() => { setFormMode('list'); setEditingId(null); }}>
                 取消

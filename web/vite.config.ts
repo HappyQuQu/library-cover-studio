@@ -24,6 +24,15 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true
+    sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/fabric')) return 'vendor-fabric';
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/') || id.includes('node_modules/react-router')) return 'vendor-react';
+          if (id.includes('node_modules/@tanstack/react-query')) return 'vendor-query';
+        }
+      }
+    }
   }
 });

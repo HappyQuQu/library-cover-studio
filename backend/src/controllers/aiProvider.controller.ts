@@ -19,12 +19,18 @@ export async function getAIProviders(req: Request, res: Response) {
       .from(aiProviders)
       .where(eq(aiProviders.userId, userId));
 
-    // 解密 API Key（只返回前几位）
-    const result = providers.map(p => ({
-      ...p,
-      apiKey: p.apiKeyEncrypted ? `${decrypt(p.apiKeyEncrypted).substring(0, 8)}...` : undefined,
-      apiKeyEncrypted: undefined
-    }));
+    // 解密 API Key（只返回前几位），解密失败时标记为已损坏
+    const result = providers.map(p => {
+      let apiKeyPreview: string | undefined;
+      if (p.apiKeyEncrypted) {
+        try {
+          apiKeyPreview = `${decrypt(p.apiKeyEncrypted).substring(0, 8)}...`;
+        } catch {
+          apiKeyPreview = '[密钥已损坏，请重新填写]';
+        }
+      }
+      return { ...p, apiKey: apiKeyPreview, apiKeyEncrypted: undefined };
+    });
 
     res.json(result);
   } catch (error: any) {
@@ -179,6 +185,33 @@ export async function deleteAIProvider(req: Request, res: Response) {
   }
 }
 
+// 测试未保存的配置（不需要 ID，直接传入配置参数）
+export async function testAIProviderConfig(req: Request, res: Response) {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const { type, apiUrl, apiKey, model } = req.body;
+    if (!type || !apiUrl) {
+      return res.status(400).json({ error: 'type 和 apiUrl 为必填项' });
+    }
+
+    const client = await createAIClient({
+      type: type as any,
+      apiUrl,
+      apiKey: apiKey || undefined,
+      model: model || undefined
+    });
+
+    const success = await client.testConnection();
+    res.json({ success });
+  } catch (error: any) {
+    console.error('Failed to test AI provider config:', error);
+    res.status(500).json({ error: error.message, success: false });
+  }
+}
+
 // 测试 AI 连接
 export async function testAIProvider(req: Request, res: Response) {
   try {
@@ -203,10 +236,18 @@ export async function testAIProvider(req: Request, res: Response) {
     const provider = providers[0];
 
     // 创建客户端并测试
+    let apiKey: string | undefined;
+    if (provider.apiKeyEncrypted) {
+      try {
+        apiKey = decrypt(provider.apiKeyEncrypted);
+      } catch {
+        return res.status(400).json({ success: false, error: 'API 密钥已损坏，请重新编辑并填写新密钥' });
+      }
+    }
     const client = await createAIClient({
       type: provider.type as any,
       apiUrl: provider.apiUrl,
-      apiKey: provider.apiKeyEncrypted ? decrypt(provider.apiKeyEncrypted) : undefined,
+      apiKey,
       model: provider.model || undefined
     });
 

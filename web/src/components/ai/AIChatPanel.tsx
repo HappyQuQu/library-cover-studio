@@ -1,10 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles, RefreshCw } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Loader2, Sparkles, RefreshCw, CheckCircle, Layers } from 'lucide-react';
 import { useAIProviders } from '../../api/ai';
-import type { Message } from '../../api/ai';
 import { useCanvasStore } from '../../stores/canvasStore';
 import { useAuthStore } from '../../stores/authStore';
 import { apiClient } from '../../api/client';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;          // 显示文本（不含 JSON）
+  canvasJson?: any;         // 待应用的模板，有值时显示"应用"按钮
+  applied?: boolean;        // 是否已应用
+}
 
 interface StreamChunk {
   type: 'chunk' | 'complete' | 'error' | 'conversation_id';
@@ -59,8 +65,12 @@ function summarizeCanvas(canvasJson: any): any {
   };
 }
 
-export function AIChatPanel() {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface AIChatPanelProps {
+  onApplied?: () => void;
+}
+
+export function AIChatPanel({ onApplied }: AIChatPanelProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string>();
@@ -70,8 +80,17 @@ export function AIChatPanel() {
 
   const { data: providers } = useAIProviders();
   const canvas = useCanvasStore(state => state.canvas);
-  const saveToHistory = useCanvasStore(state => state.saveToHistory);
+  const applyCanvasJSON = useCanvasStore(state => state.applyCanvasJSON);
   const token = useAuthStore(state => state.token);
+
+  // 手动应用模板到画布，使用 store 方法确保 isRestoring 正确设置
+  const applyToCanvas = useCallback(async (canvasJson: any, msgIndex: number) => {
+    await applyCanvasJSON(canvasJson);
+    setMessages(prev => prev.map((m, i) =>
+      i === msgIndex ? { ...m, applied: true } : m
+    ));
+    onApplied?.();
+  }, [applyCanvasJSON, onApplied]);
 
   useEffect(() => {
     if (providers && !selectedProvider) {
@@ -108,13 +127,16 @@ export function AIChatPanel() {
   const handleSend = async () => {
     if (!input.trim() || isGenerating || !selectedProvider) return;
 
-    const userMessage: Message = { role: 'user', content: input.trim() };
+    const userMessage: ChatMessage = { role: 'user', content: input.trim() };
     setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsGenerating(true);
 
+    // 占位助手消息（生成中）
+    const assistantIndex = messages.length + 1;
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
     try {
-      // 始终传入当前画布（精简版），画布为空时传 null
       let currentCanvas: any = null;
       let editMode = false;
       try {
@@ -148,16 +170,12 @@ export function AIChatPanel() {
         })
       });
 
-      if (!response.ok) throw new Error('Failed to generate template');
+      if (!response.ok) throw new Error('请求失败，请检查 AI 服务配置');
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response body');
 
       const decoder = new TextDecoder();
-      let assistantMessage = '';
-      let assistantMessageIndex = messages.length + 1;
-
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
 
       while (true) {
         const { done, value } = await reader.read();
@@ -169,21 +187,45 @@ export function AIChatPanel() {
         for (const line of lines) {
           try {
             const data: StreamChunk = JSON.parse(line.substring(5).trim());
+
             if (data.type === 'chunk') {
-              assistantMessage += data.content || '';
+              // 生成中：只显示省略号动画，不显示原始 JSON
               setMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[assistantMessageIndex] = { role: 'assistant', content: assistantMessage };
-                return newMessages;
+                const next = [...prev];
+                next[assistantIndex] = { role: 'assistant', content: '正在生成中...' };
+                return next;
               });
+
             } else if (data.type === 'complete') {
-              if (data.canvasJson && canvas) {
-                saveToHistory();
-                await canvas.loadFromJSON(data.canvasJson);
-                canvas.renderAll();
-              }
+              // 生成完成：统计对象数量，显示摘要 + 应用按钮
+              const json = data.canvasJson;
+              const objCount = json?.objects?.length ?? 0;
+              const textCount = (json?.objects ?? []).filter((o: any) =>
+                o.type === 'IText' || o.type === 'i-text'
+              ).length;
+              const imgCount = (json?.objects ?? []).filter((o: any) =>
+                o.type === 'Image'
+              ).length;
+
+              const summary = `已生成模板：共 ${objCount} 个对象（${imgCount} 张海报图、${textCount} 段文字）`;
+
+              setMessages(prev => {
+                const next = [...prev];
+                next[assistantIndex] = {
+                  role: 'assistant',
+                  content: summary,
+                  canvasJson: json ?? undefined
+                };
+                return next;
+              });
+
             } else if (data.type === 'error') {
-              setMessages(prev => [...prev, { role: 'assistant', content: `错误: ${data.error}` }]);
+              setMessages(prev => {
+                const next = [...prev];
+                next[assistantIndex] = { role: 'assistant', content: `生成失败：${data.error}` };
+                return next;
+              });
+
             } else if (data.type === 'conversation_id') {
               setConversationId(data.id);
             }
@@ -193,7 +235,11 @@ export function AIChatPanel() {
         }
       }
     } catch (error: any) {
-      setMessages(prev => [...prev, { role: 'assistant', content: `错误: ${error.message}` }]);
+      setMessages(prev => {
+        const next = [...prev];
+        next[assistantIndex] = { role: 'assistant', content: `错误：${error.message}` };
+        return next;
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -210,6 +256,7 @@ export function AIChatPanel() {
     setMessages([]);
     setConversationId(undefined);
     setInput('');
+    setIsGenerating(false);
   };
 
   if (!providers || providers.length === 0) {
@@ -282,11 +329,39 @@ export function AIChatPanel() {
 
         {messages.map((msg, idx) => (
           <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[90%] px-3 py-2 rounded-lg text-xs leading-relaxed ${msg.role === 'user'
-              ? 'bg-blue-500 text-white'
-              : 'bg-gray-100 text-gray-900'
+            <div className={`max-w-[90%] rounded-lg text-xs leading-relaxed ${msg.role === 'user'
+              ? 'bg-blue-500 text-white px-3 py-2'
+              : 'bg-gray-100 text-gray-900 px-3 py-2'
               }`}>
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              {/* 生成中动画 */}
+              {msg.role === 'assistant' && msg.content === '正在生成中...' ? (
+                <span className="flex items-center gap-1.5 text-gray-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  正在生成中...
+                </span>
+              ) : (
+                <p className="whitespace-pre-wrap">{msg.content}</p>
+              )}
+
+              {/* 生成完成：显示应用按钮 */}
+              {msg.role === 'assistant' && msg.canvasJson && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  {msg.applied ? (
+                    <span className="flex items-center gap-1 text-green-600 text-[11px]">
+                      <CheckCircle className="w-3 h-3" />
+                      已应用到画布
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => applyToCanvas(msg.canvasJson, idx)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-[11px] transition-colors"
+                    >
+                      <Layers className="w-3 h-3" />
+                      应用到画布
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         ))}

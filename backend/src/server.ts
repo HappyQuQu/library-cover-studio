@@ -10,6 +10,15 @@ import { initScheduler } from './services/scheduler.service.js';
 import { addLogClient, logger } from './utils/logger.js';
 import { ensureDataDirs, UPLOADS_DIR, COVERS_DIR, POSTERS_DIR, THUMBNAILS_DIR } from './config/paths.js';
 
+// 启动时校验必需的环境变量
+const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
+const missingVars = REQUIRED_ENV_VARS.filter(v => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error(`❌ Missing required environment variables: ${missingVars.join(', ')}`);
+  console.error('Please set these variables in your .env file before starting the server.');
+  process.exit(1);
+}
+
 // Ensure data directories exist on startup
 ensureDataDirs();
 

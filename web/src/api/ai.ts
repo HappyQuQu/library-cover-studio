@@ -82,11 +82,21 @@ export function useDeleteAIProvider() {
   });
 }
 
-// 测试 AI 连接
+// 测试已保存的 AI 连接（by ID）
 export function useTestAIProvider() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { data } = await apiClient.post<{ success: boolean }>(`/ai-providers/${id}/test`);
+      return data;
+    }
+  });
+}
+
+// 测试未保存的 AI 配置（直接传参数，不需要先保存）
+export function useTestAIProviderConfig() {
+  return useMutation({
+    mutationFn: async (config: { type: string; apiUrl: string; apiKey?: string; model?: string }) => {
+      const { data } = await apiClient.post<{ success: boolean }>('/ai-providers/test-config', config);
       return data;
     }
   });

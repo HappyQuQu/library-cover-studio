@@ -1,4 +1,4 @@
-import { Trash2, Copy, MousePointer2, Wand2, AlignLeft, AlignCenter, AlignRight } from 'lucide-react';
+import { Trash2, Copy, MousePointer2, Wand2, AlignLeft, AlignCenter, AlignRight, Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -329,31 +329,73 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           )}
 
           {/* Variable Binding - Text Only */}
-          {isText && (
-            <section className="bg-(--bg-secondary)/50 border border-(--border-color) rounded-xl p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
-                  <Wand2 className="w-3 h-3 text-(--primary)" />
-                  {t('designer.placeholder', '变量绑定')}
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-1.5">
-                {[
-                  { var: '{{primary_title}}', label: '主标题' },
-                  { var: '{{secondary_title}}', label: '副标题' },
-                ].map((item) => (
-                  <button
-                    key={item.var}
-                    onClick={() => onPropertyChange('text', (selectedObject.text || '') + item.var)}
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-white border border-(--border-color) hover:border-(--primary) hover:shadow-sm transition-all group text-left"
-                  >
-                    <code className="text-[10px] font-mono text-(--primary) bg-(--primary)/10 px-1 rounded">{item.var}</code>
-                    <span className="text-[10px] text-(--text-tertiary) group-hover:text-(--text-secondary)">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          )}
+          {isText && (() => {
+            const TEXT_VARS = [
+              { var: '{{primary_title}}', label: '主标题', desc: '媒体库名称' },
+              { var: '{{secondary_title}}', label: '副标题', desc: '自定义副标题文字' },
+              { var: '{{title}}', label: '媒体标题', desc: '媒体项目标题' },
+              { var: '{{year}}', label: '年份', desc: '发行年份' },
+              { var: '{{rating}}', label: '评分', desc: '评分，如 8.5' },
+              { var: '{{genres}}', label: '类型', desc: '媒体类型，如 动作 / 剧情' },
+            ];
+            const boundVar = TEXT_VARS.find(v => selectedObject.textVar === v.var);
+            return (
+              <section className="bg-(--bg-secondary)/50 border border-(--border-color) rounded-xl p-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
+                    <Wand2 className="w-3 h-3 text-(--primary)" />
+                    {t('designer.placeholder', '变量绑定')}
+                  </span>
+                  {boundVar && (
+                    <span className="text-[10px] text-green-600 flex items-center gap-0.5 font-medium">
+                      <Check className="w-2.5 h-2.5" /> 已绑定
+                    </span>
+                  )}
+                </div>
+
+                {/* 已绑定时显示说明 */}
+                {boundVar && (
+                  <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200">
+                    <Check className="w-3 h-3 text-green-600 shrink-0" />
+                    <span className="text-[11px] text-green-700 leading-relaxed flex-1">
+                      渲染时显示 <strong>{boundVar.desc}</strong>，原文字不变
+                    </span>
+                  </div>
+                )}
+
+                <div className="flex flex-wrap gap-1.5">
+                  {TEXT_VARS.map((item) => {
+                    const isActive = selectedObject.textVar === item.var;
+                    return (
+                      <button
+                        key={item.var}
+                        onClick={() => {
+                          // 已绑定 → 点击取消绑定；未绑定 → 设置 textVar（不改 text）
+                          onPropertyChange('textVar', isActive ? '' : item.var);
+                        }}
+                        title={isActive ? '点击取消绑定' : `渲染时替换为：${item.desc}（不改变原文字）`}
+                        className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all",
+                          isActive
+                            ? "bg-(--primary) text-white border-(--primary) shadow-sm"
+                            : "bg-(--bg-primary) text-(--text-secondary) border-(--border-color) hover:border-(--primary) hover:text-(--primary)"
+                        )}
+                      >
+                        {isActive && <Check className="w-2.5 h-2.5" />}
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {!boundVar && (
+                  <p className="text-[10px] text-(--text-tertiary) leading-relaxed">
+                    点击标签绑定变量，渲染时自动替换，不改变画布中的文字内容
+                  </p>
+                )}
+              </section>
+            );
+          })()}
 
           {/* Variable Binding - Poster Only */}
           {(selectedObject.isPoster || selectedObject.type === 'image') && (

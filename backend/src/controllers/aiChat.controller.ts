@@ -49,7 +49,7 @@ export async function generateTemplate(req: Request, res: Response) {
 
     // 获取对话历史
     let conversationHistory: Message[] = [];
-    let conversation;
+    let conversation: typeof import('../config/schema.js').aiConversations.$inferSelect | undefined;
 
     if (conversationId) {
       const conversations = await db
@@ -105,11 +105,20 @@ export async function generateTemplate(req: Request, res: Response) {
         }
       }
 
-      // 添加助手消息到历史
+      // 助手消息存摘要而非完整 JSON，避免多轮对话 token 爆炸
+      const assistantSummary = canvasJson
+        ? `[已生成模板：${canvasJson.objects?.length ?? 0} 个对象]`
+        : fullResponse.substring(0, 500);
+
       conversationHistory.push({
         role: 'assistant',
-        content: fullResponse
+        content: assistantSummary
       });
+
+      // 历史最多保留最近 10 条消息（5轮对话），防止 context 过长
+      if (conversationHistory.length > 10) {
+        conversationHistory = conversationHistory.slice(-10);
+      }
 
       // 保存或更新对话
       const now = new Date().toISOString();

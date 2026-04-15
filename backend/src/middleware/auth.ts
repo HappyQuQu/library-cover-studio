@@ -6,7 +6,7 @@ import { users } from '../config/schema.js';
 import { db } from '../config/database.js';
 import { eq } from 'drizzle-orm';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'default-secret-change-me';
+const JWT_SECRET = process.env.JWT_SECRET!;
 
 export interface JwtPayload {
   userId: string;

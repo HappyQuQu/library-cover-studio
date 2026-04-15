@@ -310,8 +310,16 @@ export function EditorPage() {
     fabricCanvas.on('selection:updated', (e: any) => setSelectedObjectRef.current(e.selected?.[0]));
     fabricCanvas.on('selection:cleared', () => setSelectedObjectRef.current(null));
 
-    fabricCanvas.on('object:added', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
-    fabricCanvas.on('object:removed', () => { syncLayersRef.current(); saveToHistoryRef.current(); });
+    fabricCanvas.on('object:added', (e: any) => {
+      if ((e.target as any)?.isGuideLine) return;
+      syncLayersRef.current();
+      saveToHistoryRef.current();
+    });
+    fabricCanvas.on('object:removed', (e: any) => {
+      if ((e.target as any)?.isGuideLine) return;
+      syncLayersRef.current();
+      saveToHistoryRef.current();
+    });
     fabricCanvas.on('object:modified', () => {
       clearGuides();
       syncLayersRef.current();
@@ -515,6 +523,7 @@ export function EditorPage() {
                 if (objData.name) obj.name = objData.name;
                 if (objData.posterVar) obj.posterVar = objData.posterVar;
                 if (objData.isPoster) obj.isPoster = objData.isPoster;
+                if (objData.textVar) obj.textVar = objData.textVar;
               }
             });
           }
@@ -596,14 +605,14 @@ export function EditorPage() {
 
       // Ctrl+Z - Undo
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        undo();
         e.preventDefault();
+        undo().then(() => syncLayersRef.current());
       }
 
       // Ctrl+Shift+Z or Ctrl+Y - Redo
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        redo();
         e.preventDefault();
+        redo().then(() => syncLayersRef.current());
       }
     };
 
@@ -1218,10 +1227,10 @@ export function EditorPage() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-(--bg-tertiary) border border-(--border-color)">
-            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={undo} title={t('designer.undoHint')}>
+            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={() => undo().then(() => syncLayersRef.current())} title={t('designer.undoHint')}>
               <Undo className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={redo} title={t('designer.redoHint')}>
+            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={() => redo().then(() => syncLayersRef.current())} title={t('designer.redoHint')}>
               <Redo className="w-4 h-4" />
             </button>
           </div>
@@ -1538,7 +1547,7 @@ export function EditorPage() {
             />
           )}
           {activePanel === 'ai' && (
-            <AIChatPanel />
+            <AIChatPanel onApplied={() => syncLayersRef.current()} />
           )}
         </div>
 
