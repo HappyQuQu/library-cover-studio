@@ -6,14 +6,21 @@ import { tasks, taskLogs } from '../config/schema.js';
 import { eq, sql } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import { scheduleTask, removeScheduledTask } from '../services/scheduler.service.js';
+import cron from 'node-cron';
 import { runTask } from '../services/taskRunner.service.js';
 import { getLocalISOString } from '../utils/time.js';
 
 // 验证 Schema
+const cronExpressionSchema = z
+  .string()
+  .refine((s) => cron.validate(s.trim()), {
+    message: 'Invalid cron expression (expected 5 fields with valid ranges, e.g. "0 3 * * *")'
+  });
+
 export const createTaskSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['scheduled', 'manual']),
-  cronExpression: z.string().optional(),
+  cronExpression: cronExpressionSchema.optional(),
   templateId: z.string().uuid().optional(), // Now optional since template can be per-library
   serverId: z.string().uuid(),
   libraryIds: z.array(z.string()).optional(),
@@ -23,9 +30,26 @@ export const createTaskSchema = z.object({
     overwriteExisting: z.boolean().default(false),
     randomBackground: z.boolean().default(false)
   }).optional()
-});
+}).refine(
+  (data) => data.type !== 'scheduled' || !!data.cronExpression,
+  { message: 'cronExpression is required for scheduled tasks', path: ['cronExpression'] }
+);
 
-export const updateTaskSchema = createTaskSchema.partial();
+export const updateTaskSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  type: z.enum(['scheduled', 'manual']).optional(),
+  cronExpression: cronExpressionSchema.optional(),
+  templateId: z.string().uuid().optional(),
+  serverId: z.string().uuid().optional(),
+  libraryIds: z.array(z.string()).optional(),
+  libraryConfigs: z.string().optional(),
+  options: z.object({
+    skipLocked: z.boolean().default(true),
+    overwriteExisting: z.boolean().default(false),
+    randomBackground: z.boolean().default(false)
+  }).optional(),
+  isEnabled: z.boolean().optional()
+});
 
 // 获取任务列表
 export async function list(req: Request, res: Response, next: NextFunction) {

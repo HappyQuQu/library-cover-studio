@@ -143,6 +143,10 @@ export function EditorPage() {
     canvas, setCanvas, selectedObject, setSelectedObject,
     zoom, setZoom, undo, redo, saveToHistory, setIsRestoring, resetHistory
   } = useCanvasStore();
+  const historyIndex = useCanvasStore((s) => s.historyIndex);
+  const historyLength = useCanvasStore((s) => s.history.length);
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < historyLength - 1;
 
   // Fetch and inject custom fonts
   useEffect(() => {
@@ -620,6 +624,46 @@ export function EditorPage() {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
         e.preventDefault();
         redo().then(() => syncLayersRef.current());
+      }
+
+      // Ctrl+D - Duplicate (clone in-place + 20px offset)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
+        e.preventDefault();
+        if (activeObject) {
+          const cloned = await activeObject.clone();
+          cloned.set({
+            left: (cloned.left || 0) + 20,
+            top: (cloned.top || 0) + 20,
+          });
+          (cloned as any).id = Math.random().toString(36).substr(2, 9);
+          canvas.add(cloned);
+          canvas.setActiveObject(cloned);
+          canvas.renderAll();
+          saveToHistory();
+        }
+      }
+
+      // Esc - 取消选择
+      if (e.key === 'Escape') {
+        if (activeObject) {
+          canvas.discardActiveObject();
+          canvas.renderAll();
+        }
+      }
+
+      // 方向键微调位置（Shift = 10px，否则 1px）
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && activeObject) {
+        e.preventDefault();
+        const step = e.shiftKey ? 10 : 1;
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        activeObject.set({
+          left: (activeObject.left || 0) + dx,
+          top: (activeObject.top || 0) + dy,
+        });
+        activeObject.setCoords();
+        canvas.renderAll();
+        saveToHistory();
       }
     };
 
@@ -1234,10 +1278,20 @@ export function EditorPage() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-(--bg-tertiary) border border-(--border-color)">
-            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={() => undo().then(() => syncLayersRef.current())} title={t('designer.undoHint')}>
+            <button
+              className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary) disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              onClick={() => undo().then(() => syncLayersRef.current())}
+              disabled={!canUndo}
+              title={t('designer.undoHint')}
+            >
               <Undo className="w-4 h-4" />
             </button>
-            <button className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary)" onClick={() => redo().then(() => syncLayersRef.current())} title={t('designer.redoHint')}>
+            <button
+              className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary) disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+              onClick={() => redo().then(() => syncLayersRef.current())}
+              disabled={!canRedo}
+              title={t('designer.redoHint')}
+            >
               <Redo className="w-4 h-4" />
             </button>
           </div>

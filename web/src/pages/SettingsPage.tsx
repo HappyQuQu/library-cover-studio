@@ -88,29 +88,35 @@ export function SettingsPage() {
       originalError.apply(console, args);
     };
 
-    // 3. Connect to Backend Log Stream (SSE)
+    // 3. Connect to Backend Log Stream (SSE) — 先取短期 ticket，再用它打开 EventSource
     let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/logs/stream');
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await apiClient.post<{ ticket: string }>('/auth/stream-ticket');
+        if (cancelled) return;
+        eventSource = new EventSource(`/api/logs/stream?ticket=${encodeURIComponent(data.ticket)}`);
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          addLog(data.level, data.message);
-        } catch (e) {
-          console.error('Failed to parse log event', e);
-        }
-      };
+        eventSource.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            addLog(payload.level, payload.message);
+          } catch (e) {
+            console.error('Failed to parse log event', e);
+          }
+        };
 
-      eventSource.onerror = () => {
-        console.error('Log stream connection error');
-        eventSource?.close();
-      };
-    } catch (e) {
-      console.error('Failed to connect to log stream', e);
-    }
+        eventSource.onerror = () => {
+          console.error('Log stream connection error');
+          eventSource?.close();
+        };
+      } catch (e) {
+        console.error('Failed to connect to log stream', e);
+      }
+    })();
 
     return () => {
+      cancelled = true;
       console.log = originalLog;
       console.warn = originalWarn;
       console.error = originalError;

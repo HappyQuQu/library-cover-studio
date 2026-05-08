@@ -7,11 +7,18 @@ import { db } from '../config/database.js';
 import { eq } from 'drizzle-orm';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
+// Separate secret for refresh tokens. Falls back to JWT_SECRET only for
+// backwards compatibility with deployments that haven't set it yet — set
+// JWT_REFRESH_SECRET to a distinct value in production.
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || JWT_SECRET;
+
+export type TokenType = 'access' | 'refresh';
 
 export interface JwtPayload {
   userId: string;
   username: string;
   role: string;
+  type?: TokenType;
 }
 
 declare global {
@@ -42,6 +49,11 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    // 拒绝 refresh token 用于普通认证
+    if (decoded.type === 'refresh') {
+      return next(createError('Refresh token cannot be used for authentication', 401, 'WRONG_TOKEN_TYPE'));
+    }
 
     // 验证用户是否在数据库中存在 (防止数据库重置后 Token 依然有效但关联失败)
     const user = db.select().from(users).where(eq(users.id, decoded.userId)).get() as any;
@@ -77,14 +89,22 @@ export function requireRole(...roles: string[]) {
   };
 }
 
-export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+export function generateToken(payload: Omit<JwtPayload, 'type'>): string {
+  return jwt.sign({ ...payload, type: 'access' }, JWT_SECRET, {
     expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any
   });
 }
 
-export function generateRefreshToken(payload: JwtPayload): string {
-  return jwt.sign(payload, JWT_SECRET, {
+export function generateRefreshToken(payload: Omit<JwtPayload, 'type'>): string {
+  return jwt.sign({ ...payload, type: 'refresh' }, JWT_REFRESH_SECRET, {
     expiresIn: (process.env.JWT_REFRESH_EXPIRES_IN || '30d') as any
   });
+}
+
+export function verifyRefreshToken(token: string): JwtPayload {
+  const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as JwtPayload;
+  if (decoded.type !== 'refresh') {
+    throw new Error('Not a refresh token');
+  }
+  return decoded;
 }

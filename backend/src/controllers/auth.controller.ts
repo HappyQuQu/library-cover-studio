@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { db } from '../config/database.js';
 import { users } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
-import { generateToken, generateRefreshToken, createError } from '../middleware/index.js';
+import { generateToken, generateRefreshToken, verifyRefreshToken, createError } from '../middleware/index.js';
+import { issueStreamTicket } from '../utils/streamTicket.js';
 
 // 验证 Schema
 export const registerSchema = z.object({
@@ -87,6 +88,48 @@ export async function login(req: Request, res: Response, next: NextFunction) {
       token,
       refreshToken
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 刷新 Access Token
+export async function refresh(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken || typeof refreshToken !== 'string') {
+      return next(createError('Refresh token required', 400, 'NO_REFRESH_TOKEN'));
+    }
+
+    let payload;
+    try {
+      payload = verifyRefreshToken(refreshToken);
+    } catch {
+      return next(createError('Invalid refresh token', 401, 'INVALID_REFRESH_TOKEN'));
+    }
+
+    // 用户仍存在且角色取最新值
+    const user = db.select().from(users).where(eq(users.id, payload.userId)).get();
+    if (!user) {
+      return next(createError('User not found', 401, 'USER_NOT_FOUND'));
+    }
+
+    const role = user.role || 'user';
+    const token = generateToken({ userId: user.id, username: user.username, role });
+    res.json({ token });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// 颁发短期 SSE ticket（60s 单次有效）
+export async function streamTicket(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (!req.user) {
+      return next(createError('Unauthorized', 401, 'UNAUTHORIZED'));
+    }
+    const ticket = issueStreamTicket(req.user.userId, req.user.role);
+    res.json({ ticket, expiresIn: 60 });
   } catch (error) {
     next(error);
   }

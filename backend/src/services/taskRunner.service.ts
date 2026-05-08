@@ -19,9 +19,14 @@ interface TaskProgress {
 }
 
 const activeTaskProgress = new Map<string, TaskProgress>();
+const runningTasks = new Set<string>();
 
 export function getTaskProgress(taskId: string): TaskProgress | undefined {
   return activeTaskProgress.get(taskId);
+}
+
+export function isTaskRunning(taskId: string): boolean {
+  return runningTasks.has(taskId);
 }
 
 // Helper to save file to data directory
@@ -43,6 +48,20 @@ async function saveFile(type: 'posters' | 'covers', filename: string, buffer: Bu
 }
 
 export async function runTask(taskId: string, logId?: string) {
+  // 互斥：同一任务不能并行运行（cron 重叠触发或手动+定时撞车）
+  if (runningTasks.has(taskId)) {
+    logger.warn(`⏭️  Task ${taskId} is already running, skipping this trigger`);
+    if (logId) {
+      db.update(taskLogs).set({
+        status: 'failed',
+        completedAt: getLocalISOString(),
+        errorMessage: 'Skipped: previous run still in progress'
+      }).where(eq(taskLogs.id, logId)).run();
+    }
+    return;
+  }
+  runningTasks.add(taskId);
+
   const progress: TaskProgress = {
     total: 0,
     current: 0,
@@ -162,6 +181,8 @@ export async function runTask(taskId: string, logId?: string) {
           for (const item of batchItems) {
             if (posterBuffers.length >= 9) break;
 
+            // 单项失败不应影响整个库，包一层 try/catch
+            try {
             // logger.debug(`  🖼️ Processing item: ${item.name}`);
 
             const imageTypes = ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile'];
@@ -213,6 +234,10 @@ export async function runTask(taskId: string, logId?: string) {
             if (savePosters) {
               const timestamp = getLocalTimestampForFile();
               await saveFile('posters', `${libraryName}_${item.name}_${usedType}_${timestamp}.jpg`, validPoster);
+            }
+            } catch (itemErr) {
+              logger.warn(`  ⚠️ Item ${item.name} failed, skipping: ${(itemErr as any)?.message || itemErr}`);
+              // 不递增 progress.failed — 单项跳过不算整个库失败
             }
           }
 
@@ -331,5 +356,7 @@ export async function runTask(taskId: string, logId?: string) {
         errorMessage: (error as any).message || String(error)
       }).where(eq(taskLogs.id, logId)).run();
     }
+  } finally {
+    runningTasks.delete(taskId);
   }
 }

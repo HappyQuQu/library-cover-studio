@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { retry } from '../utils/retry.js';
 
 interface MediaLibrary {
   id: string;
@@ -108,10 +109,10 @@ export async function getLibraryItems(
       ? `${url}/Items?${params}`
       : `${url}/emby/Items?${params}`;
 
-    const response = await axios.get(endpoint, {
+    const response = await retry(() => axios.get(endpoint, {
       headers: getAuthHeaders(serverType, apiKey),
       timeout: 30000
-    });
+    }), { label: `getLibraryItems(${libraryId})` });
 
     const items = response.data.Items?.map((item: any) => ({
       id: item.Id,
@@ -152,13 +153,13 @@ export async function uploadCover(
     // Emby/Jellyfin API requires Base64 encoded image data
     const base64Image = imageBuffer.toString('base64');
 
-    const response = await axios.post(endpoint, base64Image, {
+    const response = await retry(() => axios.post(endpoint, base64Image, {
       headers: {
         ...getAuthHeaders(serverType, apiKey),
         'Content-Type': 'image/png'
       },
       timeout: 30000
-    });
+    }), { label: `uploadCover(${itemId})` });
 
     return response.status === 200 || response.status === 204;
   } catch (error) {
@@ -182,11 +183,11 @@ export async function downloadCover(
 
     console.log(`  📡 Downloading from: ${endpoint}`);
 
-    const response = await axios.get(endpoint, {
+    const response = await retry(() => axios.get(endpoint, {
       headers: getAuthHeaders(serverType, apiKey),
       responseType: 'arraybuffer',
       timeout: 30000
-    });
+    }), { label: `downloadCover(${itemId},${type})` });
 
     console.log(`  📡 Response status: ${response.status}, content-type: ${response.headers['content-type']}, size: ${response.data?.length || 0}`);
 

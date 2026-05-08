@@ -214,12 +214,12 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 {Array.from({ length: 9 }).map((_, i) => (
                   <button
                     key={`poster-${i + 1}`}
-                    onClick={() => onAddShape('poster', `http://localhost:3000/api/templates/posters/${i + 1}.jpg`)}
+                    onClick={() => onAddShape('poster', `${import.meta.env.VITE_API_URL || '/api'}/templates/posters/${i + 1}.jpg`)}
                     className="aspect-[2/3] relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group"
                     title={`海报 ${i + 1}`}
                   >
                     <img
-                      src={`http://localhost:3000/api/templates/posters/${i + 1}.jpg`}
+                      src={`${import.meta.env.VITE_API_URL || '/api'}/templates/posters/${i + 1}.jpg`}
                       alt={`Poster ${i + 1}`}
                       className="w-full h-full object-cover"
                       loading="lazy"

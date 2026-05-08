@@ -8,7 +8,9 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { initDatabase } from './config/database.js';
 import { initScheduler } from './services/scheduler.service.js';
 import { addLogClient, logger } from './utils/logger.js';
-import { ensureDataDirs, UPLOADS_DIR, COVERS_DIR, POSTERS_DIR, THUMBNAILS_DIR } from './config/paths.js';
+import { migrateLegacyEncryption } from './utils/migrateEncryption.js';
+import { consumeStreamTicket } from './utils/streamTicket.js';
+import { ensureDataDirs, UPLOADS_DIR } from './config/paths.js';
 
 // 启动时校验必需的环境变量
 const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -55,18 +57,23 @@ app.use(morgan(':method :url :status :response-time ms - :res[content-length]', 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 静态文件 (统一数据目录)
+// 静态文件
+// 注意: COVERS_DIR / POSTERS_DIR / THUMBNAILS_DIR 未挂载为静态目录 —
+// 这些是用户生成/下载的资产，不应公开访问。如果需要前端读取，应通过受认证的 controller 输出。
 app.use('/api/uploads', express.static(UPLOADS_DIR));
-app.use('/api/covers', express.static(COVERS_DIR));
-app.use('/api/thumbnails', express.static(THUMBNAILS_DIR));
-app.use('/api/posters', express.static(POSTERS_DIR));
 
-// 模板图片 (保持原样，因为是源代码的一部分)
+// 模板图片 (源代码内置，公开)
 app.use('/api/templates/posters', express.static('src/template/poster'));
 
 
-// 日志流端点 (SSE)
-app.get('/api/logs/stream', (_req, res) => {
+// 日志流端点 (SSE) — 需要短期 ticket（前端先 POST /api/auth/stream-ticket 取得）
+app.get('/api/logs/stream', (req, res) => {
+  const ticketId = typeof req.query.ticket === 'string' ? req.query.ticket : '';
+  const consumed = consumeStreamTicket(ticketId);
+  if (!consumed) {
+    res.status(401).json({ error: 'Invalid or expired stream ticket' });
+    return;
+  }
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -116,6 +123,9 @@ async function bootstrap() {
     // 初始化数据库
     await initDatabase();
     logger.info('✅ Database initialized');
+
+    // 加密数据迁移 (从硬编码 salt 升级到每部署独立 salt)
+    migrateLegacyEncryption();
 
     // 初始化任务调度器
     initScheduler();

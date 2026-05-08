@@ -1,13 +1,29 @@
 import cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/database.js';
-import { tasks, taskLogs } from '../config/schema.js';
+import { tasks, taskLogs, systemSettings } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
 import { runTask } from './taskRunner.service.js';
 import { getLocalISOString } from '../utils/time.js';
 
 // 存储活跃的 cron 任务
 const scheduledJobs = new Map<string, cron.ScheduledTask>();
+
+const DEFAULT_TIMEZONE = 'Asia/Shanghai';
+
+function getSchedulerTimezone(): string {
+  // 优先环境变量，其次 systemSettings.scheduler.timezone，最后默认值
+  if (process.env.SCHEDULER_TIMEZONE) return process.env.SCHEDULER_TIMEZONE;
+  try {
+    const row = db.select().from(systemSettings)
+      .where(eq(systemSettings.key, 'scheduler.timezone'))
+      .get();
+    if (row?.value) return row.value;
+  } catch {
+    // ignore — DB not ready
+  }
+  return DEFAULT_TIMEZONE;
+}
 
 // 初始化调度器 - 从数据库加载所有启用的定时任务
 export function initScheduler() {
@@ -45,7 +61,7 @@ export function scheduleTask(taskId: string, cronExpression: string): boolean {
     console.log(`⏰ Running scheduled task: ${taskId}`);
     await executeScheduledTask(taskId);
   }, {
-    timezone: 'Asia/Shanghai'
+    timezone: getSchedulerTimezone()
   });
 
   scheduledJobs.set(taskId, job);

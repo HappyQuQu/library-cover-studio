@@ -170,7 +170,8 @@ export async function initDatabase() {
     { key: 'storage.saveCovers', value: 'false' },
     { key: 'rendering.outputFormat', value: 'PNG' },
     { key: 'rendering.outputQuality', value: '90' },
-    { key: 'rendering.concurrency', value: '3' }
+    { key: 'rendering.concurrency', value: '3' },
+    { key: 'scheduler.timezone', value: 'Asia/Shanghai' }
   ];
 
   for (const setting of defaultSettings) {
