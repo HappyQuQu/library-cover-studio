@@ -9,13 +9,13 @@
 ## 主要功能
 
 - **可视化设计**：拖拽海报、文字和形状，调整图层、背景、圆角及旋转。
-- **六套内置模板**：1920 × 1080，首次启动即可使用，支持复制、编辑和模板历史回退。
+- **七套内置模板**：1920 × 1080，首次启动即可使用，新增横幅背景海报列，使用首个影片的横向背景图搭配底部五张海报。支持复制、解锁编辑和模板历史回退，管理员可在设置中一键还原默认模板。
 - **Jellyfin / Emby**：通过 API 读取媒体库海报，无需挂载电影文件目录。
 - **自动化更新**：每个媒体库可单独选择模板和标题，按天、周、月或 Cron 执行。
 - **真实样张与执行历史**：上传前预览，执行后查看当次封面、逐库结果并下载原图。
 - **可选 AI 助手**：接入自己的 AI 服务生成可编辑设计，基础功能无需 AI。
 
-![模板库：六套内置样式](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/templates.jpg)
+![模板库内置样式预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/templates.jpg)
 
 ## 镜像说明
 
