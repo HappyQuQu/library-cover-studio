@@ -37,6 +37,10 @@ router.get('/', template.list);
 
 // 获取单个模板
 router.get('/:id', template.getById);
+router.get('/:id/thumbnail', template.thumbnail);
+router.get('/:id/history', template.history);
+router.get('/:id/history/:revisionId/thumbnail', template.historyThumbnail);
+router.post('/:id/history/:revisionId/restore', template.restoreRevision);
 
 // 导入模板 (ZIP) - 放在 :id 路由之前以防火墙冲突
 router.post('/import', upload.single('file'), template.importTemplate);
@@ -52,6 +56,7 @@ router.delete('/:id', template.remove);
 
 // 复制模板
 router.post('/:id/duplicate', template.duplicate);
+router.post('/:id/lock', validate(template.lockTemplateSchema), template.setLock);
 
 // 导出模板 (ZIP)
 router.get('/:id/export', template.exportTemplate);

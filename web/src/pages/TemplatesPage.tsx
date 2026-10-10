@@ -1,16 +1,34 @@
 import { Link } from 'react-router-dom';
-import { Plus, Palette, Loader2, Download, Upload } from 'lucide-react';
+import { Plus, Palette, Loader2, Download, Upload, Lock, Unlock, Copy, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useTemplates, apiClient } from '@/api';
+import { useTemplates, apiClient, type Template } from '@/api';
+import { toast } from '@/components/ui/use-toast';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 
 export function TemplatesPage() {
   const { data: templates = [], isLoading } = useTemplates();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  async function manage(template: Template, action: 'lock' | 'copy' | 'delete') {
+    if (busyId) return;
+    if (action === 'delete' && (template.isLocked || !confirm(`确定删除模板「${template.name}」吗？`))) return;
+    setBusyId(template.id);
+    try {
+      if (action === 'lock') await apiClient.post(`/templates/${template.id}/lock`, { isLocked: !template.isLocked });
+      if (action === 'copy') await apiClient.post(`/templates/${template.id}/duplicate`);
+      if (action === 'delete') await apiClient.delete(`/templates/${template.id}`);
+      await queryClient.invalidateQueries({ queryKey: ['templates'] });
+      toast({ title: action === 'copy' ? '已创建可编辑、未锁定的副本' : action === 'delete' ? '模板已删除' : template.isLocked ? '模板已解锁' : '模板已锁定，编辑和删除前需先解锁' });
+    } catch (error: any) {
+      toast({ title: '操作失败', description: error.response?.data?.error?.message || error.response?.data?.message || '请刷新后重试', variant: 'destructive' });
+    } finally { setBusyId(null); }
+  }
 
   const handleExport = async (e: React.MouseEvent, id: string, name: string) => {
     e.preventDefault();
@@ -80,11 +98,11 @@ export function TemplatesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>模板库</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
-            管理您的海报设计模板
+            默认模板可直接用于自动化；锁定保护模板，解锁后才能编辑、回退或删除。
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -140,11 +158,11 @@ export function TemplatesPage() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-          {templates.map((template) => {
-            // Use backend URL for thumbnail
+        <div className="template-library-grid">
+          {[...templates].sort((a, b) => Number(b.isDefault) - Number(a.isDefault)).map((template) => {
+            // Saved thumbnails are private assets, fetched with the API credentials.
             const thumbnailUrl = template.thumbnailPath
-              ? `${import.meta.env.VITE_API_URL || '/api'}${template.thumbnailPath}`
+              ? `/templates/${template.id}/thumbnail`
               : null;
             // Calculate aspect ratio from template dimensions
             const aspectRatio = template.width && template.height
@@ -152,14 +170,15 @@ export function TemplatesPage() {
               : '16/9';
 
             return (
-              <div key={template.id} className="group relative">
-                <Link to={`/editor/${template.id}`}>
-                  <div className="card h-full overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
+              <article key={template.id} className="template-library-card">
+                <Link to={`/editor/${template.id}`} className="template-library-open" aria-label={`打开模板 ${template.name}`}>
                     <div style={{ aspectRatio, background: 'var(--bg-tertiary)', position: 'relative' }}>
                       {thumbnailUrl ? (
-                        <img
+                        <AuthenticatedImage
                           src={thumbnailUrl}
+                          refreshKey={template.updatedAt}
                           alt={template.name}
+                          fallback={<div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Palette style={{ width: 32, height: 32, color: 'var(--text-tertiary)' }} /></div>}
                           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                       ) : (
@@ -171,26 +190,26 @@ export function TemplatesPage() {
                         {template.width}×{template.height}
                       </div>
 
-                      {/* Export Button Overlay */}
-                      <button
-                        onClick={(e) => handleExport(e, template.id, template.name)}
-                        className="absolute bottom-2 right-2 p-2 rounded-lg bg-white/90 text-gray-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-white hover:text-primary shadow-md"
-                        title="导出 ZIP"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      <div className="template-library-badges">{template.isDefault && <span>默认模板</span>}{template.isLocked && <span className="template-lock-badge"><Lock size={11} />已锁定</span>}</div>
                     </div>
                     <div className="p-3">
                       <h3 className="font-medium text-sm text-(--text-primary) truncate">
                         {template.name}
                       </h3>
-                      <p className="text-[10px] text-(--text-tertiary) mt-1">
-                        {new Date(template.updatedAt).toLocaleDateString('zh-CN')}
+                      <p className="template-library-description">
+                        {template.description || '自定义封面设计'}
                       </p>
                     </div>
-                  </div>
                 </Link>
-              </div>
+                <div className="template-library-actions">
+                  <button onClick={() => manage(template, 'copy')} disabled={!!busyId} title={`复制模板 ${template.name}`}><Copy size={15} />复制</button>
+                  <button onClick={e => handleExport(e, template.id, template.name)} title={`导出模板 ${template.name}`}><Download size={15} />导出</button>
+                  {template.canManage && <>
+                    <button onClick={() => manage(template, 'lock')} disabled={!!busyId} title={template.isLocked ? `解锁模板 ${template.name}` : `锁定模板 ${template.name}`} className={template.isLocked ? 'template-action-locked' : ''}>{busyId === template.id ? <Loader2 size={15} className="animate-spin" /> : template.isLocked ? <Unlock size={15} /> : <Lock size={15} />}{template.isLocked ? '解锁' : '锁定'}</button>
+                    <button className="template-action-delete" onClick={() => manage(template, 'delete')} disabled={template.isLocked || !!busyId} title={template.isLocked ? '模板已锁定，请先解锁再删除' : `删除模板 ${template.name}`} aria-label={`删除模板 ${template.name}`}><Trash2 size={15} /></button>
+                  </>}
+                </div>
+              </article>
             );
           })}
         </div>

@@ -2,16 +2,17 @@ import cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../config/database.js';
 import { tasks, taskLogs, systemSettings } from '../config/schema.js';
-import { eq } from 'drizzle-orm';
-import { runTask } from './taskRunner.service.js';
+import { eq, or } from 'drizzle-orm';
+import { runTask, isTaskRunning } from './taskRunner.service.js';
 import { getLocalISOString } from '../utils/time.js';
+import { getUpcomingExecutions } from '../utils/schedulePreview.js';
 
 // 存储活跃的 cron 任务
 const scheduledJobs = new Map<string, cron.ScheduledTask>();
 
 const DEFAULT_TIMEZONE = 'Asia/Shanghai';
 
-function getSchedulerTimezone(): string {
+export function getSchedulerTimezone(): string {
   // 优先环境变量，其次 systemSettings.scheduler.timezone，最后默认值
   if (process.env.SCHEDULER_TIMEZONE) return process.env.SCHEDULER_TIMEZONE;
   try {
@@ -28,6 +29,9 @@ function getSchedulerTimezone(): string {
 // 初始化调度器 - 从数据库加载所有启用的定时任务
 export function initScheduler() {
   try {
+    for (const id of scheduledJobs.keys()) removeScheduledTask(id);
+    db.update(tasks).set({ nextRunAt: null })
+      .where(or(eq(tasks.isEnabled, 0), eq(tasks.type, 'manual'))).run();
     const enabledTasks = db.select()
       .from(tasks)
       .where(eq(tasks.isEnabled, 1))
@@ -39,7 +43,7 @@ export function initScheduler() {
       }
     }
 
-    console.log(`📅 Loaded ${enabledTasks.length} scheduled tasks`);
+    console.log(`📅 Loaded ${scheduledJobs.size} scheduled tasks`);
   } catch (error) {
     console.error('Failed to initialize scheduler:', error);
   }
@@ -47,31 +51,35 @@ export function initScheduler() {
 
 // 注册定时任务
 export function scheduleTask(taskId: string, cronExpression: string): boolean {
+  const expression = cronExpression.trim();
   // 验证 cron 表达式
-  if (!cron.validate(cronExpression)) {
+  if (!cron.validate(expression)) {
     console.error(`Invalid cron expression: ${cronExpression}`);
     return false;
   }
 
-  // 移除已存在的任务
-  removeScheduledTask(taskId);
-
-  // 创建新的定时任务
-  const job = cron.schedule(cronExpression, async () => {
-    console.log(`⏰ Running scheduled task: ${taskId}`);
-    await executeScheduledTask(taskId);
-  }, {
-    timezone: getSchedulerTimezone()
-  });
-
-  scheduledJobs.set(taskId, job);
-  console.log(`✅ Scheduled task ${taskId} with cron: ${cronExpression}`);
-
-  return true;
+  try {
+    const timezone = getSchedulerTimezone();
+    const nextRunAt = getUpcomingExecutions(expression, timezone, 1)[0];
+    removeScheduledTask(taskId);
+    const job = cron.schedule(expression, async () => {
+      await executeScheduledTask(taskId);
+    }, { timezone, scheduled: false });
+    scheduledJobs.set(taskId, job);
+    db.update(tasks).set({ nextRunAt }).where(eq(tasks.id, taskId)).run();
+    job.start();
+    console.log(`✅ Scheduled task ${taskId} with cron: ${expression}`);
+    return true;
+  } catch (error) {
+    removeScheduledTask(taskId);
+    console.error(`Failed to schedule task ${taskId}:`, error);
+    return false;
+  }
 }
 
 // 移除定时任务
 export function removeScheduledTask(taskId: string): boolean {
+  db.update(tasks).set({ nextRunAt: null }).where(eq(tasks.id, taskId)).run();
   const job = scheduledJobs.get(taskId);
   if (job) {
     job.stop();
@@ -93,11 +101,19 @@ async function executeScheduledTask(taskId: string) {
       return;
     }
 
-    if (!task.isEnabled) {
-      console.log(`Task ${taskId} is disabled, skipping`);
+    if (!task.isEnabled || task.type !== 'scheduled' || !task.cronExpression) {
+      removeScheduledTask(taskId);
       return;
     }
 
+    const nextRunAt = getUpcomingExecutions(task.cronExpression, getSchedulerTimezone(), 1)[0];
+    db.update(tasks).set({ nextRunAt }).where(eq(tasks.id, taskId)).run();
+    // A skipped tick is not another failed execution; retain the current run's record.
+    if (isTaskRunning(taskId)) {
+      console.log(`⏭️ Task ${taskId} is still running, skipping scheduled trigger`);
+      return;
+    }
+    console.log(`⏰ Running scheduled task: ${taskId}`);
     // 更新最后运行时间
     const now = getLocalISOString();
     db.update(tasks)
@@ -116,7 +132,7 @@ async function executeScheduledTask(taskId: string) {
 
     // 执行任务逻辑，传入 logId 以便记录结果
     await runTask(taskId, logId);
-    console.log(`Task ${taskId} executed successfully`);
+    console.log(`Task ${taskId} execution finished`);
 
   } catch (error) {
     console.error(`Failed to execute task ${taskId}:`, error);

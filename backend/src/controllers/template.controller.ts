@@ -3,7 +3,8 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
-import { templates } from '../config/schema.js';
+import { templates, templateRevisions } from '../config/schema.js';
+import { saveTemplateVersion, getTemplateRevisions, getTemplateRevision, cleanupTemplateImages, TEMPLATE_HISTORY_LIMIT } from '../services/templateHistory.service.js';
 import { eq, sql } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import fs from 'fs';
@@ -17,14 +18,29 @@ const d: any = db;
 export const createTemplateSchema = z.object({
   name: z.string().min(1).max(100),
   description: z.string().optional(),
-  canvasJson: z.string(),
+  canvasJson: z.string().refine(value => {
+    try { const canvas = JSON.parse(value); return !!canvas && !Array.isArray(canvas) && Array.isArray(canvas.objects); }
+    catch { return false; }
+  }, '画布 JSON 格式无效'),
   thumbnail: z.string().optional(), // Base64 data URL
   width: z.number().int().min(100).max(4000).default(900),
   height: z.number().int().min(100).max(6000).default(600),
-  isPublic: z.boolean().default(false)
+  isPublic: z.boolean().default(false),
+  isLocked: z.boolean().default(false)
 });
 
-export const updateTemplateSchema = createTemplateSchema.partial();
+export const updateTemplateSchema = createTemplateSchema.omit({ isLocked: true }).partial();
+export const lockTemplateSchema = z.object({ isLocked: z.boolean() });
+
+function canManage(req: Request, template: any) {
+  return req.user?.role === 'admin' || template.userId === req.user?.userId;
+}
+function assertReadable(req: Request, template: any) {
+  if (!canManage(req, template) && !template.isPublic) throw createError('无权查看此模板', 403, 'TEMPLATE_FORBIDDEN');
+}
+function serializeTemplate(req: Request, template: any) {
+  return { ...template, isPublic: !!template.isPublic, isLocked: !!template.isLocked, isDefault: !!template.isDefault, canManage: canManage(req, template) };
+}
 
 // 获取模板列表
 export async function list(req: Request, res: Response, next: NextFunction) {
@@ -40,6 +56,9 @@ export async function list(req: Request, res: Response, next: NextFunction) {
       width: templates.width,
       height: templates.height,
       isPublic: templates.isPublic,
+      isLocked: templates.isLocked,
+      isDefault: templates.isDefault,
+      userId: templates.userId,
       createdAt: templates.createdAt,
       updatedAt: templates.updatedAt
     })
@@ -49,7 +68,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
       ? query.all()
       : query.where(sql`${templates.userId} = ${userId} OR ${templates.isPublic} = 1`).all();
 
-    res.json(templateList);
+    res.json(templateList.map(template => serializeTemplate(req, template)));
   } catch (error) {
     next(error);
   }
@@ -67,10 +86,30 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }
 
-    res.json(template);
+    assertReadable(req, template);
+    res.json(serializeTemplate(req, template));
   } catch (error) {
     next(error);
   }
+}
+
+// Read saved artwork through an authenticated route; generated asset folders
+// remain private. Resolve the filename from the owned/public template only.
+export async function thumbnail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const template = d.select().from(templates).where(eq(templates.id, req.params.id)).get();
+    if (!template) throw createError('模板不存在', 404, 'TEMPLATE_NOT_FOUND');
+    if (req.user?.role !== 'admin' && template.userId !== req.user?.userId && !template.isPublic) {
+      throw createError('无权查看此模板', 403, 'TEMPLATE_FORBIDDEN');
+    }
+    if (!template.thumbnailPath) throw createError('模板尚未保存缩略图', 404, 'THUMBNAIL_NOT_FOUND');
+    const filename = path.basename(template.thumbnailPath);
+    if (!/^[\w.-]+\.(?:png|jpe?g|webp)$/i.test(filename)) throw createError('模板缩略图路径无效', 404, 'THUMBNAIL_NOT_FOUND');
+    const file = path.join(THUMBNAILS_DIR, filename);
+    if (!fs.existsSync(file)) throw createError('模板缩略图文件不存在', 404, 'THUMBNAIL_NOT_FOUND');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(file, error => { if (error) next(error); });
+  } catch (error) { next(error); }
 }
 
 // 导出模板 (ZIP)
@@ -83,6 +122,7 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }
 
+    assertReadable(req, template);
     const zip = new AdmZip();
 
     // Add template JSON
@@ -139,30 +179,15 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    // Look for preview.jpg or other images
-    let thumbnailPath = null;
     const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png)$/i));
-
-    if (previewEntry) {
-      const buffer = previewEntry.getData();
-      const filename = `${id}-${Date.now()}.jpg`;
-      fs.writeFileSync(path.join(THUMBNAILS_DIR, filename), buffer);
-      thumbnailPath = `/thumbnails/${filename}`;
-    }
-
-    d.insert(templates).values({
-      id,
-      name: `${name} (Imported)`,
-      description,
-      canvasJson,
-      thumbnailPath,
-      width,
-      height,
-      userId,
-      isPublic: isPublic ? 1 : 0,
-      createdAt: now,
-      updatedAt: now
-    }).run();
+    const thumbnail = previewEntry ? `data:image/jpeg;base64,${previewEntry.getData().toString('base64')}` : undefined;
+    const data = createTemplateSchema.parse({ name: `${name} (Imported)`, description, width, height, canvasJson, isPublic });
+    const saved = await saveTemplateVersion(undefined, {
+      id, name: data.name, description: data.description ?? null, canvasJson: data.canvasJson,
+      width: data.width, height: data.height, userId, isPublic: data.isPublic ? 1 : 0,
+      isLocked: 0, isDefault: 0, thumbnailPath: null, createdAt: now, updatedAt: now
+    }, userId, 'save', thumbnail);
+    const thumbnailPath = saved.thumbnailPath;
 
     // Clean up uploaded file
     try {
@@ -184,39 +209,18 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
 // 创建模板
 export async function create(req: Request, res: Response, next: NextFunction) {
   try {
-    const { name, description, canvasJson, thumbnail, width, height, isPublic } = req.body;
+    const { name, description, canvasJson, thumbnail, width, height, isPublic, isLocked } = req.body;
     const userId = req.user?.userId;
 
     const now = new Date().toISOString();
     const id = uuidv4();
 
-    // Save thumbnail if provided
-    let thumbnailPath = null;
-    if (thumbnail && thumbnail.startsWith('data:image')) {
-      const uploadsDir = THUMBNAILS_DIR;
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-      const base64Data = thumbnail.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `${id}-${Date.now()}.jpg`;
-      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
-      thumbnailPath = `/thumbnails/${filename}`;
-    }
-
-    d.insert(templates).values({
-      id,
-      name,
-      description,
-      canvasJson,
-      thumbnailPath,
-      width,
-      height,
-      userId,
-      isPublic: isPublic ? 1 : 0,
-      createdAt: now,
-      updatedAt: now
-    }).run();
+    const saved = await saveTemplateVersion(undefined, {
+      id, name, description: description ?? null, canvasJson, thumbnailPath: null,
+      width, height, userId, isPublic: isPublic ? 1 : 0, isLocked: isLocked ? 1 : 0,
+      isDefault: 0, createdAt: now, updatedAt: now
+    }, userId, 'save', thumbnail);
+    const thumbnailPath = saved.thumbnailPath;
 
     res.status(201).json({
       id,
@@ -226,6 +230,9 @@ export async function create(req: Request, res: Response, next: NextFunction) {
       width,
       height,
       isPublic,
+      isLocked: !!isLocked,
+      isDefault: false,
+      canManage: true,
       createdAt: now
     });
   } catch (error) {
@@ -250,46 +257,13 @@ export async function update(req: Request, res: Response, next: NextFunction) {
       return next(createError('Forbidden: Access denied to this template', 403, 'FORBIDDEN'));
     }
 
-    const updateData: Record<string, unknown> = { updatedAt: now };
-
-    // Handle thumbnail update
-    if (updates.thumbnail && updates.thumbnail.startsWith('data:image')) {
-      const uploadsDir = THUMBNAILS_DIR;
-      if (!fs.existsSync(uploadsDir)) {
-        fs.mkdirSync(uploadsDir, { recursive: true });
-      }
-
-      // cleanup old thumbnail if exists
-      if (existing.thumbnailPath) {
-        try {
-          const oldFileName = path.basename(existing.thumbnailPath);
-          const oldFullPath = path.join(uploadsDir, oldFileName);
-          if (fs.existsSync(oldFullPath)) {
-            fs.unlinkSync(oldFullPath);
-          }
-        } catch (e) {
-          console.warn('Failed to delete old thumbnail:', e);
-        }
-      }
-
-      const base64Data = updates.thumbnail.replace(/^data:image\/\w+;base64,/, '');
-      const buffer = Buffer.from(base64Data, 'base64');
-      const filename = `${id}-${Date.now()}.jpg`;
-      fs.writeFileSync(path.join(uploadsDir, filename), buffer);
-      updateData.thumbnailPath = `/thumbnails/${filename}`;
+    if (existing.isLocked) throw createError('模板已锁定，请先解锁再编辑', 409, 'TEMPLATE_LOCKED');
+    const updateData = { ...existing, updatedAt: now };
+    for (const key of ['name', 'description', 'canvasJson', 'width', 'height']) {
+      if (updates[key] !== undefined) updateData[key] = updates[key];
     }
-
-    if (updates.name !== undefined) updateData.name = updates.name;
-    if (updates.description !== undefined) updateData.description = updates.description;
-    if (updates.canvasJson !== undefined) updateData.canvasJson = updates.canvasJson;
-    if (updates.width !== undefined) updateData.width = updates.width;
-    if (updates.height !== undefined) updateData.height = updates.height;
     if (updates.isPublic !== undefined) updateData.isPublic = updates.isPublic ? 1 : 0;
-
-    (d.update(templates)
-      .set(updateData)
-      .where(eq(templates.id, id)) as any)
-      .run();
+    await saveTemplateVersion(existing, updateData, req.user!.userId, 'save', updates.thumbnail);
 
     res.json({ message: 'Template updated successfully' });
   } catch (error) {
@@ -311,7 +285,11 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
       return next(createError('Forbidden: Access denied to this template', 403, 'FORBIDDEN'));
     }
 
+    if (existing.isLocked) throw createError('模板已锁定，请先解锁再删除', 409, 'TEMPLATE_LOCKED');
+
+    const images = d.select().from(templateRevisions).where(eq(templateRevisions.templateId, id)).all().map(revision => revision.thumbnailPath);
     d.delete(templates).where(eq(templates.id, id)).run();
+    await cleanupTemplateImages([existing.thumbnailPath, ...images]);
 
     res.json({ message: 'Template deleted successfully' });
   } catch (error) {
@@ -330,21 +308,14 @@ export async function duplicate(req: Request, res: Response, next: NextFunction)
       return next(createError('Template not found', 404, 'TEMPLATE_NOT_FOUND'));
     }
 
+    assertReadable(req, original);
     const now = new Date().toISOString();
     const newId = uuidv4();
 
-    d.insert(templates).values({
-      id: newId,
-      name: `${original.name} (Copy)`,
-      description: original.description,
-      canvasJson: original.canvasJson,
-      width: original.width,
-      height: original.height,
-      userId,
-      isPublic: 0,
-      createdAt: now,
-      updatedAt: now
-    }).run();
+    await saveTemplateVersion(undefined, {
+      ...original, id: newId, isLocked: 0, isDefault: 0, name: `${original.name} (Copy)`,
+      userId, isPublic: 0, createdAt: now, updatedAt: now
+    }, userId);
 
     res.status(201).json({
       id: newId,
@@ -354,4 +325,58 @@ export async function duplicate(req: Request, res: Response, next: NextFunction)
   } catch (error) {
     next(error);
   }
+}
+
+// A locked template is read-only; making an unlocked copy remains available.
+export async function setLock(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = d.select().from(templates).where(eq(templates.id, req.params.id)).get();
+    if (!existing) throw createError('模板不存在', 404, 'TEMPLATE_NOT_FOUND');
+    if (!canManage(req, existing)) throw createError('无权修改此模板的锁定状态', 403, 'TEMPLATE_FORBIDDEN');
+    const isLocked = req.body.isLocked;
+    d.update(templates).set({ isLocked: isLocked ? 1 : 0, updatedAt: new Date().toISOString() }).where(eq(templates.id, existing.id)).run();
+    res.json({ id: existing.id, isLocked });
+  } catch (error) { next(error); }
+}
+
+function managedTemplate(req: Request) {
+  const existing = d.select().from(templates).where(eq(templates.id, req.params.id)).get();
+  if (!existing) throw createError('模板不存在', 404, 'TEMPLATE_NOT_FOUND');
+  if (!canManage(req, existing)) throw createError('无权查看或回退此模板的历史记录', 403, 'TEMPLATE_FORBIDDEN');
+  return existing;
+}
+
+export async function history(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = managedTemplate(req);
+    const rows = getTemplateRevisions(existing.id);
+    res.json({ limit: TEMPLATE_HISTORY_LIMIT, revisions: rows.map(({ canvasJson, thumbnailPath, savedBy, ...revision }) => ({
+      ...revision, previewUrl: `/templates/${existing.id}/history/${revision.id}/thumbnail`
+    })) });
+  } catch (error) { next(error); }
+}
+
+export async function historyThumbnail(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = managedTemplate(req);
+    const revision = getTemplateRevision(existing.id, req.params.revisionId);
+    if (!revision) throw createError('历史版本不存在或已超过最近 50 条', 404, 'REVISION_NOT_FOUND');
+    const file = path.join(THUMBNAILS_DIR, path.basename(revision.thumbnailPath));
+    if (!fs.existsSync(file)) throw createError('历史预览图不存在', 404, 'THUMBNAIL_NOT_FOUND');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(file, error => { if (error) next(error); });
+  } catch (error) { next(error); }
+}
+
+export async function restoreRevision(req: Request, res: Response, next: NextFunction) {
+  try {
+    const existing = managedTemplate(req);
+    if (existing.isLocked) throw createError('模板已锁定，请先解锁再回退', 409, 'TEMPLATE_LOCKED');
+    const revision = getTemplateRevision(existing.id, req.params.revisionId);
+    if (!revision) throw createError('历史版本不存在或已超过最近 50 条', 404, 'REVISION_NOT_FOUND');
+    const saved = await saveTemplateVersion(existing, { ...existing, name: revision.name, description: revision.description,
+      canvasJson: revision.canvasJson, width: revision.width, height: revision.height, isPublic: revision.isPublic,
+      thumbnailPath: revision.thumbnailPath }, req.user!.userId, 'restore', undefined, revision.id);
+    res.json(serializeTemplate(req, saved));
+  } catch (error) { next(error); }
 }

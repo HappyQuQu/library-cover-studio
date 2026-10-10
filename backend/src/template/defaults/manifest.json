@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "templates": [
+    "soft-fan.json",
+    "upright-wall.json",
+    "tilted-wall.json",
+    "diagonal-hero.json",
+    "centered-title.json",
+    "stacked-cards.json"
+  ]
+}

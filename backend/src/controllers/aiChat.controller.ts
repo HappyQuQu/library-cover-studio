@@ -7,6 +7,9 @@ import { decrypt } from '../utils/crypto.js';
 import { createAIProvider } from '../services/ai/aiClient.service.js';
 import type { Message } from '../services/ai/aiClient.service.js';
 import { resolveSystemPrompt } from '../services/ai/prompts/templateGenerator.js';
+import { parseReferenceImages } from '../services/ai/utils/referenceImages.js';
+
+import { requireImageModel, parseModelCapabilities } from '../services/ai/modelCatalog.service.js';
 
 // 生成模板（SSE 流式响应）
 export async function generateTemplate(req: Request, res: Response) {
@@ -20,6 +23,7 @@ export async function generateTemplate(req: Request, res: Response) {
     if (!prompt) {
       return res.status(400).json({ error: 'Prompt is required' });
     }
+    const referenceImages = await parseReferenceImages(req.body.referenceImages);
 
     // 获取 AI Provider 配置
     let provider;
@@ -48,6 +52,8 @@ export async function generateTemplate(req: Request, res: Response) {
       provider = providers[0];
     }
 
+    if (!provider.isActive) return res.status(400).json({ error: 'AI 服务已停用' });
+
     // 获取对话历史
     let conversationHistory: Message[] = [];
     let conversation: typeof import('../config/schema.js').aiConversations.$inferSelect | undefined;
@@ -66,12 +72,14 @@ export async function generateTemplate(req: Request, res: Response) {
     }
 
     // 创建 AI 客户端
-    const aiClient = await createAIProvider({
+    const clientConfig = {
       type: provider.type as any,
       apiUrl: provider.apiUrl,
       apiKey: provider.apiKeyEncrypted ? decrypt(provider.apiKeyEncrypted) : undefined,
-      model: customModel || provider.model || undefined
-    });
+      model: customModel || provider.model?.split(',')[0].trim() || undefined
+    };
+    if (referenceImages.length) await requireImageModel({ ...clientConfig, modelCapabilities: parseModelCapabilities(provider.modelCapabilities) }, clientConfig.model);
+    const aiClient = await createAIProvider(clientConfig);
 
     // 实时读取运行时配置（空值也要传入模型上下文）
     const runtimeConfigSetting = await db
@@ -90,23 +98,32 @@ export async function generateTemplate(req: Request, res: Response) {
     // 添加用户消息到历史
     conversationHistory.push({
       role: 'user',
-      content: prompt
+      content: prompt + (referenceImages.length ? `\n[附 ${referenceImages.length} 张参考图，仅本次请求使用]` : '')
     });
 
     let fullResponse = '';
     let canvasJson: any = null;
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    res.on('close', cancel);
 
     try {
       // 流式生成
       for await (const chunk of aiClient.generateTemplate(prompt, {
-        conversationHistory,
+        conversationHistory: conversationHistory.slice(0, -1),
         currentCanvas,
         canvasSize,
         editMode: !!editMode,
         runtimeConfig,
-        systemPrompt
+        systemPrompt,
+        signal: controller.signal,
+        referenceImages
       })) {
-        if (chunk.type === 'chunk') {
+        if (controller.signal.aborted) return;
+        if (chunk.type === 'status') {
+          fullResponse = '';
+          res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        } else if (chunk.type === 'chunk') {
           fullResponse += chunk.content || '';
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         } else if (chunk.type === 'complete') {
@@ -114,12 +131,15 @@ export async function generateTemplate(req: Request, res: Response) {
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         } else if (chunk.type === 'error') {
           res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+          res.end();
+          return;
         }
       }
 
+      if (controller.signal.aborted) return;
       // 助手消息存摘要而非完整 JSON，避免多轮对话 token 爆炸
       const assistantSummary = canvasJson
-        ? `[已生成模板：${canvasJson.objects?.length ?? 0} 个对象]`
+        ? `[已生成模板：${canvasJson.objects?.length ?? 0} 个对象]${typeof canvasJson.referenceAnalysis === 'string' ? '\n参考分析：' + canvasJson.referenceAnalysis.slice(0, 1200) : ''}`
         : fullResponse.substring(0, 500);
 
       conversationHistory.push({
@@ -162,13 +182,16 @@ export async function generateTemplate(req: Request, res: Response) {
 
       res.end();
     } catch (error: any) {
+      if (controller.signal.aborted) return;
       res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
       res.end();
+    } finally {
+      res.off('close', cancel);
     }
   } catch (error: any) {
     console.error('Failed to generate template:', error);
     if (!res.headersSent) {
-      res.status(500).json({ error: error.message });
+      res.status(error.statusCode || 500).json({ error: error.message });
     }
   }
 }

@@ -20,7 +20,8 @@
     "lint": "pnpm -r lint",
     "format": "pnpm -r format",
     "db:migrate": "pnpm --filter backend db:migrate",
-    "db:seed": "pnpm --filter backend db:seed"
+    "db:seed": "pnpm --filter backend db:seed",
+    "test": "pnpm --filter ./backend exec tsx --test ../tests/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -49,6 +49,8 @@ export default {
     shadow: '阴影',
     duplicate: '复制',
     delete: '删除',
+    undoHint: '撤销',
+    redoHint: '重做',
   },
   servers: {
     title: '媒体服务器',

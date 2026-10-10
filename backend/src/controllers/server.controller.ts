@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
@@ -7,14 +6,21 @@ import { mediaServers } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
-import { testConnection, getLibraries, getAuthHeaders } from '../services/mediaClient.service.js';
+import { getServerInfo, getLibraries, downloadCover, imageMimeType, normalizeServerUrl } from '../services/mediaClient.service.js';
+
+function accessibleServer(req: Request) {
+  const server = db.select().from(mediaServers).where(eq(mediaServers.id, req.params.id as string)).get();
+  if (!server) throw createError('Server not found', 404, 'SERVER_NOT_FOUND');
+  if (req.user?.role !== 'admin' && server.userId !== req.user?.userId) throw createError('无权访问此媒体服务器', 403, 'FORBIDDEN');
+  return server;
+}
 
 // 验证 Schema
 export const createServerSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(['jellyfin', 'emby']),
   url: z.string().url(),
-  apiKey: z.string().min(1)
+  apiKey: z.string().trim().min(1)
 });
 
 export const updateServerSchema = createServerSchema.partial();
@@ -54,24 +60,9 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
   try {
     const { id } = req.params;
 
-    const server = db.select({
-      id: mediaServers.id,
-      name: mediaServers.name,
-      type: mediaServers.type,
-      url: mediaServers.url,
-      isActive: mediaServers.isActive,
-      lastSyncAt: mediaServers.lastSyncAt,
-      createdAt: mediaServers.createdAt
-    })
-      .from(mediaServers)
-      .where(eq(mediaServers.id, id as string))
-      .get();
-
-    if (!server) {
-      return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
-    }
-
-    res.json(server);
+    const server = accessibleServer(req);
+    res.json({ id, name: server.name, type: server.type, url: server.url, isActive: !!server.isActive,
+      lastSyncAt: server.lastSyncAt, createdAt: server.createdAt });
   } catch (error) {
     next(error);
   }
@@ -85,13 +76,8 @@ export async function create(req: Request, res: Response, next: NextFunction) {
     console.log(`[Server] Creating new server: ${name} (${type}) for user ${userId}`);
 
     // 测试连接
-    const cleanUrl = url.replace(/\/$/, '');
-    const isConnected = await testConnection(type, cleanUrl, apiKey);
-
-    if (!isConnected) {
-      console.warn(`[Server] Connection test failed for ${cleanUrl}`);
-      return next(createError('Failed to connect to media server', 400, 'CONNECTION_FAILED'));
-    }
+    const cleanUrl = normalizeServerUrl(url);
+    await getServerInfo(type, cleanUrl, apiKey, true);
 
     const now = new Date().toISOString();
     const id = uuidv4();
@@ -146,8 +132,11 @@ export async function update(req: Request, res: Response, next: NextFunction) {
 
     if (updates.name) updateData.name = updates.name;
     if (updates.type) updateData.type = updates.type;
-    if (updates.url) updateData.url = updates.url.replace(/\/$/, '');
+    if (updates.url) updateData.url = normalizeServerUrl(updates.url);
     if (updates.apiKey) updateData.apiKeyEncrypted = encrypt(updates.apiKey);
+    if (updates.url || updates.apiKey || updates.type) {
+      await getServerInfo(updates.type || existing.type, String(updateData.url || existing.url), updates.apiKey || decrypt(existing.apiKeyEncrypted), true);
+    }
 
     db.update(mediaServers)
       .set(updateData)
@@ -186,17 +175,14 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
 // 测试服务器连接
 export async function testServerConnection(req: Request, res: Response, next: NextFunction) {
   try {
-    const { id } = req.params;
-
-    const server = db.select().from(mediaServers).where(eq(mediaServers.id, id as string)).get();
-    if (!server) {
-      return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
-    }
-
+    const server = accessibleServer(req);
     const apiKey = decrypt(server.apiKeyEncrypted);
-    const isConnected = await testConnection(server.type, server.url, apiKey);
-
-    res.json({ connected: isConnected });
+    try {
+      const info = await getServerInfo(server.type, server.url, apiKey, true);
+      res.json({ connected: true, version: info.version, serverName: info.name, product: info.product });
+    } catch (error: any) {
+      res.json({ connected: false, error: error.message, code: error.code });
+    }
   } catch (error) {
     next(error);
   }
@@ -208,25 +194,15 @@ export async function listLibraries(req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     console.log(`[Server] Fetching libraries for server ID: ${id}`);
 
-    const server = db.select().from(mediaServers).where(eq(mediaServers.id, id as string)).get();
-    if (!server) {
-      console.warn(`[Server] Server not found for library listing: ${id}`);
-      return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
-    }
+    const server = accessibleServer(req);
 
     const apiKey = decrypt(server.apiKeyEncrypted);
     console.log(`[Server] Connecting to ${server.url} (${server.type})`);
-    const baseUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
     const libraries = await getLibraries(server.type, server.url, apiKey);
-
-    // 获取当前请求的 Token 以便在图片 URL 中使用
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : '';
-
-    // 将图片 URL 替换为代理 URL，并附加 Token
-    const librariesWithProxy = libraries.map(lib => ({
+    // Same-origin image URLs work through Docker/reverse proxies; clients authenticate in headers.
+    const librariesWithProxy = libraries.map(({ imageItemId, ...lib }) => ({
       ...lib,
-      imageUrl: `${baseUrl}/api/servers/${server.id}/items/${lib.id}/image?token=${token}`
+      imageUrl: `/api/servers/${server.id}/items/${encodeURIComponent(imageItemId || lib.id)}/image`
     }));
 
     console.log(`[Server] Found ${libraries.length} libraries for ${server.name}`);
@@ -240,31 +216,20 @@ export async function listLibraries(req: Request, res: Response, next: NextFunct
 // 代理获取媒体项目图片
 export async function proxyItemImage(req: Request, res: Response, next: NextFunction) {
   try {
-    const { id, itemId } = req.params;
-
-    const server = db.select().from(mediaServers).where(eq(mediaServers.id, id as string)).get();
-    if (!server) {
-      return next(createError('Server not found', 404, 'SERVER_NOT_FOUND'));
-    }
-
+    const { itemId } = req.params;
+    const server = accessibleServer(req);
     const apiKey = decrypt(server.apiKeyEncrypted);
-    const endpoint = server.type === 'jellyfin'
-      ? `${server.url}/Items/${itemId}/Images/Primary`
-      : `${server.url}/emby/Items/${itemId}/Images/Primary`;
-
-    const response = await axios.get(endpoint, {
-      headers: getAuthHeaders(server.type, apiKey),
-      responseType: 'stream',
-      timeout: 10000
-    });
-
-    res.set('Content-Type', response.headers['content-type']);
-    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-    response.data.pipe(res);
+    const controller = new AbortController();
+    const cancel = () => controller.abort();
+    res.on('close', cancel);
+    try {
+      const image = await downloadCover(server.type, server.url, apiKey, itemId as string, 'Primary', { signal: controller.signal });
+      if (controller.signal.aborted) return;
+      if (!image) return res.status(404).send('Image not found');
+      res.type(imageMimeType(image)!).set('Cache-Control', 'private, no-store').send(image);
+    } catch (error) { if (!controller.signal.aborted) throw error; }
+    finally { res.off('close', cancel); }
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 404) {
-      return res.status(404).send('Image not found');
-    }
     next(error);
   }
 }

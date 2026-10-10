@@ -1,399 +1,270 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, RefreshCw, CheckCircle, Layers } from 'lucide-react';
-import { useAIProviders } from '../../api/ai';
-import { useCanvasStore } from '../../stores/canvasStore';
-import { useAuthStore } from '../../stores/authStore';
-import { apiClient } from '../../api/client';
+import { Link } from 'react-router-dom';
+import { Send, Loader2, Sparkles, RefreshCw, CheckCircle, Layers, Square, Settings2, ArrowRight, Lock, X, ImagePlus } from 'lucide-react';
+import { useAIProviders, useAIProviderModels, modelImageLabel, type AIModel } from '@/api/ai';
+import { useCanvasStore } from '@/stores/canvasStore';
+import { useAuthStore } from '@/stores/authStore';
+import { apiClient } from '@/api/client';
+import { toast } from '@/components/ui/use-toast';
+import { CANVAS_PROPERTIES, constrainDesign, describeChanges, isLocked, summarizeCanvas } from '@/lib/aiDesign';
+import type { CanvasJSON, DesignScope } from '@/lib/aiDesign';
+import { readSSE } from '@/lib/sse';
+import { DesignPreview, normalizeDesignAssets } from './DesignPreview';
+import { MAX_REFERENCE_IMAGES, prepareReferenceImage, type ReferenceImage } from '@/lib/referenceImages';
 
 interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;          // 显示文本（不含 JSON）
-  canvasJson?: any;         // 待应用的模板，有值时显示"应用"按钮
-  applied?: boolean;        // 是否已应用
+  role: 'user' | 'assistant'; content: string; prompt?: string; error?: boolean;
+  canvasJson?: CanvasJSON; baseline?: CanvasJSON; originSnapshot?: string;
+  changes?: string[]; applied?: boolean; width?: number; height?: number;
+  referenceImages?: ReferenceImage[]; referenceAnalysis?: string;
+}
+interface StreamChunk { type: 'chunk' | 'status' | 'complete' | 'error' | 'conversation_id'; content?: string; canvasJson?: CanvasJSON; error?: string; id?: string; }
+
+function ResultCard({ message, onApply, onContinue, applying }: {
+  message: ChatMessage; onApply: () => void; onContinue: () => void; applying: boolean;
+}) {
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [ready, setReady] = useState(false);
+  const setPreviewReady = useCallback((value: boolean) => setReady(value), []);
+  return <div className="ai-result">
+    {message.referenceAnalysis && <div className="ai-reference-analysis"><strong><Sparkles size={13} />参考图分析</strong><p>{message.referenceAnalysis}</p></div>}
+    <div className="ai-result-heading"><span>封面方案</span><div className="segmented compact" aria-label="预览对比">
+      <button type="button" aria-pressed={!showOriginal} onClick={() => setShowOriginal(false)}>生成结果</button>
+      <button type="button" aria-pressed={showOriginal} onClick={() => setShowOriginal(true)}>修改前</button>
+    </div></div>
+    <div hidden={showOriginal}><DesignPreview json={message.canvasJson!} width={message.width!} height={message.height!} onReady={setPreviewReady} /></div>
+    {showOriginal && <DesignPreview json={message.baseline!} width={message.width!} height={message.height!} />}
+    <ul className="ai-change-list">{message.changes?.map(change => <li key={change}><CheckCircle size={13} />{change}</li>)}</ul>
+    <div className="ai-result-actions">
+      {message.applied ? <span className="ai-applied"><CheckCircle size={14} />已应用，可在编辑器撤销</span>
+        : <button type="button" className="studio-primary" disabled={!ready || applying} onClick={onApply}>
+          {applying ? <Loader2 size={14} className="animate-spin" /> : <Layers size={14} />}应用到画布</button>}
+      <button type="button" className="studio-secondary" disabled={applying} onClick={onContinue}>继续调整<ArrowRight size={13} /></button>
+    </div>
+  </div>;
 }
 
-interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error' | 'conversation_id';
-  content?: string;
-  canvasJson?: any;
-  error?: string;
-  id?: string;
-}
-
-/** 精简 canvas JSON，去掉 base64 大数据，只保留 AI 需要的结构信息 */
-function summarizeCanvas(canvasJson: any): any {
-  if (!canvasJson) return null;
-  return {
-    version: canvasJson.version,
-    width: canvasJson.width,
-    height: canvasJson.height,
-    background: canvasJson.background,
-    backgroundImage: canvasJson.backgroundImage ? {
-      type: canvasJson.backgroundImage.type,
-      width: canvasJson.backgroundImage.width,
-      height: canvasJson.backgroundImage.height,
-      src: canvasJson.backgroundImage.src?.startsWith('data:')
-        ? `[SVG/base64 pattern, ${Math.round((canvasJson.backgroundImage.src?.length || 0) / 1024)}KB]`
-        : canvasJson.backgroundImage.src
-    } : undefined,
-    objects: (canvasJson.objects || []).map((obj: any) => ({
-      id: obj.id,
-      type: obj.type,
-      left: Math.round(obj.left),
-      top: Math.round(obj.top),
-      width: obj.width,
-      height: obj.height,
-      scaleX: obj.scaleX,
-      scaleY: obj.scaleY,
-      angle: obj.angle,
-      fill: typeof obj.fill === 'string' ? obj.fill : '[pattern/gradient]',
-      opacity: obj.opacity,
-      ...(obj.type === 'IText' || obj.type === 'i-text' ? {
-        text: obj.text,
-        fontSize: obj.fontSize,
-        fontFamily: obj.fontFamily,
-        fontWeight: obj.fontWeight,
-        textAlign: obj.textAlign,
-      } : {}),
-      ...(obj.type === 'Image' ? {
-        src: obj.src?.startsWith('data:') ? '[base64 image]' : obj.src,
-        posterVar: obj.posterVar,
-        clipPath: obj.clipPath ? { rx: obj.clipPath.rx, ry: obj.clipPath.ry } : undefined,
-      } : {}),
-      ...(obj.type === 'Rect' ? { rx: obj.rx, ry: obj.ry } : {}),
-    }))
-  };
-}
-
-interface AIChatPanelProps {
-  onApplied?: () => void;
-}
-
-export function AIChatPanel({ onApplied }: AIChatPanelProps) {
+export function AIChatPanel({ onApplied, width = 1920, height = 1080 }: { onApplied?: () => void; width?: number; height?: number }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [applyingIndex, setApplyingIndex] = useState<number | null>(null);
+  const [scope, setScope] = useState<DesignScope>('canvas');
   const [selectedProvider, setSelectedProvider] = useState<string>();
   const [selectedModel, setSelectedModel] = useState<string>();
   const [conversationId, setConversationId] = useState<string>();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const { data: providers } = useAIProviders();
+  const [draft, setDraft] = useState<{ json: CanvasJSON; originSnapshot: string } | null>(null);
+  const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
+  const [showReferenceImages, setShowReferenceImages] = useState(true);
+  const [isPreparingImages, setIsPreparingImages] = useState(false);
+  const [draggingImages, setDraggingImages] = useState(false);
+  const imageUploadRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const latestMessageRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const requestRef = useRef<AbortController | null>(null);
+  const { data: providers, isLoading, isError, refetch } = useAIProviders();
+  const activeProviders = providers?.filter(provider => provider.isActive);
   const canvas = useCanvasStore(state => state.canvas);
+  const selectedObject = useCanvasStore(state => state.selectedObject);
   const applyCanvasJSON = useCanvasStore(state => state.applyCanvasJSON);
-  const token = useAuthStore(state => state.token);
+  const currentProvider = activeProviders?.find(provider => provider.id === selectedProvider);
+  const modelCatalog = useAIProviderModels(currentProvider?.id, currentProvider?.updatedAt);
+  const availableModels = [...new Map([
+    ...(currentProvider?.model || '').split(',').map(id => id.trim()).filter(Boolean).map(id => ({ id, name: id,
+      imageInput: currentProvider?.modelCapabilities?.[id] ?? null, capabilitySource: 'unknown' } as AIModel)),
+    ...(modelCatalog.data?.models || [])
+  ].map(model => [model.id, model])).values()];
+  const modelInfo = availableModels.find(model => model.id === selectedModel);
+  const supportsImages = modelInfo?.imageInput === true;
+  const imageCapabilityHint = modelCatalog.isFetching ? '正在读取模型图片能力…' : supportsImages ? '支持拖入或粘贴'
+    : modelInfo?.imageInput === false ? '当前模型不支持图片，请切换图片模型'
+    : '图片能力待确认，可在 AI 配置中确认';
 
-  // 手动应用模板到画布，使用 store 方法确保 isRestoring 正确设置
-  const applyToCanvas = useCallback(async (canvasJson: any, msgIndex: number) => {
-    await applyCanvasJSON(canvasJson);
-    setMessages(prev => prev.map((m, i) =>
-      i === msgIndex ? { ...m, applied: true } : m
-    ));
-    onApplied?.();
-  }, [applyCanvasJSON, onApplied]);
-
+  const snapshot = useCallback(() => ({ ...(canvas?.toObject(CANVAS_PROPERTIES) || { objects: [] }), width, height } as CanvasJSON), [canvas, width, height]);
   useEffect(() => {
-    if (providers && !selectedProvider) {
-      const defaultProvider = providers.find(p => p.isDefault);
-      if (defaultProvider) {
-        setSelectedProvider(defaultProvider.id);
-      } else if (providers.length > 0) {
-        setSelectedProvider(providers[0].id);
-      }
+    if (activeProviders?.length && !activeProviders.some(provider => provider.id === selectedProvider)) {
+      setSelectedProvider((activeProviders.find(provider => provider.isDefault) || activeProviders[0]).id);
     }
   }, [providers, selectedProvider]);
-
-  // 当 provider 变更时，更新可用的 models 和选中 model
-  const currentProvider = providers?.find(p => p.id === selectedProvider);
-  const availableModels = (currentProvider?.model || '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
-
+  useEffect(() => { setSelectedModel(currentProvider?.model?.split(',')[0].trim() || undefined); }, [selectedProvider, currentProvider?.model]);
   useEffect(() => {
-    if (availableModels.length > 0) {
-      if (!selectedModel || !availableModels.includes(selectedModel)) {
-        setSelectedModel(availableModels[0]);
-      }
-    } else {
-      setSelectedModel(undefined);
+    if (!selectedModel && availableModels.length) setSelectedModel(availableModels[0].id);
+  }, [selectedModel, modelCatalog.data]);
+  useEffect(() => { latestMessageRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [messages]);
+  useEffect(() => () => { requestRef.current?.abort(); }, []);
+
+  const selectedIds = selectedObject ? (selectedObject.type.toLowerCase() === 'activeselection'
+    ? (selectedObject as any).getObjects().map((object: any) => object.id)
+    : [(selectedObject as any).id]).filter(Boolean) as string[] : [];
+
+  const addReferenceImages = async (files: File[]) => {
+    if (!supportsImages && files.length) {
+      toast({ title: '当前模型尚未支持参考图上传', description: imageCapabilityHint, variant: 'destructive' }); return;
     }
-  }, [selectedProvider, availableModels.join(',')]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleSend = async () => {
-    if (!input.trim() || isGenerating || !selectedProvider) return;
-
-    const userMessage: ChatMessage = { role: 'user', content: input.trim() };
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setIsGenerating(true);
-
-    // 占位助手消息（生成中）
-    const assistantIndex = messages.length + 1;
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
-
+    if (!files.length || imageUploadRef.current || isGenerating || applyingIndex !== null) return;
+    if (referenceImages.length + files.length > MAX_REFERENCE_IMAGES) {
+      toast({ title:'最多添加 3 张参考图', description:'请移除已有图片后再添加', variant:'destructive' }); return;
+    }
+    imageUploadRef.current = true; setIsPreparingImages(true);
     try {
-      let currentCanvas: any = null;
-      let editMode = false;
-      try {
-        const rawJson = canvas?.toJSON();
-        if (rawJson && (rawJson.objects?.length > 0 || rawJson.backgroundImage)) {
-          currentCanvas = summarizeCanvas(rawJson);
-          editMode = true;
-        }
-      } catch { /* 忽略 */ }
+      const prepared = await Promise.all(files.map(prepareReferenceImage));
+      setReferenceImages(previous => [...previous, ...prepared]);
+      setShowReferenceImages(true);
+    } catch (error: any) { toast({ title:'参考图添加失败', description:error.message, variant:'destructive' }); }
+    finally { imageUploadRef.current = false; setIsPreparingImages(false); }
+  };
 
-      const canvasSize = canvas
-        ? { width: canvas.width || 1920, height: canvas.height || 1080 }
-        : { width: 1920, height: 1080 };
-
-      if (!token) throw new Error('未登录，请先登录');
-
+  const handleSend = async (retryPrompt?: string, retryImages?: ReferenceImage[]) => {
+    const sentImages = retryImages || referenceImages;
+    if (sentImages.length && !supportsImages) {
+      toast({ title: '请切换支持图片理解的模型', description: '参考图已保留，也可以移除图片后继续文字生成', variant: 'destructive' }); return;
+    }
+    const prompt = (retryPrompt || input).trim() || (sentImages.length ? '分析参考图的配色、构图和文字层级，参考其风格设计一张媒体库海报，保留主副标题变量。' : '');
+    if (!prompt || imageUploadRef.current || requestRef.current || !currentProvider || !canvas) return;
+    const live = snapshot();
+    const liveSignature = JSON.stringify(live);
+    if (draft && draft.originSnapshot !== liveSignature) {
+      toast({ title: '画布已发生变化', description: '请关闭待调整方案，再基于当前画布生成', variant: 'destructive' }); return;
+    }
+    const baseline = draft?.json || live;
+    if (scope === 'selection' && (!selectedIds.length || selectedIds.some(id => isLocked(baseline.objects.find(object => object.id === id) || {})))) {
+      toast({ title: '请选择可编辑的图层', description: '锁定图层会保持原样', variant: 'destructive' }); return;
+    }
+    const controller = new AbortController(); requestRef.current = controller;
+    const assistantIndex = messages.length + 1;
+    const update = (message: ChatMessage) => {
+      if (requestRef.current === controller) setMessages(previous => previous.map((item, index) => index === assistantIndex ? message : item));
+    };
+    setMessages(previous => [...previous, { role: 'user', content: prompt, referenceImages:sentImages }, { role: 'assistant', content: sentImages.length ? '正在分析参考图…' : '正在分析设计需求…' }]);
+    setInput(''); setIsGenerating(true);
+    setShowReferenceImages(false);
+    let completed = false;
+    let generationLabel = sentImages.length ? '正在分析参考图并生成海报方案…' : '正在生成封面方案…';
+    try {
+      const token = useAuthStore.getState().token;
+      if (!token) throw new Error('登录已失效，请重新登录');
+      const constraints = scope === 'selection'
+        ? `仅修改这些图层 ID：${selectedIds.join('、')}。保留这些 ID，返回完整画布 JSON。其他图层和背景必须原样保留。`
+        : scope === 'new' ? '生成新的封面设计，保留上下文中的锁定图层。' : '在当前设计上优化，保留所有现有图层 ID、图片素材和变量绑定。';
       const response = await fetch(`${apiClient.defaults.baseURL}/ai-chat/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          prompt: userMessage.content,
-          conversationId,
-          providerId: selectedProvider,
-          model: selectedModel,
-          currentCanvas,
-          canvasSize,
-          editMode
-        })
+        method: 'POST', signal: controller.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prompt: `${prompt}\n\n设计约束：${constraints}\n所有锁定图层保持原样。`, conversationId, providerId: selectedProvider,
+          model: selectedModel, currentCanvas: summarizeCanvas(baseline), canvasSize: { width, height }, editMode: scope !== 'new',
+          referenceImages:sentImages.map(image => ({dataUrl:image.dataUrl})) })
       });
-
-      if (!response.ok) throw new Error('请求失败，请检查 AI 服务配置');
-
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No response body');
-
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data:'));
-
-        for (const line of lines) {
-          try {
-            const data: StreamChunk = JSON.parse(line.substring(5).trim());
-
-            if (data.type === 'chunk') {
-              // 生成中：只显示省略号动画，不显示原始 JSON
-              setMessages(prev => {
-                const next = [...prev];
-                next[assistantIndex] = { role: 'assistant', content: '正在生成中...' };
-                return next;
-              });
-
-            } else if (data.type === 'complete') {
-              // 生成完成：统计对象数量，显示摘要 + 应用按钮
-              const json = data.canvasJson;
-              const objCount = json?.objects?.length ?? 0;
-              const textCount = (json?.objects ?? []).filter((o: any) =>
-                o.type === 'IText' || o.type === 'i-text'
-              ).length;
-              const imgCount = (json?.objects ?? []).filter((o: any) =>
-                o.type === 'Image'
-              ).length;
-
-              const summary = `已生成模板：共 ${objCount} 个对象（${imgCount} 张海报图、${textCount} 段文字）`;
-
-              setMessages(prev => {
-                const next = [...prev];
-                next[assistantIndex] = {
-                  role: 'assistant',
-                  content: summary,
-                  canvasJson: json ?? undefined
-                };
-                return next;
-              });
-
-            } else if (data.type === 'error') {
-              setMessages(prev => {
-                const next = [...prev];
-                next[assistantIndex] = { role: 'assistant', content: `生成失败：${data.error}` };
-                return next;
-              });
-
-            } else if (data.type === 'conversation_id') {
-              setConversationId(data.id);
-            }
-          } catch (e) {
-            console.error('Failed to parse SSE data:', e);
-          }
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(typeof detail.error === 'string' ? detail.error : detail.error?.message || '请求失败，请检查 AI 服务配置');
+      }
+      if (!response.body) throw new Error('未收到生成结果，请重试');
+      for await (const event of readSSE<StreamChunk>(response.body)) {
+        if (controller.signal.aborted) break;
+        if (event.type === 'status') { generationLabel = event.content || '正在校正设计格式…'; update({ role: 'assistant', content: generationLabel }); }
+        if (event.type === 'chunk') update({ role: 'assistant', content: generationLabel });
+        if (event.type === 'error') throw new Error(event.error || '生成失败，请重试');
+        if (event.type === 'conversation_id' && requestRef.current === controller) setConversationId(event.id);
+        if (event.type === 'complete') {
+          const { referenceAnalysis, ...design } = event.canvasJson!;
+          const candidate = normalizeDesignAssets(constrainDesign(design as CanvasJSON, baseline, scope, selectedIds));
+          update({ role: 'assistant', content: '方案已生成，预览后应用', canvasJson: candidate, baseline,
+            originSnapshot: draft?.originSnapshot || liveSignature, width, height, changes: describeChanges(baseline, candidate, scope),
+            referenceAnalysis: typeof referenceAnalysis === 'string' ? referenceAnalysis.slice(0, 1200) : undefined });
+          completed = true; setDraft(null);
         }
       }
+      if (!completed && !controller.signal.aborted) throw new Error('连接提前结束，未收到完整设计，请重试');
     } catch (error: any) {
-      setMessages(prev => {
-        const next = [...prev];
-        next[assistantIndex] = { role: 'assistant', content: `错误：${error.message}` };
-        return next;
-      });
+      update({ role: 'assistant', content: controller.signal.aborted ? '已停止生成，需求与参考图已保留' : error.message, error: !controller.signal.aborted, prompt, referenceImages:sentImages });
+      if (!completed) { setInput(prompt); setShowReferenceImages(true); }
     } finally {
-      setIsGenerating(false);
+      if (requestRef.current === controller) { requestRef.current = null; setIsGenerating(false); }
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const apply = async (message: ChatMessage, index: number) => {
+    if (JSON.stringify(snapshot()) !== message.originSnapshot) {
+      toast({ title: '画布已发生变化', description: '请基于当前画布重新生成，避免覆盖后续修改', variant: 'destructive' }); return;
     }
+    setApplyingIndex(index);
+    try {
+      await applyCanvasJSON(message.canvasJson!);
+      setMessages(previous => previous.map((item, messageIndex) => messageIndex === index ? { ...item, applied: true } : item));
+      setDraft(null); onApplied?.();
+      toast({ title: '设计已应用', description: '可以使用编辑器的撤销恢复原设计' });
+    } catch {
+      toast({ title: '应用失败', description: '原设计已保留，请检查素材或重新生成', variant: 'destructive' });
+    } finally { setApplyingIndex(null); }
   };
 
-  const handleNewConversation = () => {
-    setMessages([]);
-    setConversationId(undefined);
-    setInput('');
-    setIsGenerating(false);
-  };
+  if (isLoading) return <div className="ai-empty"><Loader2 size={24} className="animate-spin" /><p>正在加载 AI 服务</p></div>;
+  if (isError) return <div className="ai-empty"><p>AI 服务加载失败</p><button className="studio-secondary" onClick={() => void refetch()}>重新加载</button></div>;
+  if (!activeProviders?.length) return <div className="ai-empty"><Sparkles size={32} /><strong>连接你的 AI 设计助手</strong>
+    <p>配置 AI 服务后，即可生成封面、优化排版和调整选中图层。</p><Link to="/settings" className="studio-primary">前往配置<ArrowRight size={14} /></Link></div>;
 
-  if (!providers || providers.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full p-4 text-center">
-        <Sparkles className="w-12 h-12 mb-4 text-gray-400" />
-        <p className="text-sm text-gray-600 mb-2">未配置 AI 服务</p>
-        <p className="text-xs text-gray-500">请前往设置页面配置 AI 服务提供商</p>
+  return <div className="ai-panel">
+    <div className="ai-panel-header"><div><Sparkles size={16} /><strong>设计助手</strong></div>
+      <button type="button" className="studio-icon" title="新建会话" aria-label="新建会话" disabled={isGenerating || applyingIndex !== null || isPreparingImages}
+        onClick={() => { setMessages([]); setConversationId(undefined); setInput(''); setDraft(null); setReferenceImages([]); }}><RefreshCw size={15} /></button></div>
+    <details className="ai-model-settings"><summary><Settings2 size={13} /><span>{currentProvider?.name} · {selectedModel || '默认模型'}</span></summary>
+      <div><label>AI 服务<select className="studio-input" aria-label="AI 服务" value={selectedProvider || ''} disabled={isGenerating || isPreparingImages}
+        onChange={event => { setSelectedProvider(event.target.value); setConversationId(undefined); }}>{activeProviders.map(provider => <option key={provider.id} value={provider.id}>{provider.name}</option>)}</select></label>
+        <label>模型<select className="studio-input" aria-label="模型" value={selectedModel || ''} disabled={isGenerating || isPreparingImages || !availableModels.length} onChange={event => setSelectedModel(event.target.value)}>
+          {availableModels.length ? availableModels.map(model => <option key={model.id} value={model.id}>{model.id} · {modelImageLabel(model)}</option>) : <option value="">默认模型</option>}</select></label></div>
+      <div className="ai-model-status">
+        <span>{modelImageLabel(modelInfo)}</span>
+        <button type="button" className="studio-secondary" disabled={modelCatalog.isFetching || isGenerating} onClick={() => void modelCatalog.refetch()}><RefreshCw size={12} />刷新模型</button>
+        {!supportsImages && <Link to="/settings">配置图片能力</Link>}
+        {(modelCatalog.data?.warning || modelCatalog.isError) && <p>{modelCatalog.data?.warning || '获取列表失败，已保留配置模型'}</p>}
       </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* 顶部：Provider 选择 + 新建会话 */}
-      <div className="p-2 border-b border-gray-200 flex gap-2">
-        <select
-          value={selectedProvider}
-          onChange={(e) => setSelectedProvider(e.target.value)}
-          className="w-1/2 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
-          disabled={isGenerating}
-        >
-          {providers.map(p => (
-            <option key={p.id} value={p.id}>
-              {p.name} {p.isDefault && '(默认)'}
-            </option>
-          ))}
-        </select>
-
-        {availableModels.length > 0 ? (
-          <select
-            value={selectedModel || ''}
-            onChange={(e) => setSelectedModel(e.target.value)}
-            className="flex-1 px-2 py-1.5 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 truncate"
-            disabled={isGenerating || availableModels.length <= 1}
-            title={availableModels.length <= 1 ? "该服务仅配置了此模型" : "切换模型"}
-          >
-            {availableModels.map(m => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        ) : (
-          <div className="flex-1 px-2 py-1.5 text-xs border border-gray-200 bg-gray-50 text-gray-400 rounded-md flex items-center truncate">
-            默认模型
-          </div>
-        )}
-
-        {messages.length > 0 && (
-          <button
-            onClick={handleNewConversation}
-            title="新建会话"
-            className="px-2 py-1.5 shrink-0 text-xs border border-gray-300 rounded-md hover:bg-gray-50 text-gray-600"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        )}
-      </div>
-
-      {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <Sparkles className="w-10 h-10 mb-3 text-blue-500" />
-            <p className="text-xs text-gray-600 mb-1 font-medium">AI 模板生成助手</p>
-            <p className="text-[11px] text-gray-400 leading-relaxed">
-              描述你想要的设计，画布有内容时 AI 会在现有基础上修改
-            </p>
-          </div>
-        )}
-
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[90%] rounded-lg text-xs leading-relaxed ${msg.role === 'user'
-              ? 'bg-blue-500 text-white px-3 py-2'
-              : 'bg-gray-100 text-gray-900 px-3 py-2'
-              }`}>
-              {/* 生成中动画 */}
-              {msg.role === 'assistant' && msg.content === '正在生成中...' ? (
-                <span className="flex items-center gap-1.5 text-gray-500">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  正在生成中...
-                </span>
-              ) : (
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              )}
-
-              {/* 生成完成：显示应用按钮 */}
-              {msg.role === 'assistant' && msg.canvasJson && (
-                <div className="mt-2 pt-2 border-t border-gray-200">
-                  {msg.applied ? (
-                    <span className="flex items-center gap-1 text-green-600 text-[11px]">
-                      <CheckCircle className="w-3 h-3" />
-                      已应用到画布
-                    </span>
-                  ) : (
-                    <button
-                      onClick={() => applyToCanvas(msg.canvasJson, idx)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-md text-[11px] transition-colors"
-                    >
-                      <Layers className="w-3 h-3" />
-                      应用到画布
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* 输入框 */}
-      <div className="p-2 border-t border-gray-200">
-        <div className="flex gap-2">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="描述你想要的设计，或如何修改当前模版..."
-            className="flex-1 px-2.5 py-2 text-xs border border-gray-300 rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-            rows={3}
-            disabled={isGenerating}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || isGenerating || !selectedProvider}
-            className="px-3 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          >
-            {isGenerating ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
-        </div>
-      </div>
+    </details>
+    <div className="ai-scope"><span className="studio-label">操作范围</span><div className="segmented">
+      {([{ value: 'canvas', label: '优化设计' }, { value: 'selection', label: '选中图层' }, { value: 'new', label: '新模板' }] as const).map(item =>
+        <button type="button" key={item.value} aria-pressed={scope === item.value} disabled={isGenerating || (item.value === 'selection' && !selectedIds.length)}
+          onClick={() => { setScope(item.value); setDraft(null); }}>{item.label}</button>)}
+    </div><p><Lock size={11} />{scope === 'selection' ? selectedIds.length ? `仅修改选中的 ${selectedIds.length} 个图层` : '请先在画布或图层面板选择要调整的图层' : scope === 'new' ? '重新设计封面，保留锁定图层' : '基于当前画布优化，保留锁定图层'}</p></div>
+    <div className="ai-messages" aria-live="polite" aria-busy={isGenerating}>
+      {!messages.length && <div className="ai-welcome"><div className="ai-welcome-icon"><Sparkles size={25} /></div><strong>让封面更有设计感</strong>
+        <p>描述想调整的地方，或从下面的快捷操作开始。生成后可先对比，再应用。</p>
+        <div className="ai-shortcuts">{['优化标题排版', '调整海报排列', '提升文字可读性', '统一封面配色'].map(prompt =>
+          <button type="button" key={prompt} onClick={() => { setInput(prompt); inputRef.current?.focus(); }}>{prompt}<ArrowRight size={12} /></button>)}</div></div>}
+      {messages.map((message, index) => <div key={index} ref={index === messages.length - 1 ? latestMessageRef : undefined} className={`ai-message ${message.role}`}>
+        {message.role === 'user' && !!message.referenceImages?.length && <div className="ai-sent-references">{message.referenceImages.map((image, imageIndex) =>
+          <img key={image.id} src={image.dataUrl} alt={`已发送的参考图 ${imageIndex + 1}`} />)}</div>}
+        {message.canvasJson ? <ResultCard message={message} applying={applyingIndex !== null || isGenerating}
+          onApply={() => void apply(message, index)} onContinue={() => {
+            setDraft({ json: message.canvasJson!, originSnapshot: message.applied ? JSON.stringify(snapshot()) : message.originSnapshot! });
+            setScope('canvas'); setInput('在这个方案基础上，'); inputRef.current?.focus();
+          }} /> : <><p>{message.content}</p>{message.error && <button type="button" className="studio-secondary" disabled={isGenerating}
+            onClick={() => void handleSend(message.prompt, message.referenceImages)}><RefreshCw size={12} />重试</button>}</>}
+      </div>)}
     </div>
-  );
+    <div className={`ai-composer${draggingImages ? ' dragging-images' : ''}`}
+      onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); if (supportsImages) setDraggingImages(true); } }}
+      onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDraggingImages(false); }}
+      onDrop={event => { event.preventDefault(); setDraggingImages(false); void addReferenceImages(Array.from(event.dataTransfer.files)); }}
+      onPaste={event => { const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/')); if (images.length) { event.preventDefault(); void addReferenceImages(images); } }}>
+      {draft && <div className="ai-draft">正在调整上一个方案<button type="button" className="studio-icon" aria-label="关闭待调整方案" onClick={() => setDraft(null)} disabled={isGenerating}><X size={13} /></button></div>}
+      <div className="ai-reference-toolbar"><button type="button" className="studio-secondary" disabled={!supportsImages || isGenerating || applyingIndex !== null || isPreparingImages || referenceImages.length >= MAX_REFERENCE_IMAGES}
+        onClick={() => fileInputRef.current?.click()}>{isPreparingImages ? <Loader2 size={13} className="animate-spin" /> : <ImagePlus size={13} />}添加参考图</button>
+        {referenceImages.length ? <button type="button" className="ai-reference-toggle" aria-expanded={showReferenceImages}
+          onClick={() => setShowReferenceImages(value => !value)}>{referenceImages.length} / {MAX_REFERENCE_IMAGES} 张 · {showReferenceImages ? '收起参考图' : '展开参考图'}</button>
+          : <span>{imageCapabilityHint}</span>}
+        <input ref={fileInputRef} type="file" aria-label="上传参考图" accept="image/jpeg,image/png,image/webp" multiple hidden
+          onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ''; void addReferenceImages(files); }} /></div>
+      {!!referenceImages.length && !supportsImages && <p className="ai-reference-hint">请切换支持图片理解的模型，或移除参考图后继续。</p>}
+      {showReferenceImages && !!referenceImages.length && <div className="ai-reference-list">{referenceImages.map((image, imageIndex) => <div key={image.id} className="ai-reference-item">
+        <img src={image.dataUrl} alt={`参考图 ${imageIndex + 1}：${image.name}`} /><span title={image.name}>参考图 {imageIndex + 1}</span>
+        <button type="button" className="studio-icon" aria-label={`移除参考图 ${imageIndex + 1}`} disabled={isGenerating || applyingIndex !== null || isPreparingImages}
+          onClick={() => setReferenceImages(previous => previous.filter(item => item.id !== image.id))}><X size={12} /></button></div>)}</div>}
+      {showReferenceImages && !!referenceImages.length && <p className="ai-reference-hint">分析配色、排版与构图，生成可编辑海报。图片将在生成时发送给所选 AI 服务。</p>}
+      <textarea ref={inputRef} aria-label="设计需求" placeholder={scope === 'selection' ? '例如：把选中的标题放大，保留位置…' : '例如：标题放在左侧，海报整齐排列，整体用深色…'}
+        value={input} onChange={event => setInput(event.target.value)} rows={referenceImages.length ? 2 : 3} disabled={isGenerating || applyingIndex !== null || isPreparingImages}
+        onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void handleSend(); } }} />
+      <div className="ai-composer-footer"><span>Enter 发送 · Shift + Enter 换行</span>{isGenerating
+        ? <button type="button" className="studio-secondary" onClick={() => requestRef.current?.abort()}><Square size={12} />停止生成</button>
+        : <button type="button" className="studio-primary" disabled={(!!referenceImages.length && !supportsImages) || (!input.trim() && !referenceImages.length) || isPreparingImages || !currentProvider || !canvas || applyingIndex !== null || (scope === 'selection' && !selectedIds.length)} onClick={() => void handleSend()}><Send size={13} />{referenceImages.length ? '参考生成海报' : '生成方案'}</button>}</div>
+    </div>
+  </div>;
 }

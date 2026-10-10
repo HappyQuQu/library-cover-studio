@@ -22,6 +22,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getSamplePosterUrl } from '@/lib/posters';
 
 interface ToolboxPanelProps {
   onAddText: () => void;
@@ -214,12 +215,12 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 {Array.from({ length: 9 }).map((_, i) => (
                   <button
                     key={`poster-${i + 1}`}
-                    onClick={() => onAddShape('poster', `${import.meta.env.VITE_API_URL || '/api'}/templates/posters/${i + 1}.jpg`)}
+                    onClick={() => onAddShape('poster', getSamplePosterUrl(i + 1))}
                     className="aspect-[2/3] relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group"
                     title={`海报 ${i + 1}`}
                   >
                     <img
-                      src={`${import.meta.env.VITE_API_URL || '/api'}/templates/posters/${i + 1}.jpg`}
+                      src={getSamplePosterUrl(i + 1)}
                       alt={`Poster ${i + 1}`}
                       className="w-full h-full object-cover"
                       loading="lazy"
@@ -452,13 +453,13 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                     checked={randomOnGeneration}
                     onChange={(e) => {
                       setRandomOnGeneration(e.target.checked);
-                      onChangeBackground({ type: 'random-gradient', direction: gradientDirection, randomOnGeneration: e.target.checked });
+                      onChangeBackground({ randomOnGeneration: e.target.checked });
                     }}
                     className="w-4 h-4 accent-(--primary) cursor-pointer"
                   />
                   <div className="flex-1">
                     <span className="text-sm font-medium text-(--text-primary)">生成任务时随机背景</span>
-                    <p className="text-xs text-(--text-tertiary) mt-0.5">每次执行任务时自动使用随机背景</p>
+                    <p className="text-xs text-(--text-tertiary) mt-0.5">样张和任务每次生成都会随机配色；默认模板保持原背景风格</p>
                   </div>
                   <Shuffle className="w-4 h-4 text-(--text-tertiary)" />
                 </label>

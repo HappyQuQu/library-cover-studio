@@ -4,6 +4,8 @@ export interface Message {
 }
 
 export interface TemplateContext {
+  referenceImages?: import('./utils/referenceImages.js').ReferenceImage[];
+  signal?: AbortSignal;
   conversationHistory?: Message[];
   currentCanvas?: any;
   canvasSize?: { width: number; height: number };
@@ -13,7 +15,7 @@ export interface TemplateContext {
 }
 
 export interface StreamChunk {
-  type: 'chunk' | 'complete' | 'error';
+  type: 'chunk' | 'status' | 'complete' | 'error';
   content?: string;
   canvasJson?: any;
   error?: string;

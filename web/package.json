@@ -5,9 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview",
+    "dev": "vite --config vite.config.ts",
+    "build": "tsc -b && vite build --config vite.config.ts",
+    "preview": "vite preview --config vite.config.ts",
     "lint": "eslint src --ext .ts,.tsx --fix",
     "format": "prettier --write src/**/*.{ts,tsx,css}",
     "clean": "rimraf node_modules dist .vite"

@@ -10,6 +10,8 @@ import {
   useDeleteAIProvider,
   useTestAIProvider,
   useTestAIProviderConfig,
+  useDiscoverAIModels, useAIProviderModels, modelImageLabel,
+  type ModelCatalog, type AIModel,
 } from '@/api/ai';
 import { apiClient } from '@/api/client';
 
@@ -18,6 +20,7 @@ const PROVIDER_OPTIONS = [
   { value: 'claude', label: 'Claude (Anthropic)', apiUrl: 'https://api.anthropic.com', model: 'claude-3-5-sonnet-20241022', group: '国际服务' },
   { value: 'openai', label: 'OpenAI', apiUrl: 'https://api.openai.com/v1', model: 'gpt-4o', group: '国际服务' },
   { value: 'ollama', label: 'Ollama (本地)', apiUrl: 'http://localhost:11434', model: '', group: '本地部署' },
+  { value: 'mimo', label: '小米 MiMo', apiUrl: 'https://api.xiaomimimo.com/v1', model: '', group: '国产模型' },
   { value: 'deepseek', label: '🐋 DeepSeek', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', group: '国产模型' },
   { value: 'qwen', label: '🌐 通义千问 (Qwen)', apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max', group: '国产模型' },
   { value: 'ernie', label: '🌊 文心一言 (ERNIE)', apiUrl: 'https://qianfan.baidubce.com/v2', model: 'ernie-4.5-8k', group: '国产模型' },
@@ -61,9 +64,35 @@ export function AIProviderSettings() {
     type: 'custom' as 'claude' | 'openai' | 'ollama' | 'custom',
     apiUrl: 'https://api.deepseek.com/v1',
     apiKey: '',
-    model: 'deepseek-chat'
+    model: 'deepseek-chat',
+    modelCapabilities: {} as Record<string, boolean>
   };
   const [formData, setFormData] = useState(defaultForm);
+  const discoverMutation = useDiscoverAIModels();
+  const savedProvider = providers.find(provider => provider.id === editingId);
+  const savedModels = useAIProviderModels(formMode === 'edit' ? editingId || undefined : undefined, savedProvider?.updatedAt);
+  const [discovered, setDiscovered] = useState<{ fingerprint: string; result: ModelCatalog } | null>(null);
+  const [modelSearch, setModelSearch] = useState('');
+  const fingerprint = JSON.stringify([editingId, formData.type, formData.apiUrl, formData.apiKey]);
+  const catalog = discovered?.fingerprint === fingerprint ? discovered.result
+    : savedProvider?.apiUrl === formData.apiUrl && savedProvider.type === formData.type && !formData.apiKey ? savedModels.data : undefined;
+  const modelOptions = [...new Map([
+    ...formData.model.split(',').map(id => id.trim()).filter(Boolean).map(id => ({ id, name: id, imageInput: null, capabilitySource: 'unknown' } as AIModel)),
+    ...(catalog?.models || [])
+  ].map(model => [model.id, Object.hasOwn(formData.modelCapabilities, model.id)
+    ? { ...model, imageInput: formData.modelCapabilities[model.id], capabilitySource: 'manual' as const } : model])).values()];
+  const primaryModel = formData.model.split(',')[0].trim();
+  const selectedModelInfo = modelOptions.find(model => model.id === primaryModel);
+  const fetchModels = async () => {
+    try {
+      const result = await discoverMutation.mutateAsync({ ...formData, providerId: editingId || undefined, apiKey: formData.apiKey || undefined });
+      setDiscovered({ fingerprint, result });
+      if (!formData.model && result.models.length) setFormData(previous =>
+        JSON.stringify([editingId, previous.type, previous.apiUrl, previous.apiKey]) === fingerprint ? { ...previous, model: result.models[0].id } : previous);
+    } catch (error: any) {
+      toast({ title: '获取模型失败', description: error.response?.data?.error || error.message, variant: 'destructive' });
+    }
+  };
 
   // 提示词编辑
   const [promptExpanded, setPromptExpanded] = useState(false);
@@ -125,6 +154,7 @@ export function AIProviderSettings() {
 
   const handleProviderSelect = (value: string) => {
     setSelectedValue(value);
+    setModelSearch('');
     const opt = PROVIDER_OPTIONS.find(o => o.value === value);
     if (opt) {
       setFormData(prev => ({
@@ -132,6 +162,7 @@ export function AIProviderSettings() {
         type: toBackendType(value),
         apiUrl: opt.apiUrl,
         model: opt.model,
+        modelCapabilities: {},
         name: prev.name || opt.label.replace(/^[^\s]+ /, '')
       }));
     }
@@ -139,6 +170,7 @@ export function AIProviderSettings() {
 
   const handleEdit = (provider: any) => {
     setFormMode('edit');
+    setModelSearch('');
     setEditingId(provider.id);
     // 尝试推断 selectedValue
     const match = PROVIDER_OPTIONS.find(o => o.apiUrl && provider.apiUrl?.includes(
@@ -151,7 +183,8 @@ export function AIProviderSettings() {
       type: provider.type,
       apiUrl: provider.apiUrl,
       apiKey: '', // 编辑时不显示 key，除非重新输入
-      model: provider.model || ''
+      model: provider.model || '',
+      modelCapabilities: provider.modelCapabilities || {}
     });
   };
 
@@ -160,8 +193,8 @@ export function AIProviderSettings() {
       toast({ title: '请填写配置名称和 API URL', variant: 'destructive' });
       return;
     }
-    if (formData.type === 'ollama' && !formData.model) {
-      toast({ title: 'Ollama 需要指定模型名称', variant: 'destructive' });
+    if (!formData.model.trim()) {
+      toast({ title: '请获取并选择模型，或手动填写模型名称', variant: 'destructive' });
       return;
     }
     if (formMode === 'add' && formData.type !== 'ollama' && !formData.apiKey) {
@@ -355,16 +388,41 @@ export function AIProviderSettings() {
             )}
 
             <div>
-              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">
-                模型名称配置 {formData.type === 'ollama' ? '*' : '(选填，支持配置多模型自动切换)'}
-              </label>
-              <Input
-                placeholder={formData.type === 'ollama' ? '如: qwen2.5:7b,llama3' : '如: gpt-4o,gpt-4-turbo...'}
-                value={formData.model}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="bg-(--bg-primary) border-(--border-color) text-sm font-mono focus-visible:ring-(--primary)"
-              />
-              <p className="text-[10px] text-(--text-tertiary) mt-1.5 ml-1 leading-relaxed">多个模型请使用英文逗号 `,` 隔开。在聊天面板右侧会自动出现快捷切换这些模型的菜单。<br />如果不填，将使用服务商或 SDK 默认模型兜底请求。</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <label htmlFor="provider-model" className="text-xs font-medium text-(--text-secondary)">默认模型</label>
+                <Button variant="outline" size="sm" onClick={() => void fetchModels()} disabled={discoverMutation.isPending || !formData.apiUrl}>
+                  {discoverMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
+                  {catalog?.source === 'api' ? '刷新模型列表' : '获取模型列表'}
+                </Button>
+              </div>
+              {modelOptions.length > 8 && <Input aria-label="搜索模型" placeholder="搜索模型…" value={modelSearch} onChange={event => setModelSearch(event.target.value)} className="mb-2" />}
+              <select id="provider-model" className="studio-input w-full" value={primaryModel} onChange={event => setFormData({ ...formData, model: event.target.value })} disabled={discoverMutation.isPending}>
+                {!primaryModel && <option value="">请获取并选择模型</option>}
+                {modelOptions.filter(model => model.id === primaryModel || model.id.toLowerCase().includes(modelSearch.toLowerCase())).map(model =>
+                  <option key={model.id} value={model.id}>{model.id} · {modelImageLabel(model)}</option>)}
+              </select>
+              <p className="text-xs text-(--text-secondary) mt-2" role="status">
+                {discoverMutation.isPending || savedModels.isFetching ? '正在从接口获取模型…' : catalog?.warning || (catalog?.source === 'api' ? `已从接口获取模型；${modelOptions.length} 个可选。设计助手会同步显示。` : '填写地址和密钥后，点击获取模型列表。')}
+              </p>
+              {savedModels.isError && !catalog && <p className="text-xs text-red-500 mt-1">获取失败，请刷新列表或手动填写模型。</p>}
+              <details className="mt-3 text-xs text-(--text-secondary)">
+                <summary className="cursor-pointer">手动模型与图片能力</summary>
+                <div className="space-y-2 mt-2">
+                  <label htmlFor="manual-model" className="block">接口不提供列表时可手动填写，多个模型用英文逗号分隔</label>
+                  <Input id="manual-model" placeholder="模型 ID" value={formData.model} onChange={event => setFormData({ ...formData, model: event.target.value })} />
+                  <label htmlFor="model-vision" className="block">当前默认模型的图片输入能力</label>
+                  <select id="model-vision" className="studio-input w-full" disabled={!primaryModel} value={Object.hasOwn(formData.modelCapabilities, primaryModel) ? String(formData.modelCapabilities[primaryModel]) : 'auto'}
+                    onChange={event => {
+                      const capabilities = { ...formData.modelCapabilities };
+                      if (event.target.value === 'auto') delete capabilities[primaryModel]; else capabilities[primaryModel] = event.target.value === 'true';
+                      setFormData({ ...formData, modelCapabilities: capabilities });
+                    }}>
+                    <option value="auto">自动识别 · {modelImageLabel(selectedModelInfo)}</option>
+                    <option value="true">确认支持图片理解</option><option value="false">不支持图片理解</option>
+                  </select>
+                  <p>优先使用接口能力信息。未知模型请查阅服务商文档后确认；支持图片理解的模型才可上传参考图。</p>
+                </div>
+              </details>
             </div>
 
             <div className="flex flex-wrap gap-2 pt-4 border-t border-(--border-color)">
@@ -379,6 +437,7 @@ export function AIProviderSettings() {
                 onClick={async () => {
                   try {
                     const result = await testConfigMutation.mutateAsync({
+                      providerId: editingId || undefined,
                       type: formData.type,
                       apiUrl: formData.apiUrl,
                       apiKey: formData.apiKey || undefined,

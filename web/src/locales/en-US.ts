@@ -49,6 +49,8 @@ export default {
     shadow: 'Shadow',
     duplicate: 'Duplicate',
     delete: 'Delete',
+    undoHint: 'Undo',
+    redoHint: 'Redo',
   },
   servers: {
     title: 'Media Servers',

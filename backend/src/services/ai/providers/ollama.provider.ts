@@ -1,7 +1,9 @@
 import axios from 'axios';
+import { StringDecoder } from 'node:string_decoder';
 import type { AIProvider, AIProviderConfig, TemplateContext, StreamChunk } from '../aiClient.service.js';
 import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/templateGenerator.js';
-import { extractJSON } from '../utils/jsonParser.js';
+import { parseTemplateResponse } from '../utils/jsonParser.js';
+import { referenceImageError } from '../utils/referenceImages.js';
 
 export class OllamaProvider implements AIProvider {
   private apiUrl: string;
@@ -20,7 +22,7 @@ export class OllamaProvider implements AIProvider {
       const systemPrompt = context?.systemPrompt || SYSTEM_PROMPT;
 
       // 构建消息历史
-      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string; images?: string[] }> = [
         { role: 'system', content: systemPrompt }
       ];
 
@@ -41,44 +43,53 @@ export class OllamaProvider implements AIProvider {
           currentCanvas: context?.currentCanvas,
           canvasSize: context?.canvasSize,
           editMode: context?.editMode,
-          runtimeConfig: context?.runtimeConfig
-        })
+          runtimeConfig: context?.runtimeConfig,
+          referenceImageCount: context?.referenceImages?.length
+        }),
+        ...(context?.referenceImages?.length ? { images:context.referenceImages.map(image => image.dataUrl.split(',')[1]) } : {})
       });
 
       // 调用 Ollama API（流式）
       const response = await axios.post(`${this.apiUrl}/api/chat`, {
         model: this.model,
         messages,
-        stream: true
+        stream: true,
+        format: 'json', options: { num_predict: 8192 }
       }, {
-        responseType: 'stream'
+        responseType: 'stream', signal: context?.signal
       });
 
       let fullResponse = '';
+      let finishReason: string | null = null;
 
+      const decoder = new StringDecoder('utf8');
+      let pending = '';
       for await (const chunk of response.data) {
-        const lines = chunk.toString().split('\n').filter((line: string) => line.trim());
-
-        for (const line of lines) {
-          try {
-            const data = JSON.parse(line);
-            if (data.message?.content) {
-              const content = data.message.content;
-              fullResponse += content;
-
-              yield {
-                type: 'chunk',
-                content
-              };
-            }
-          } catch (e) {
-            // 忽略解析错误
+        pending += decoder.write(chunk);
+        let newline: number;
+        while ((newline = pending.indexOf('\n')) !== -1) {
+          const line = pending.slice(0, newline).trim();
+          pending = pending.slice(newline + 1);
+          if (!line) continue;
+          const data = JSON.parse(line);
+          if (data.done) finishReason = data.done_reason || 'stop';
+          if (data.error) throw new Error(data.error);
+          if (data.message?.content) {
+            fullResponse += data.message.content;
+            yield { type: 'chunk', content: data.message.content };
           }
         }
       }
+      pending += decoder.end();
+      if (pending.trim()) {
+        const data = JSON.parse(pending);
+        if (data.done) finishReason = data.done_reason || 'stop';
+        if (data.error) throw new Error(data.error);
+        if (data.message?.content) fullResponse += data.message.content;
+      }
 
       // 解析 JSON
-      const canvasJson = extractJSON(fullResponse);
+      const canvasJson = parseTemplateResponse(fullResponse, finishReason);
 
       yield {
         type: 'complete',
@@ -88,7 +99,7 @@ export class OllamaProvider implements AIProvider {
     } catch (error: any) {
       yield {
         type: 'error',
-        error: error.message || 'Failed to generate template'
+        error: referenceImageError(error, !!context?.referenceImages?.length)
       };
     }
   }

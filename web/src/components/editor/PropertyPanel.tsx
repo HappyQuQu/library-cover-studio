@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
+import { getSamplePosterUrl } from '@/lib/posters';
 
 interface PropertyPanelProps {
   selectedObject: any;
@@ -410,8 +411,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 {Array.from({ length: 9 }).map((_, i) => {
                   const varName = `post${i + 1}`;
                   const isActive = selectedObject.posterVar === varName;
-                  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-                  const imgUrl = `${baseUrl}/templates/posters/${i + 1}.jpg`;
+                  const imgUrl = getSamplePosterUrl(i + 1);
 
                   return (
                     <button

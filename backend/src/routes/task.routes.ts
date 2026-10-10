@@ -1,11 +1,14 @@
 import { Router } from 'express';
 import { authenticate, validate } from '../middleware/index.js';
 import * as task from '../controllers/task.controller.js';
+import { previewSchedule, previewCover, previewCoverSchema } from '../controllers/taskPreview.controller.js';
 
 const router = Router();
 
 // 所有路由需要认证
 router.use(authenticate);
+router.post('/preview-schedule', previewSchedule);
+router.post('/preview-cover', validate(previewCoverSchema), previewCover);
 
 // 获取任务列表
 router.get('/', task.list);
@@ -30,5 +33,6 @@ router.post('/:id/toggle', task.toggleStatus);
 
 // 获取任务日志
 router.get('/:id/logs', task.getLogs);
+router.get('/:id/logs/:logId/covers/:coverId/image', task.getLogCover);
 
 export { router as taskRouter };

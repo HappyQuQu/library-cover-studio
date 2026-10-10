@@ -6,6 +6,8 @@ import morgan from 'morgan';
 import { router as apiRouter } from './routes/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { initDatabase } from './config/database.js';
+import { seedDefaultTemplates } from './services/defaultTemplates.service.js';
+import { initializeTemplateHistory } from './services/templateHistory.service.js';
 import { initScheduler } from './services/scheduler.service.js';
 import { addLogClient, logger } from './utils/logger.js';
 import { migrateLegacyEncryption } from './utils/migrateEncryption.js';
@@ -123,6 +125,8 @@ async function bootstrap() {
     // 初始化数据库
     await initDatabase();
     logger.info('✅ Database initialized');
+    await seedDefaultTemplates();
+    await initializeTemplateHistory();
 
     // 加密数据迁移 (从硬编码 salt 升级到每部署独立 salt)
     migrateLegacyEncryption();

@@ -1,45 +1,48 @@
-version: "3.8"
-
 services:
   # 后端 API 服务
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     container_name: lcs-backend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - DATABASE_PATH=/app/data/data.sqlite
-      - JWT_SECRET=${JWT_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - FRONTEND_URL=http://localhost:8080
+      - JWT_SECRET=${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY:?请在 .env 中设置 ENCRYPTION_KEY}
+      - FRONTEND_URL=http://localhost:${WEB_PORT:-8080}
     volumes:
-      - backend_data:/app/data
-      - backend_uploads:/app/uploads
+      - backend_data:/app/backend/data
+      - backend_uploads:/app/backend/uploads
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
-      interval: 30s
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      start_period: 20s
+      interval: 10s
       timeout: 10s
       retries: 3
 
   # 前端静态服务
   web:
     build:
-      context: ./web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: web/Dockerfile
       args:
-        - VITE_API_URL=http://localhost:3000
+        - VITE_API_URL=/api
     container_name: lcs-web
     restart: unless-stopped
     ports:
-      - "8080:80"
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
     depends_on:
       backend:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   backend_data:

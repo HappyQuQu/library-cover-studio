@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X, Sparkles } from 'lucide-react';
+import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X, Sparkles, PanelLeft, PanelRight, Maximize2, Lock, Unlock, History, Copy, Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { useCanvasStore } from '@/stores/canvasStore';
-import { useTemplate, useCreateTemplate, useUpdateTemplate } from '@/api';
+import { useTemplate, useCreateTemplate, useUpdateTemplate, useSetTemplateLock } from '@/api';
 import { toast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import * as fabric from 'fabric';
@@ -15,6 +15,10 @@ import { LayerPanel } from '@/components/editor/LayerPanel';
 import { ToolboxPanel } from '@/components/editor/ToolboxPanel';
 import { AIChatPanel } from '@/components/ai/AIChatPanel';
 import { apiClient } from '@/api/client';
+import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
+import { TemplateHistory } from '@/components/editor/TemplateHistory';
+import { calculateFitZoom } from '@/lib/editorLayout';
+import { getSamplePosterUrl } from '@/lib/posters';
 
 // ── Background generation helpers ──────────────────────────────────────────
 
@@ -124,6 +128,8 @@ export function EditorPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const [compactPane, setCompactPane] = useState<'canvas' | 'tools' | 'inspector'>('canvas');
+  const [autoFit, setAutoFit] = useState(true);
   const [leftWidth, setLeftWidth] = useState(340);
   const [rightWidth, setRightWidth] = useState(360);
   const [templateName, setTemplateName] = useState('');
@@ -134,6 +140,7 @@ export function EditorPage() {
   const [canvasHeight, setCanvasHeight] = useState(1080);
   const [canvasReady, setCanvasReady] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [saveHistoryOpen, setSaveHistoryOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [customFonts, setCustomFonts] = useState<Font[]>([]);
 
@@ -200,8 +207,36 @@ export function EditorPage() {
   }, []);
 
   const { data: templateData } = useTemplate(id || '');
+  const readOnly = !!id && (!templateData || templateData.isLocked);
+  const readOnlyRef = useRef(readOnly);
+  readOnlyRef.current = readOnly;
+  const lockMutation = useSetTemplateLock();
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
+  const saving = createMutation.isPending || updateMutation.isPending;
+
+  useEffect(() => {
+    useCanvasStore.getState().setReadOnly(readOnly);
+    if (canvas) {
+      canvas.selection = !readOnly;
+      canvas.skipTargetFind = readOnly;
+      if (readOnly) { canvas.discardActiveObject(); setSelectedObject(null); }
+      canvas.requestRenderAll();
+    }
+  }, [canvas, readOnly, canvasReady, setSelectedObject]);
+  useEffect(() => () => useCanvasStore.getState().setReadOnly(false), []);
+
+  async function unlockTemplate() {
+    if (!id || !templateData?.canManage || lockMutation.isPending) return;
+    try { await lockMutation.mutateAsync({ id, isLocked: false }); toast({ title: '模板已解锁，可以编辑' }); }
+    catch (error: any) { toast({ title: '解锁失败', description: error.response?.data?.error?.message || '请稍后重试', variant: 'destructive' }); }
+  }
+  async function copyTemplate() {
+    if (!id) return;
+    try { const { data } = await apiClient.post(`/templates/${id}/duplicate`); navigate(`/editor/${data.id}`); }
+    catch { toast({ title: '复制失败，请稍后重试', variant: 'destructive' }); }
+  }
+
 
   // Helper to sync layers from canvas
   const syncLayers = useCallback(() => {
@@ -454,24 +489,27 @@ export function EditorPage() {
     };
   }, []);
 
+  const fitToView = useCallback((width: number, height: number) => {
+    const container = containerRef.current;
+    return container ? calculateFitZoom(container.clientWidth, container.clientHeight, width, height) : 0.5;
+  }, []);
+
+  // Follow viewport/panel changes while fitted; retain a user-selected zoom until "fit" is pressed.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || !canvas || !autoFit) return;
+    const resize = () => {
+      if (container.clientWidth && container.clientHeight) setZoom(fitToView(canvasWidth, canvasHeight));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(container); resize();
+    return () => observer.disconnect();
+  }, [canvas, autoFit, canvasWidth, canvasHeight, fitToView, setZoom]);
+
   // Load template data when available
   useEffect(() => {
     const defaultW = 1920;
     const defaultH = 1080;
-
-    // Helper to calculate fit-to-view zoom
-    const fitToView = (w: number, h: number) => {
-      if (!containerRef.current) return 0.5;
-      const container = containerRef.current;
-      const padding = 120; // Room for margins
-      const availableWidth = container.clientWidth - padding;
-      const availableHeight = container.clientHeight - padding;
-
-      const scaleX = availableWidth / w;
-      const scaleY = availableHeight / h;
-      const newZoom = Math.min(scaleX, scaleY, 1);
-      return Math.floor(newZoom * 10) / 10;
-    };
 
     // Basic initialization
     if (canvas && !id) {
@@ -512,12 +550,15 @@ export function EditorPage() {
           const jsonData = JSON.parse(templateData.canvasJson);
           setIsRestoring(true);
           await canvas.loadFromJSON(jsonData);
-
-          // Restore randomOnGeneration setting
-          if (jsonData.randomOnGeneration) {
-            setRandomOnGeneration(true);
-            (canvas as any).randomOnGeneration = true;
+          if (jsonData.background && typeof jsonData.background === 'object') {
+            canvas.backgroundColor = jsonData.background.type === 'radial'
+              ? new fabric.Gradient<'radial'>(jsonData.background)
+              : new fabric.Gradient<'linear'>(jsonData.background);
           }
+
+          setRandomOnGeneration(Boolean(jsonData.randomOnGeneration));
+          (canvas as any).randomOnGeneration = Boolean(jsonData.randomOnGeneration);
+          (canvas as any).randomBackgroundStyle = jsonData.randomBackgroundStyle;
 
           // Restore custom properties from JSON data
           const objects = canvas.getObjects();
@@ -530,6 +571,8 @@ export function EditorPage() {
                 if (objData.posterVar) obj.posterVar = objData.posterVar;
                 if (objData.isPoster) obj.isPoster = objData.isPoster;
                 if (objData.textVar) obj.textVar = objData.textVar;
+                if (objData.fitText !== undefined) obj.fitText = objData.fitText;
+                if (objData.wrapText !== undefined) obj.wrapText = objData.wrapText;
               }
             });
           }
@@ -575,6 +618,7 @@ export function EditorPage() {
     let clipboard: fabric.FabricObject | null = null;
 
     const handleKeyDown = async (e: KeyboardEvent) => {
+      if (readOnlyRef.current) return;
       // Ignore if typing in an input/textarea
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -671,6 +715,7 @@ export function EditorPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [canvas, saveToHistory, undo, redo]);
   const addObject = useCallback(async (type: string, payload?: any) => {
+    if (readOnlyRef.current) return;
     if (!canvas) {
       console.log('Canvas not ready');
       return;
@@ -833,6 +878,7 @@ export function EditorPage() {
             const imgEl = document.createElement('img');
             imgEl.src = ev.target?.result as string;
             imgEl.onload = () => {
+              if (readOnlyRef.current) return;
               const fabricImg = new fabric.FabricImage(imgEl, {
                 left: centerX, top: centerY,
                 originX: 'center', originY: 'center',
@@ -850,7 +896,7 @@ export function EditorPage() {
         return;
       }
     }
-    if (obj) {
+    if (obj && !readOnlyRef.current) {
       canvas.add(obj);
       canvas.setActiveObject(obj);
       canvas.renderAll();
@@ -858,65 +904,40 @@ export function EditorPage() {
   }, [canvas, t]);
 
   const handleSave = async () => {
-    if (!canvas) return;
-
-    // Deselect for clean export
-    canvas.discardActiveObject();
-    canvas.renderAll();
-
-    // Store current state
-    const currentZoom = canvas.getZoom();
-    const currentWidth = canvas.getWidth();
-    const currentHeight = canvas.getHeight();
-
-    // Temporarily reset to full size for thumbnail
-    canvas.setZoom(1);
-    canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
-    canvas.renderAll();
-
-    // Generate thumbnail (scaled down for storage)
-    const thumbnailDataUrl = canvas.toDataURL({
-      format: 'jpeg',
-      quality: 0.7,
-      multiplier: 0.2 // 20% of original size for thumbnail
-    });
-
-    // Restore dimensions
-    canvas.setZoom(currentZoom);
-    canvas.setDimensions({ width: currentWidth, height: currentHeight });
-    canvas.renderAll();
-
-    // Serialize canvas with custom properties
-    // IMPORTANT: Include 'randomOnGeneration' in the export
-    const canvasData = canvas.toObject(['randomOnGeneration']);
-    canvasData.objects = canvasData.objects.map((obj: any, index: number) => {
-      const fabricObj = canvas.getObjects()[index] as any;
-      return {
-        ...obj,
-        id: fabricObj.id,
-        name: fabricObj.name,
-        posterVar: fabricObj.posterVar,
-        isPoster: fabricObj.isPoster
-      };
-    });
-    const canvasJson = JSON.stringify(canvasData);
+    if (!canvas || readOnlyRef.current || saving) return;
     try {
-      if (id) {
+      canvas.discardActiveObject();
+      const currentZoom = canvas.getZoom(), currentWidth = canvas.getWidth(), currentHeight = canvas.getHeight();
+      let thumbnailDataUrl: string;
+      try {
+        canvas.setZoom(1);
+        canvas.setDimensions({ width: canvasWidth, height: canvasHeight });
+        canvas.renderAll();
+        thumbnailDataUrl = canvas.toDataURL({ format: 'jpeg', quality: 0.8, multiplier: Math.min(480 / canvasWidth, 270 / canvasHeight) });
+      } finally {
+        canvas.setZoom(currentZoom);
+        canvas.setDimensions({ width: currentWidth, height: currentHeight });
+        canvas.renderAll();
+      }
+      const canvasJson = JSON.stringify(canvas.toObject(CANVAS_PROPERTIES));
+      if (id && templateData?.canManage !== false) {
         await updateMutation.mutateAsync({ id, name: templateName, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
       } else {
         const result = await createMutation.mutateAsync({
-          name: templateName || t('designer.newTemplate'), canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
+          name: id ? `${templateName} · 副本` : templateName || t('designer.newTemplate'), canvasJson,
+          width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
         });
         navigate(`/editor/${result.id}`, { replace: true });
       }
-      toast({ title: t('common.success'), description: t('designer.saveSuccessMsg', '设计已成功保存') });
-    } catch (error) {
-      toast({ title: t('common.error'), variant: 'destructive' });
+      toast({ title: t('common.success'), description: '设计已保存，并记录到保存历史。' });
+    } catch (error: any) {
+      toast({ title: '保存失败', description: error.response?.data?.error?.message || '请检查图片素材后重试', variant: 'destructive' });
     }
   };
 
   // Change background
   const changeBackground = useCallback(async (bg: any) => {
+    if (readOnlyRef.current) return;
     if (!canvas) {
       console.log('Canvas not ready for background change');
       return;
@@ -926,6 +947,15 @@ export function EditorPage() {
     if (bg.randomOnGeneration !== undefined) {
       setRandomOnGeneration(bg.randomOnGeneration);
       (canvas as any).randomOnGeneration = bg.randomOnGeneration;
+    }
+
+    if (!bg.type) {
+      saveToHistory();
+      return;
+    }
+    // A manually chosen replacement background opts out of the template's style-specific palette.
+    if (['color', 'gradient', 'random-gradient', 'mesh', 'stripes'].includes(bg.type)) {
+      (canvas as any).randomBackgroundStyle = undefined;
     }
 
     // Get gradient coords based on direction
@@ -1125,24 +1155,29 @@ export function EditorPage() {
   }, [canvas, canvasWidth, canvasHeight]);
 
   return (
-    <div className="flex -mx-6 -mb-6 bg-(--bg-secondary) overflow-hidden" style={{ height: 'calc(100vh - 56px - 48px)' }}>
+    <div className="editor-shell bg-(--bg-secondary) overflow-hidden" data-compact-pane={compactPane}>
+      <div className="editor-compact-tabs" role="group" aria-label="设计器工作区">
+        <button type="button" aria-pressed={compactPane === 'canvas'} onClick={() => setCompactPane('canvas')}><MousePointer2 size={16} />画布</button>
+        <button type="button" aria-pressed={compactPane === 'tools'} onClick={() => setCompactPane('tools')}><PanelLeft size={16} />素材</button>
+        <button type="button" aria-pressed={compactPane === 'inspector'} onClick={() => setCompactPane('inspector')}><PanelRight size={16} />属性与 AI</button>
+      </div>
       {/* Left - Toolbox Panel */}
       <aside
         style={{ width: leftWidth, minWidth: 260, maxWidth: 540, flexShrink: 0 }}
-        className="bg-(--bg-primary) border-r border-(--border-color) overflow-hidden flex flex-col"
+        className="editor-toolbox bg-(--bg-primary) border-r border-(--border-color) overflow-hidden flex flex-col"
       >
-        <ToolboxPanel
+        {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>模板已锁定</strong><p>当前为只读预览，无法修改素材、背景或文字。</p><p>解锁后编辑，或复制为新模板。</p></div> : <ToolboxPanel
           onAddText={() => addObject('text')}
           onAddImage={() => addObject('image')}
           onAddShape={(type, payload) => addObject(type, payload)}
           onChangeBackground={changeBackground}
           initialRandomOnGeneration={randomOnGeneration}
-        />
+        />}
       </aside>
 
       {/* Left Resize Divider */}
       <div
-        className="w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
+        className="editor-resizer w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
@@ -1161,38 +1196,47 @@ export function EditorPage() {
       />
 
       {/* Center - Canvas Area (Flexible) */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="editor-center flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top Header Bar */}
-        <header className="h-14 px-6 flex items-center justify-between bg-(--bg-primary) border-b border-(--border-color) shrink-0">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate('/templates')} className="p-2 rounded-lg hover:bg-(--bg-tertiary) transition-all text-(--text-secondary) hover:text-(--primary)">
+        <header className="editor-document-header h-14 px-6 flex items-center justify-between bg-(--bg-primary) border-b border-(--border-color) shrink-0">
+          <div className="editor-document-name flex items-center gap-4">
+            <button aria-label="返回模板库" onClick={() => navigate('/templates')} className="p-2 rounded-lg hover:bg-(--bg-tertiary) transition-all text-(--text-secondary) hover:text-(--primary)">
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="editor-name-field flex items-center gap-2">
               <input
                 type="text"
+                aria-label="模板名称"
+                readOnly={readOnly}
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
                 placeholder={t('designer.newTemplate')}
                 className="bg-transparent text-lg font-bold text-(--text-primary) focus:outline-none focus:border-b-2 focus:border-(--primary) transition-all"
               />
               <Edit className="w-4 h-4 text-(--text-tertiary)" />
+              {templateData?.isLocked && <span className="template-lock-badge" title="已锁定：不可编辑、保存、回退或删除"><Lock size={12} />已锁定 · 只读</span>}
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="editor-document-actions flex items-center gap-2">
+            {id && templateData?.canManage && <Button variant="ghost" className="h-9 gap-2" onClick={() => setSaveHistoryOpen(true)}><History size={16} />历史</Button>}
+            {templateData?.isLocked && <>
+              <Button variant="ghost" className="h-9 gap-2" onClick={copyTemplate}><Copy size={16} />复制编辑</Button>
+              {templateData.canManage && <Button className="h-9 gap-2" onClick={unlockTemplate} disabled={lockMutation.isPending}>{lockMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Unlock size={16} />}解锁编辑</Button>}
+            </>}
+
             <Button variant="ghost" className="h-9 gap-2 text-(--text-secondary) hover:text-(--text-primary)" onClick={handlePreview}>
               <Eye className="w-4 h-4" />
               {t('common.preview')}
             </Button>
-            <Button className="h-9 gap-2 bg-(--primary) text-white hover:opacity-90" onClick={handleSave}>
+            {!readOnly && <Button className="h-9 gap-2 bg-(--primary) text-white hover:opacity-90" onClick={handleSave} disabled={saving}>
               <Save className="w-4 h-4" />
-              {t('common.save')}
-            </Button>
+              {saving ? '保存中…' : templateData?.canManage === false ? '保存副本' : t('common.save')}
+            </Button>}
           </div>
         </header>
 
         {/* Horizontal Tools Bar */}
-        <div className="h-12 px-4 flex items-center gap-2 bg-(--bg-primary) border-b border-(--border-color) shrink-0">
+        <div className="editor-toolbar h-12 px-4 flex items-center gap-2 bg-(--bg-primary) border-b border-(--border-color) shrink-0">
           <button
             onClick={() => setActiveTool('select')}
             className={cn(
@@ -1209,6 +1253,7 @@ export function EditorPage() {
           <div className="w-px h-6 bg-(--border-color)" />
 
           <button
+            disabled={readOnly}
             onClick={() => { setActiveTool('text'); addObject('text'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm font-medium",
@@ -1222,6 +1267,7 @@ export function EditorPage() {
           </button>
 
           <button
+            disabled={readOnly}
             onClick={() => { setActiveTool('image'); addObject('image'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 px-3 rounded-lg flex items-center gap-2 transition-all text-sm font-medium",
@@ -1237,6 +1283,7 @@ export function EditorPage() {
           <div className="w-px h-6 bg-(--border-color)" />
 
           <button
+            disabled={readOnly}
             onClick={() => { setActiveTool('rect'); addObject('rect'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
@@ -1250,6 +1297,7 @@ export function EditorPage() {
           </button>
 
           <button
+            disabled={readOnly}
             onClick={() => { setActiveTool('circle'); addObject('circle'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
@@ -1263,6 +1311,7 @@ export function EditorPage() {
           </button>
 
           <button
+            disabled={readOnly}
             onClick={() => { setActiveTool('triangle'); addObject('triangle'); setTimeout(() => setActiveTool('select'), 200); }}
             className={cn(
               "h-9 w-9 rounded-lg flex items-center justify-center transition-all",
@@ -1281,7 +1330,7 @@ export function EditorPage() {
             <button
               className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary) disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               onClick={() => undo().then(() => syncLayersRef.current())}
-              disabled={!canUndo}
+              disabled={readOnly || !canUndo}
               title={t('designer.undoHint')}
             >
               <Undo className="w-4 h-4" />
@@ -1289,7 +1338,7 @@ export function EditorPage() {
             <button
               className="p-1.5 rounded-md hover:bg-(--bg-secondary) transition-all text-(--text-secondary) disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
               onClick={() => redo().then(() => syncLayersRef.current())}
-              disabled={!canRedo}
+              disabled={readOnly || !canRedo}
               title={t('designer.redoHint')}
             >
               <Redo className="w-4 h-4" />
@@ -1297,19 +1346,20 @@ export function EditorPage() {
           </div>
 
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-(--bg-tertiary) border border-(--border-color)">
-            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" onClick={() => setZoom(Math.max(0.1, zoom - 0.1))}>
+            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label="缩小画布" onClick={() => { setAutoFit(false); setZoom(Math.max(0.01, zoom - 0.1)); }}>
               <ZoomOut className="w-4 h-4 text-(--text-secondary)" />
             </button>
             <span className="text-xs font-bold w-10 text-center text-(--text-primary)">{Math.round(zoom * 100)}%</span>
-            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" onClick={() => setZoom(Math.min(2, zoom + 0.1))}>
+            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label="放大画布" onClick={() => { setAutoFit(false); setZoom(Math.min(2, zoom + 0.1)); }}>
               <ZoomIn className="w-4 h-4 text-(--text-secondary)" />
             </button>
           </div>
+          <button type="button" className="editor-fit-button" aria-label="适应窗口" title="适应窗口" onClick={() => { setAutoFit(true); setZoom(fitToView(canvasWidth, canvasHeight)); }}><Maximize2 size={16} /></button>
         </div>
 
         <main
           ref={containerRef}
-          className="flex-1 overflow-auto bg-(--bg-tertiary) flex items-center justify-center p-8 relative"
+          className="editor-canvas-area flex-1 overflow-auto bg-(--bg-tertiary) flex items-center justify-center relative"
         >
           <div className="absolute inset-0 bg-dot-pattern pointer-events-none opacity-30" />
 
@@ -1330,7 +1380,7 @@ export function EditorPage() {
             style={{
               width: canvasWidth * zoom,
               height: canvasHeight * zoom,
-              padding: 0
+              padding: 0, flexShrink: 0
             }}
           >
             <canvas
@@ -1346,7 +1396,7 @@ export function EditorPage() {
 
       {/* Right Resize Divider */}
       <div
-        className="w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
+        className="editor-resizer w-1 shrink-0 bg-(--border-color) hover:bg-(--primary) active:bg-(--primary) cursor-col-resize transition-colors select-none"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
@@ -1367,7 +1417,7 @@ export function EditorPage() {
       {/* Right Sidebar */}
       <aside
         style={{ width: rightWidth, minWidth: 300, maxWidth: 600, flexShrink: 0 }}
-        className="bg-(--bg-primary) border-l border-(--border-color) flex flex-col overflow-hidden"
+        className="editor-inspector bg-(--bg-primary) border-l border-(--border-color) flex flex-col overflow-hidden"
       >
         <div className="flex border-b border-(--border-color) p-1">
           <button
@@ -1391,12 +1441,14 @@ export function EditorPage() {
           </button>
         </div>
         <div className="flex-1 overflow-auto p-1">
+          {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>只读模式</strong><p>锁定后不允许编辑图层或应用 AI 设计。</p><div className="editor-readonly-layers">{layers.map(layer => <div key={layer.id}>{layer.name}</div>)}</div></div> : <>
+
           {activePanel === 'properties' && (
             <PropertyPanel
               selectedObject={selectedObject}
               customFonts={customFonts}
               onPropertyChange={async (prop, val) => {
-                if (!selectedObject || !canvas) return;
+                if (readOnlyRef.current || !selectedObject || !canvas) return;
 
                 // SPECIAL HANDLING: Poster Variant Switching
                 // Allow if it is marked as poster OR if it is an image/rect that we are turning into a poster
@@ -1407,8 +1459,7 @@ export function EditorPage() {
                   const match = val.match(/post(\d+)/);
                   if (match) {
                     const posterIndex = match[1];
-                    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
-                    const sampleUrl = `${baseUrl}/templates/posters/${posterIndex}.jpg`;
+                    const sampleUrl = getSamplePosterUrl(posterIndex);
 
                     try {
                       // CAPTURE STATE BEFORE LOADING
@@ -1417,15 +1468,15 @@ export function EditorPage() {
                       const { left, top, angle, opacity, originX, originY } = selectedObject;
 
                       const imgEl = document.createElement('img');
-                      imgEl.src = sampleUrl;
                       imgEl.crossOrigin = 'anonymous';
+                      imgEl.src = sampleUrl;
                       await new Promise((resolve, reject) => {
                         imgEl.onload = resolve;
                         imgEl.onerror = reject;
                       });
 
                       // RACE CONDITION CHECK
-                      if (!canvas || !canvas.getObjects().includes(selectedObject as any)) return;
+                      if (readOnlyRef.current || !canvas || !canvas.getObjects().includes(selectedObject as any)) return;
 
                       // CREATE NEW TARGET OBJECT
                       const fabricImg = new fabric.FabricImage(imgEl, {
@@ -1521,7 +1572,7 @@ export function EditorPage() {
                 saveToHistory();
               }}
               onDelete={() => {
-                if (!selectedObject || !canvas) return;
+                if (readOnlyRef.current || !selectedObject || !canvas) return;
                 canvas.remove(selectedObject);
                 canvas.discardActiveObject();
                 canvas.renderAll();
@@ -1529,7 +1580,7 @@ export function EditorPage() {
                 saveToHistory();
               }}
               onClone={async () => {
-                if (!selectedObject || !canvas) return;
+                if (readOnlyRef.current || !selectedObject || !canvas) return;
                 const cloned = await selectedObject.clone();
                 cloned.set({ left: (selectedObject.left || 0) + 20, top: (selectedObject.top || 0) + 20 });
                 (cloned as any).id = Math.random().toString(36).substr(2, 9);
@@ -1607,12 +1658,15 @@ export function EditorPage() {
               }}
             />
           )}
-          {activePanel === 'ai' && (
-            <AIChatPanel onApplied={() => syncLayersRef.current()} />
-          )}
+          <div style={{ display: activePanel === 'ai' ? 'flex' : 'none', flexDirection: 'column', height: '100%' }}>
+            <AIChatPanel width={canvasWidth} height={canvasHeight} onApplied={() => syncLayersRef.current()} />
+          </div>
+          </>}
         </div>
 
       </aside>
+
+      {id && templateData?.canManage && <TemplateHistory id={id} open={saveHistoryOpen} onOpenChange={setSaveHistoryOpen} locked={templateData.isLocked} saving={saving} />}
 
       {/* Preview Modal */}
       {previewOpen && (

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import * as fabric from 'fabric';
+import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
 
 /**
  * Fabric.js 6 的 loadFromJSON 会把 gradient background 赋值为 plain object 而非 Gradient 实例，
@@ -7,6 +8,8 @@ import * as fabric from 'fabric';
  * 此函数在 loadFromJSON 之后补丁修复。
  */
 async function reapplyBackground(canvas: fabric.Canvas, json: any) {
+  (canvas as any).randomOnGeneration = Boolean(json.randomOnGeneration);
+  (canvas as any).randomBackgroundStyle = json.randomBackgroundStyle;
   // 修复 gradient backgroundColor
   const bg = (canvas as any).backgroundColor;
   if (bg && typeof bg === 'object' && !(bg instanceof fabric.Gradient)) {
@@ -33,6 +36,8 @@ interface CanvasState {
   historyIndex: number;
   zoom: number;
   isRestoring: boolean; // 正在执行撤销/重做，阻止事件触发 saveToHistory
+  readOnly: boolean;
+  setReadOnly: (readOnly: boolean) => void;
 
   setCanvas: (canvas: fabric.Canvas | null) => void;
   setSelectedObject: (obj: fabric.FabricObject | null) => void;
@@ -53,6 +58,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   historyIndex: -1,
   zoom: 1,
   isRestoring: false,
+  readOnly: false,
+  setReadOnly: (readOnly) => set({ readOnly }),
 
   setCanvas: (canvas) => set({ canvas }),
 
@@ -67,9 +74,9 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     // 正在撤销/重做时不保存历史，避免 object:added 事件覆盖历史
     if (isRestoring || !canvas) return;
 
-    const CUSTOM_PROPS = ['id', 'posterVar', 'isPoster', 'randomOnGeneration', 'textVar'];
     // toJSON 会自动包含 backgroundImage，传入自定义属性确保对象级别的属性也被序列化
-    const json = JSON.stringify((canvas as any).toJSON(CUSTOM_PROPS));
+    const json = JSON.stringify(canvas.toObject(CANVAS_PROPERTIES));
+    if (history[historyIndex] === json) return;
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(json);
     // 最多保留 50 步历史，避免内存占用过大
@@ -84,8 +91,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     const { canvas } = get();
     if (!canvas) return;
 
-    const CUSTOM_PROPS = ['id', 'posterVar', 'isPoster', 'randomOnGeneration', 'textVar'];
-    const json = JSON.stringify(snapshot ?? (canvas as any).toJSON(CUSTOM_PROPS));
+    const json = JSON.stringify(snapshot ?? canvas.toObject(CANVAS_PROPERTIES));
     set({
       history: [json],
       historyIndex: 0
@@ -93,6 +99,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   undo: async () => {
+    if (get().readOnly) return;
     const { canvas, history, historyIndex } = get();
     if (!canvas || historyIndex <= 0) return;
 
@@ -102,6 +109,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     try {
       await canvas.loadFromJSON(parsed);
       await reapplyBackground(canvas, parsed);
+      canvas.discardActiveObject();
+      set({ selectedObject: null });
       canvas.renderAll();
     } finally {
       set({ isRestoring: false });
@@ -109,6 +118,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   redo: async () => {
+    if (get().readOnly) return;
     const { canvas, history, historyIndex } = get();
     if (!canvas || historyIndex >= history.length - 1) return;
 
@@ -118,6 +128,8 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
     try {
       await canvas.loadFromJSON(parsed);
       await reapplyBackground(canvas, parsed);
+      canvas.discardActiveObject();
+      set({ selectedObject: null });
       canvas.renderAll();
     } finally {
       set({ isRestoring: false });
@@ -125,6 +137,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   },
 
   clearCanvas: () => {
+    if (get().readOnly) return;
     const { canvas } = get();
     if (canvas) {
       canvas.clear();
@@ -135,16 +148,26 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   // 从 AI 生成结果等外部 JSON 应用到画布，保证历史正确且不被 object:added 覆盖
   applyCanvasJSON: async (json: any) => {
+    if (get().readOnly) throw new Error('模板已锁定，请先解锁再编辑');
     const { canvas } = get();
     if (!canvas) return;
+    const original = canvas.toObject(CANVAS_PROPERTIES);
     get().saveToHistory();
     set({ isRestoring: true });
     try {
       await canvas.loadFromJSON(json);
       await reapplyBackground(canvas, json);
+      canvas.discardActiveObject();
+      set({ selectedObject: null });
       canvas.renderAll();
+    } catch (error) {
+      await canvas.loadFromJSON(original);
+      await reapplyBackground(canvas, original);
+      canvas.renderAll();
+      throw error;
     } finally {
       set({ isRestoring: false });
     }
+    get().saveToHistory();
   }
 }));

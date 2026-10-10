@@ -25,9 +25,11 @@ import {
   DialogFooter,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { useServers, useCreateServer, useDeleteServer, useServerLibraries, MediaServer } from '@/api';
-import { useQueryClient } from '@tanstack/react-query';
+import { useServers, useCreateServer, useDeleteServer, useServerLibraries, useServerConnection, MediaServer } from '@/api';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
+
+const apiError = (error: any) => error?.response?.data?.error?.message || error?.message || '无法读取媒体服务器';
 
 // 获取媒体库类型图标
 function getLibraryIcon(type: string) {
@@ -45,17 +47,27 @@ function getLibraryIcon(type: string) {
 function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: string) => void }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const queryClient = useQueryClient();
-  const { data: libraries = [], isLoading: loadingLibraries } = useServerLibraries(
-    isExpanded ? server.id : ''
-  );
+  const librariesQuery = useServerLibraries(isExpanded ? server.id : '');
+  const { data: libraries = [], isLoading: loadingLibraries } = librariesQuery;
+  const connectionQuery = useServerConnection(server.id);
+  const connection = connectionQuery.data;
+  const refresh = async () => {
+    const results = await Promise.all([connectionQuery.refetch(), ...(isExpanded ? [librariesQuery.refetch()] : [])]);
+    const error = results.find(result => result.error)?.error;
+    if (error || !results[0].data || !('connected' in results[0].data) || !results[0].data.connected) {
+      toast({ title: '刷新失败', description: error ? apiError(error) : (results[0].data && 'error' in results[0].data ? results[0].data.error : '') || '无法连接媒体服务器', variant: 'destructive' });
+      return;
+    }
+    setRefreshKey(value => value + 1);
+    toast({ title: '刷新成功', description: isExpanded ? '连接状态和媒体库已更新' : '连接状态已更新' });
+  };
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div className="server-card-heading" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+          <div className="server-card-identity" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div
               className={server.type === 'jellyfin' ? 'gradient-jellyfin' : 'gradient-emby'}
               style={{
@@ -70,11 +82,13 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
             </div>
             <div>
               <h3 style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{server.name}</h3>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
+              <div className="server-card-status" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px' }}>
                 <span className={`badge ${server.type === 'jellyfin' ? 'badge-primary' : 'badge-success'}`}>
-                  {server.type}
+                  {server.type}{connection?.version ? ` ${connection.version}` : ''}
                 </span>
-                {server.isActive ? (
+                {connectionQuery.isFetching ? (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}><Loader2 size={14} className="animate-spin" />检测中</span>
+                ) : connection?.connected ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--success)' }}>
                     <CheckCircle2 style={{ width: 14, height: 14 }} />
                     在线
@@ -88,17 +102,18 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn-ghost btn-icon"><RefreshCw style={{ width: 16, height: 16 }} /></button>
+          <div className="server-card-actions" style={{ display: 'flex', gap: '8px' }}>
+            <button className="btn-ghost btn-icon" aria-label="检测连接并刷新" onClick={refresh} disabled={connectionQuery.isFetching || librariesQuery.isFetching}><RefreshCw style={{ width: 16, height: 16 }} /></button>
             <button className="btn-ghost btn-icon" onClick={() => onDelete(server.id)} style={{ color: 'var(--danger)' }}>
               <Trash2 style={{ width: 16, height: 16 }} />
             </button>
           </div>
         </div>
 
+        {(connection?.error || connectionQuery.error) && <p role="alert" style={{ marginTop: 12, fontSize: 13, color: 'var(--danger)' }}>{connection?.error || apiError(connectionQuery.error)}</p>}
         {/* URL */}
         <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="server-card-address" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '14px', color: 'var(--text-secondary)', overflow: 'hidden' }}>
               <ExternalLink style={{ width: 16, height: 16, flexShrink: 0 }} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{server.url}</span>
@@ -138,11 +153,8 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
             <button
               className="btn-ghost"
               style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4 }}
-              onClick={() => {
-                queryClient.invalidateQueries({ queryKey: ['servers', server.id, 'libraries'] });
-                setRefreshKey(prev => prev + 1);
-                toast({ title: '刷新成功', description: '媒体库列表已更新' });
-              }}
+              disabled={connectionQuery.isFetching || librariesQuery.isFetching}
+              onClick={refresh}
             >
               <RefreshCw style={{ width: 12, height: 12 }} />
               刷新列表
@@ -153,14 +165,16 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <Loader2 style={{ width: 20, height: 20, color: 'var(--text-tertiary)', animation: 'spin 1s linear infinite' }} />
             </div>
+          ) : librariesQuery.isError ? (
+            <div role="alert" style={{ padding: 20, color: 'var(--danger)', fontSize: 14 }}>媒体库读取失败：{apiError(librariesQuery.error)}</div>
           ) : libraries.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-tertiary)', fontSize: 14, background: 'var(--bg-secondary)', borderRadius: 12, border: '1px dashed var(--border-color)' }}>
               <Folder style={{ width: 24, height: 24, margin: '0 auto 8px', opacity: 0.5 }} />
-              <div>未发现公开媒体库</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>请确保 API 密钥具有访问权限</div>
+              <div>服务器尚未创建媒体库</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>请在媒体服务器中添加媒体库后刷新</div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
               {libraries.map((lib) => {
                 const Icon = getLibraryIcon(lib.type);
                 return (
@@ -194,20 +208,10 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
                       boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
                       position: 'relative'
                     }}>
-                      {lib.imageUrl ? (
-                        <img
-                          src={`${lib.imageUrl}${lib.imageUrl.includes('?') ? '&' : '?'}_t=${refreshKey}`}
-                          alt={lib.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }}
-                          className="group-hover/lib:scale-110"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
-                      ) : (
-                        <Icon style={{ width: 56, height: 56, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)', opacity: 0.8 }} />
-                      )}
+                      <AuthenticatedImage src={lib.imageUrl} refreshKey={refreshKey} alt={lib.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }}
+                        className="group-hover/lib:scale-110"
+                        fallback={<Icon style={{ width: 56, height: 56, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)', opacity: 0.8 }} />} />
                       {/* Fallback pattern / Icon background */}
                       <div style={{ position: 'absolute', zIndex: -1, opacity: 0.1 }}>
                         <Icon style={{ width: 80, height: 80, color: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)' }} />
@@ -296,7 +300,7 @@ export function ServersPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>媒体源</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>

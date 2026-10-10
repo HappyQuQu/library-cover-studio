@@ -1,4 +1,6 @@
 import sharp from 'sharp';
+import { applyRandomBackground } from './templateBackground.service.js';
+export { generateRandomGradient } from './templateBackground.service.js';
 import pLimit from 'p-limit';
 import fs from 'fs';
 import path from 'path';
@@ -22,19 +24,26 @@ interface CanvasObject {
   text?: string;
   fontSize?: number;
   fontFamily?: string;
+  fitText?: boolean;
+  wrapText?: boolean;
   src?: string;
   scaleX?: number;
   scaleY?: number;
   angle?: number;
   opacity?: number;
   originX?: string;  // 'left' | 'center' | 'right'
+  visible?: boolean;
+  flipX?: boolean;
+  flipY?: boolean;
   originY?: string;  // 'top' | 'center' | 'bottom'
 }
 
 interface TemplateData {
   version: string;
   objects: CanvasObject[];
-  background?: string;
+  background?: string | Record<string, any>;
+  backgroundColor?: string | Record<string, any>;
+  backgroundImage?: CanvasObject;
   width: number;
   height: number;
 }
@@ -66,7 +75,7 @@ const registeredFonts = new Set<string>();
  * 确保自定义字体已注册到 GlobalFonts
  */
 function ensureFontRegistered(fontFamily: string): boolean {
-  if (registeredFonts.has(fontFamily)) return true;
+  if (registeredFonts.has(fontFamily) || GlobalFonts.has(fontFamily)) return true;
 
   if (!fs.existsSync(FONTS_DIR)) return false;
 
@@ -108,7 +117,8 @@ export async function renderTemplate(
 ): Promise<Buffer> {
   return limit(async () => {
     try {
-      const template: TemplateData = JSON.parse(templateJson);
+      const saved: TemplateData = JSON.parse(templateJson);
+      const template = applyRandomBackground({ ...saved, width: saved.width || options.width, height: saved.height || options.height });
       console.log(`  📐 Canvas size from template: ${template.width}x${template.height}`);
 
       // 替换变量
@@ -137,11 +147,14 @@ export async function renderTemplate(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
+      const backgroundLayer = await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
+      if (backgroundLayer) layers.push(backgroundLayer);
 
       for (const obj of processedTemplate.objects) {
         const layer = await renderObject(obj, posterBuffer);
         if (layer) {
-          layers.push(layer);
+          const clipped = await clipLayerToCanvas(layer, width, height, (obj as any).clipPath);
+          if (clipped) layers.push(clipped);
         }
       }
 
@@ -178,7 +191,8 @@ export async function renderLibraryCover(
 ): Promise<Buffer> {
   return limit(async () => {
     try {
-      const template: TemplateData = JSON.parse(templateJson);
+      const saved: TemplateData = JSON.parse(templateJson);
+      const template = applyRandomBackground({ ...saved, width: saved.width || options.width, height: saved.height || options.height });
       console.log(`  📐 Canvas size from template: ${template.width}x${template.height}`);
 
       // 替换变量
@@ -216,11 +230,14 @@ export async function renderLibraryCover(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
+      const backgroundLayer = await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
+      if (backgroundLayer) layers.push(backgroundLayer);
 
       for (const obj of processedTemplate.objects) {
         const layer = await renderObjectWithPosters(obj, posterBuffers);
         if (layer) {
-          layers.push(layer);
+          const clipped = await clipLayerToCanvas(layer, width, height, (obj as any).clipPath);
+          if (clipped) layers.push(clipped);
         }
       }
 
@@ -279,6 +296,7 @@ async function renderObjectWithPosters(
   obj: CanvasObject,
   posterBuffers: Buffer[]
 ): Promise<sharp.OverlayOptions | null> {
+  if (obj.visible === false || obj.opacity === 0) return null;
   const { left, top } = calculateTopLeft(obj);
   const objType = obj.type?.toLowerCase();
 
@@ -385,10 +403,10 @@ async function renderObject(
   obj: CanvasObject,
   posterBuffer?: Buffer
 ): Promise<sharp.OverlayOptions | null> {
-  const left = Math.round(obj.left || 0);
-  const top = Math.round(obj.top || 0);
+  if (obj.visible === false || obj.opacity === 0) return null;
+  const { left, top } = calculateTopLeft(obj);
 
-  switch (obj.type) {
+  switch (obj.type?.toLowerCase()) {
     case 'rect':
       return renderRect(obj, left, top);
 
@@ -534,6 +552,12 @@ async function renderPoster(
       positionOffsetY += padding;
     }
 
+    if (obj.opacity !== undefined && obj.opacity < 1) {
+      const { data, info } = await sharp(resized).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (let index = 3; index < data.length; index += 4) data[index] = Math.round(data[index] * Math.max(0, obj.opacity));
+      resized = await sharp(data, { raw: info }).png().toBuffer();
+    }
+
     // Calculate final position
     const finalLeft = left - positionOffsetX;
     const finalTop = top - positionOffsetY;
@@ -546,30 +570,85 @@ async function renderPoster(
   }
 }
 
-// 渲染图片
-async function renderImage(
-  obj: CanvasObject,
-  left: number,
-  top: number
-): Promise<sharp.OverlayOptions | null> {
-  try {
-    const width = Math.round((obj.width || 100) * (obj.scaleX || 1));
-    const height = Math.round((obj.height || 100) * (obj.scaleY || 1));
-
-    // 这里需要处理图片 URL 或本地路径
-    // 简化起见，暂时只支持本地路径
-    if (obj.src && fs.existsSync(obj.src)) {
-      const resized = await sharp(obj.src)
-        .resize(width, height, { fit: 'contain' })
-        .png()
-        .toBuffer();
-
-      return { input: resized, left, top };
-    }
-  } catch (error) {
-    console.error('Failed to render image:', error);
+function imageSource(src: string): Buffer | string {
+  if (src.startsWith('data:')) {
+    const match = /^data:(image\/[\w.+-]+)((?:;[^,]*)*),([\s\S]*)$/i.exec(src);
+    if (!match) throw new Error('图片数据格式无效');
+    return /;base64(?:;|$)/i.test(match[2]) ? Buffer.from(match[3], 'base64') : Buffer.from(decodeURIComponent(match[3]), 'utf8');
   }
-  return null;
+  if (fs.existsSync(src)) return src;
+  throw new Error('图片素材不可读取');
+}
+
+// Saved Fabric backgrounds use an image outside the ordinary objects array.
+// Composite it first, clipped to the canvas, before posters and titles.
+async function renderBackgroundImage(obj: CanvasObject | undefined, width: number, height: number): Promise<sharp.OverlayOptions | null> {
+  if (!obj || obj.visible === false || obj.opacity === 0) return null;
+  const { left, top } = calculateTopLeft(obj);
+  const layer = await renderImage(obj, left, top, true);
+  if (!layer) return null;
+  return clipLayerToCanvas(layer, width, height);
+}
+
+// Fabric permits cards to extend beyond the canvas; Sharp composite requires cropped inputs.
+async function clipLayerToCanvas(layer: sharp.OverlayOptions, width: number, height: number, clipPath?: any): Promise<sharp.OverlayOptions | null> {
+  const input = layer.input as Buffer;
+  const dimensions = await sharp(input).metadata();
+  const x = Math.round(layer.left || 0), y = Math.round(layer.top || 0);
+  let minimumX = 0, minimumY = 0, maximumX = width, maximumY = height;
+  // Fabric absolute clip rectangles constrain the wall to its right-hand region in world coordinates.
+  if (clipPath?.absolutePositioned && clipPath.type?.toLowerCase() === 'rect' && !clipPath.angle) {
+    const origin = calculateTopLeft(clipPath);
+    minimumX = Math.max(0, Math.round(origin.left)); minimumY = Math.max(0, Math.round(origin.top));
+    maximumX = Math.min(width, Math.round(origin.left + clipPath.width * (clipPath.scaleX ?? 1)));
+    maximumY = Math.min(height, Math.round(origin.top + clipPath.height * (clipPath.scaleY ?? 1)));
+  }
+  const cropX = Math.max(0, minimumX - x), cropY = Math.max(0, minimumY - y);
+  const left = Math.max(minimumX, x), top = Math.max(minimumY, y);
+  const cropWidth = Math.min(dimensions.width! - cropX, maximumX - left);
+  const cropHeight = Math.min(dimensions.height! - cropY, maximumY - top);
+  if (cropWidth <= 0 || cropHeight <= 0) return null;
+  let clipped = !cropX && !cropY && cropWidth === dimensions.width && cropHeight === dimensions.height
+    ? input : await sharp(input).extract({ left: cropX, top: cropY, width: cropWidth, height: cropHeight }).png().toBuffer();
+  if (clipPath?.absolutePositioned && clipPath.type?.toLowerCase() === 'polygon' && !clipPath.angle && Array.isArray(clipPath.points)) {
+    const points = clipPath.points as { x: number; y: number }[];
+    const minX = Math.min(...points.map(point => point.x)), minY = Math.min(...points.map(point => point.y));
+    const origin = calculateTopLeft(clipPath);
+    const polygon = points.map(point => `${origin.left + (point.x - minX) * (clipPath.scaleX ?? 1) - left},${origin.top + (point.y - minY) * (clipPath.scaleY ?? 1) - top}`).join(' ');
+    const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${cropWidth}" height="${cropHeight}"><polygon points="${polygon}" fill="white"/></svg>`);
+    clipped = await sharp(clipped).ensureAlpha().composite([{ input: mask, blend: 'dest-in' }]).png().toBuffer();
+  }
+  return { ...layer, input: clipped, left, top };
+}
+
+// Decode both URI-encoded SVG gradients and base64 raster uploads from Fabric.
+async function renderImage(
+  obj: CanvasObject, left: number, top: number, required = false
+): Promise<sharp.OverlayOptions | null> {
+  if (obj.visible === false || obj.opacity === 0) return null;
+  try {
+    if (!obj.src) throw new Error('图片素材未保存');
+    const width = Math.round((obj.width || 100) * (obj.scaleX ?? 1));
+    const height = Math.round((obj.height || 100) * (obj.scaleY ?? 1));
+    if (width <= 0 || height <= 0) return null;
+    let pipeline = sharp(imageSource(obj.src)).resize(width, height, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } });
+    if (obj.flipX) pipeline = pipeline.flop();
+    if (obj.flipY) pipeline = pipeline.flip();
+    if (obj.angle) pipeline = pipeline.rotate(obj.angle, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
+    let input = await pipeline.ensureAlpha().png().toBuffer();
+    const dimensions = await sharp(input).metadata();
+    if (obj.angle) { left -= Math.round((dimensions.width! - width) / 2); top -= Math.round((dimensions.height! - height) / 2); }
+    if (obj.opacity !== undefined && obj.opacity < 1) {
+      const { data, info } = await sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      for (let index = 3; index < data.length; index += 4) data[index] = Math.round(data[index] * Math.max(0, obj.opacity));
+      input = await sharp(data, { raw: info }).png().toBuffer();
+    }
+    return { input, left, top };
+  } catch (error) {
+    if (required) throw new Error('背景图片无法渲染，请检查模板背景素材后重新保存', { cause: error });
+    console.error('Failed to render image:', error);
+    return null;
+  }
 }
 
 // 渲染多边形 (使用 SVG)
@@ -624,10 +703,12 @@ async function renderText(
   const baseFontSize = obj.fontSize || 24;
   const scaleX = obj.scaleX || 1;
   const scaleY = obj.scaleY || 1;
-  const fontSize = Math.round(baseFontSize * Math.max(scaleX, scaleY));
+  let fontSize = Math.round(baseFontSize * Math.max(scaleX, scaleY));
 
   const fontFamily = obj.fontFamily || 'sans-serif';
   const fontWeight = (obj as any).fontWeight || 'normal';
+  const fontStyle = (obj as any).fontStyle || 'normal';
+  const lineHeight = (obj as any).lineHeight || 1.16;
   const fill = obj.fill || '#ffffff';
   const textAlign = (obj as any).textAlign || 'left';
   const angle = obj.angle || 0;
@@ -642,30 +723,55 @@ async function renderText(
   // 注意：Canvas 渲染文本需要一定的 Padding 避免被切掉
   const baseWidth = obj.width || 200;
   const width = Math.round(baseWidth * scaleX * 1.5) + 100;
-  const height = Math.round(fontSize * 2) + 100;
+  const maximumLines = obj.wrapText ? Math.max(2, obj.text.split(/\s+/).length) : obj.text.split('\n').length;
+  const height = Math.round(fontSize * Math.max(2, maximumLines * lineHeight + 1)) + 100;
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
   // 设置字体
-  ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}"`;
+  // Resolve an installed family explicitly: Canvas font-list fallbacks can select a serif face.
+  const candidates = /[\u3400-\u9fff]/.test(obj.text)
+    ? ['Noto Sans CJK SC', 'Noto Sans CJK JP', 'PingFang SC', 'Heiti SC', 'Heiti TC', 'Arial Unicode MS']
+    : ['Arial', 'Noto Sans CJK SC', 'Noto Sans CJK JP', 'DejaVu Sans'];
+  const families = /serif/.test(fontFamily) && !/sans/.test(fontFamily)
+    ? ['Georgia', 'Times New Roman', 'DejaVu Serif', 'Noto Serif CJK SC', 'Noto Serif CJK JP'] : candidates;
+  const renderFont = isRegistered ? fontFamily : families.find(family => GlobalFonts.has(family)) || fontFamily;
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${renderFont}"`;
   ctx.fillStyle = fill;
   ctx.textBaseline = 'top';
 
-  // 测量文字
-  const metrics = ctx.measureText(obj.text);
-  const textWidth = metrics.width;
-
-  // 根据对齐方式调整绘制位置 (在画布内部居中或偏移)
-  let drawX = 50;
-  if (textAlign === 'center') {
-    drawX = (width - textWidth) / 2;
-  } else if (textAlign === 'right') {
-    drawX = width - textWidth - 50;
+  let letterSpacing = ((obj as any).charSpacing || 0) * fontSize / 1000;
+  const measureWidth = (value: string) => letterSpacing
+    ? Array.from(value).reduce((sum, char) => sum + ctx.measureText(char).width, 0) + Math.max(0, Array.from(value).length - 1) * letterSpacing
+    : ctx.measureText(value).width;
+  let lines = obj.text.split('\n');
+  if (obj.wrapText) {
+    lines = lines.flatMap(line => {
+      const result: string[] = []; let current = '';
+      for (const word of line.split(/\s+/)) {
+        const candidate = current ? `${current} ${word}` : word;
+        if (current && measureWidth(candidate) > baseWidth * scaleX) { result.push(current); current = word; }
+        else current = candidate;
+      }
+      result.push(current); return result;
+    });
   }
-
-  // 绘制文字
-  ctx.fillText(obj.text, drawX, 50);
+  const textWidth = Math.max(...lines.map(measureWidth));
+  // Large variable titles stay inside their allotted column, even for longer library names.
+  if (obj.fitText && textWidth > baseWidth * scaleX) {
+    fontSize = Math.max(1, Math.floor(fontSize * Math.max(1, baseWidth * scaleX - 2) / textWidth));
+    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px "${renderFont}"`;
+    letterSpacing = ((obj as any).charSpacing || 0) * fontSize / 1000;
+  }
+  lines.forEach((line, index) => {
+    const lineWidth = measureWidth(line);
+    let drawX = textAlign === 'center' ? (width - lineWidth) / 2 : textAlign === 'right' ? width - lineWidth - 50 : 50;
+    const drawY = 50 + index * fontSize * lineHeight;
+    if (letterSpacing) {
+      for (const char of Array.from(line)) { ctx.fillText(char, drawX, drawY); drawX += ctx.measureText(char).width + letterSpacing; }
+    } else ctx.fillText(line, drawX, drawY);
+  });
 
   let textBuffer = await canvas.encode('png');
 
@@ -683,12 +789,10 @@ async function renderText(
   const finalBuffer = await sharpInstance.png().toBuffer();
 
   // 获取处理后的尺寸以便重新校准位置
-  await sharp(finalBuffer).metadata();
-
-  // 调整 left/top 使得渲染后的文字中心与原始位置对齐
-  // 因为 Canvas 渲染时带了 Padding，且经过了 Trim
-  // 这里简化处理：直接使用原始 left/top，因为 Fabric 的坐标已经由 calculateTopLeft 处理过
-  // 如果需要极其精确的对齐，这里可能需要根据 Trim 后的偏移量进行修正
+  const rendered = await sharp(finalBuffer).metadata();
+  // Trimming removes internal padding; retain the text box alignment on the destination canvas.
+  if (textAlign === 'center') left += Math.round((baseWidth * scaleX - rendered.width!) / 2);
+  else if (textAlign === 'right') left += Math.round(baseWidth * scaleX - rendered.width!);
 
   return { input: finalBuffer, left, top };
 }
@@ -709,28 +813,17 @@ function generateGradientSvg(width: number, height: number, gradient: any): stri
   // 这里的 log 显示 gradientUnits: "pixels", coords 是绝对值.
   const gradientUnits = gradient.gradientUnits === 'percentage' ? 'objectBoundingBox' : 'userSpaceOnUse';
 
-  let stops = '';
-  if (gradient.colorStops && Array.isArray(gradient.colorStops)) {
-    stops = gradient.colorStops.map((stop: any) => {
-      const offset = (stop.offset * 100) + '%';
-      return `<stop offset="${offset}" stop-color="${stop.color}" />`;
-    }).join('');
-  }
-
-  return `
-    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <${type} id="grad" 
-          gradientUnits="${gradientUnits}"
-          x1="${coords.x1}" y1="${coords.y1}"
-          x2="${coords.x2}" y2="${coords.y2}"
-        >
-          ${stops}
-        </${type}>
-      </defs>
-      <rect x="0" y="0" width="${width}" height="${height}" fill="url(#grad)" />
-    </svg>
-  `;
+  const escape = (value: unknown) => String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const stops = gradient.colorStops.map((stop: any) => `<stop offset="${stop.offset * 100}%" stop-color="${escape(stop.color)}" stop-opacity="${stop.opacity ?? 1}" />`).join('');
+  const coordinates = gradient.type === 'radial'
+    ? `cx="${coords.x2}" cy="${coords.y2}" r="${coords.r2}" fx="${coords.x1}" fy="${coords.y1}" fr="${coords.r1 || 0}"`
+    : `x1="${coords.x1}" y1="${coords.y1}" x2="${coords.x2}" y2="${coords.y2}"`;
+  const transform = Array.isArray(gradient.gradientTransform) && gradient.gradientTransform.length === 6 && gradient.gradientTransform.every(Number.isFinite)
+    ? ` gradientTransform="matrix(${gradient.gradientTransform.join(' ')})"` : '';
+  return `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs><${type} id="grad" gradientUnits="${gradientUnits}" ${coordinates}${transform}>${stops}</${type}></defs>
+    <rect width="${width}" height="${height}" fill="url(#grad)" />
+  </svg>`;
 }
 
 // 解析颜色，支持渐变对象（回退到纯色）
@@ -757,45 +850,6 @@ function resolveColor(color: any): string | object {
 
   console.warn('Unknown color format, defaulting to black:', color);
   return '#000000';
-}
-
-// 生成随机渐变背景
-export function generateRandomGradient(): any {
-  const getRandomColor = () => {
-    const h = Math.floor(Math.random() * 360);
-    const s = Math.floor(Math.random() * 40) + 40; // 40-80%
-    const l = Math.floor(Math.random() * 40) + 30; // 30-70%
-    return `hsl(${h},${s}%,${l}%)`;
-  };
-
-  const color1 = getRandomColor();
-  const color2 = getRandomColor();
-
-  // 随机角度 (0, 45, 90, 135...) -> coords
-  const directions = [
-    { x1: 0, y1: 0, x2: 1, y2: 1 }, // TL -> BR
-    { x1: 0, y1: 0, x2: 0, y2: 1 }, // Top -> Bottom
-    { x1: 0, y1: 0, x2: 1, y2: 0 }, // Left -> Right
-    { x1: 1, y1: 0, x2: 0, y2: 1 }, // TR -> BL
-  ];
-  const dir = directions[Math.floor(Math.random() * directions.length)];
-
-  return {
-    type: 'linear',
-    gradientUnits: 'percentage',
-    coords: {
-      x1: dir.x1,
-      y1: dir.y1,
-      x2: dir.x2,
-      y2: dir.y2
-    },
-    colorStops: [
-      { offset: 0, color: color1 },
-      { offset: 1, color: color2 }
-    ],
-    offsetX: 0,
-    offsetY: 0
-  };
 }
 
 // 解析颜色为 Sharp 对像
@@ -840,5 +894,4 @@ function parseColor(colorInput: any): { r: number; g: number; b: number; alpha: 
   // 默认黑色
   return { r: 0, g: 0, b: 0, alpha: 1 };
 }
-
 

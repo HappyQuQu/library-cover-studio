@@ -70,7 +70,17 @@ export function useServerLibraries(id: string): UseQueryResult<MediaLibrary[], E
       apiClient.get<MediaLibrary[]>(`/servers/${id}/libraries`).then((r) => r.data),
     enabled: !!id,
     staleTime: 0,
-    refetchOnMount: 'always'
+    refetchOnMount: 'always',
+    retry: false
+  });
+}
+
+export interface ServerConnection { connected: boolean; version?: string; serverName?: string; product?: string; error?: string; }
+export function useServerConnection(id: string) {
+  return useQuery({
+    queryKey: ['servers', id, 'connection'],
+    queryFn: () => apiClient.post<ServerConnection>(`/servers/${id}/test`).then(response => response.data),
+    enabled: !!id, staleTime: 60000, retry: false
   });
 }
 
@@ -107,6 +117,9 @@ export interface Template {
   width: number;
   height: number;
   isPublic: boolean;
+  isLocked: boolean;
+  isDefault: boolean;
+  canManage: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -145,6 +158,7 @@ export function useUpdateTemplate(): UseMutationResult<any, Error, Partial<Templ
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
       queryClient.invalidateQueries({ queryKey: ['templates', variables.id] });
+      queryClient.invalidateQueries({ queryKey: ['template-history', variables.id] });
     }
   });
 }
@@ -155,6 +169,39 @@ export function useDeleteTemplate(): UseMutationResult<any, Error, string> {
     mutationFn: (id: string) => apiClient.delete(`/templates/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
+    }
+  });
+}
+
+export function useSetTemplateLock() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, isLocked }: { id: string; isLocked: boolean }) => apiClient.post(`/templates/${id}/lock`, { isLocked }),
+    onSuccess: (_, { id }) => queryClient.invalidateQueries({ queryKey: ['templates', id] }).then(() => queryClient.invalidateQueries({ queryKey: ['templates'] }))
+  });
+}
+
+export interface TemplateRevision {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  createdAt: string;
+  kind: 'save' | 'restore' | 'baseline';
+  previewUrl: string;
+}
+
+export function useTemplateRevisions(id: string, enabled: boolean) {
+  return useQuery({ queryKey: ['template-history', id], enabled: !!id && enabled,
+    queryFn: () => apiClient.get<{ limit: number; revisions: TemplateRevision[] }>(`/templates/${id}/history`).then(response => response.data) });
+}
+
+export function useRestoreTemplateRevision(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({ mutationFn: (revisionId: string) => apiClient.post<Template>(`/templates/${id}/history/${revisionId}/restore`).then(response => response.data),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['templates', id] });
+      await Promise.all([queryClient.invalidateQueries({ queryKey: ['templates'] }), queryClient.invalidateQueries({ queryKey: ['template-history', id] })]);
     }
   });
 }
@@ -172,6 +219,7 @@ export interface Task {
   isEnabled: boolean;
   lastRunAt?: string;
   nextRunAt?: string;
+  timezone?: string;
   createdAt: string;
 }
 
@@ -232,6 +280,19 @@ export function useDeleteTask(): UseMutationResult<any, Error, string> {
   });
 }
 
+export interface TaskLogCover {
+  id: string;
+  libraryId: string;
+  libraryName: string;
+  templateName?: string | null;
+  status: 'generated' | 'uploaded' | 'failed';
+  width?: number | null;
+  height?: number | null;
+  errorMessage?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+}
+
 export interface TaskLog {
   id: string;
   taskId: string;
@@ -241,12 +302,14 @@ export interface TaskLog {
   errorMessage?: string;
   startedAt?: string;
   completedAt?: string;
+  covers?: TaskLogCover[];
 }
 
 export function useTaskLogs(taskId: string): UseQueryResult<TaskLog[], Error> {
   return useQuery({
     queryKey: ['tasks', taskId, 'logs'],
     queryFn: () => apiClient.get<TaskLog[]>(`/tasks/${taskId}/logs`).then((r) => r.data),
+    refetchInterval: query => query.state.data?.some(log => log.status === 'running') ? 3000 : false,
     enabled: !!taskId,
     refetchOnMount: 'always',
     staleTime: 0
@@ -349,4 +412,3 @@ export function useStats(): UseQueryResult<DashboardStats, Error> {
     queryFn: () => apiClient.get<DashboardStats>('/stats').then((r) => r.data)
   });
 }
-

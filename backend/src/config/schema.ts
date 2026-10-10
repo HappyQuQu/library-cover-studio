@@ -35,8 +35,28 @@ export const templates = sqliteTable('templates', {
   height: integer('height').default(1080),
   userId: text('user_id').references(() => users.id),
   isPublic: integer('is_public').default(0),
+  isLocked: integer('is_locked').default(0),
+  isDefault: integer('is_default').default(0),
   createdAt: text('created_at'),
   updatedAt: text('updated_at')
+});
+
+// 任务表
+export const templateRevisions = sqliteTable('template_revisions', {
+  sequence: integer('sequence').primaryKey({ autoIncrement: true }),
+  id: text('id').unique().notNull(),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  canvasJson: text('canvas_json').notNull(),
+  thumbnailPath: text('thumbnail_path').notNull(),
+  width: integer('width').notNull(),
+  height: integer('height').notNull(),
+  isPublic: integer('is_public').default(0),
+  savedBy: text('saved_by').references(() => users.id, { onDelete: 'set null' }),
+  kind: text('kind').notNull(),
+  restoredFrom: text('restored_from'),
+  createdAt: text('created_at').notNull()
 });
 
 // 任务表
@@ -70,6 +90,22 @@ export const taskLogs = sqliteTable('task_logs', {
   completedAt: text('completed_at')
 });
 
+// 每次执行的媒体库结果与独立封面快照
+export const taskLogCovers = sqliteTable('task_log_covers', {
+  id: text('id').primaryKey(),
+  logId: text('log_id').notNull().references(() => taskLogs.id, { onDelete: 'cascade' }),
+  libraryId: text('library_id').notNull(),
+  libraryName: text('library_name').notNull(),
+  templateName: text('template_name'),
+  status: text('status').notNull(), // 'generated' | 'uploaded' | 'failed'
+  imageName: text('image_name'),
+  thumbnailName: text('thumbnail_name'),
+  width: integer('width'),
+  height: integer('height'),
+  errorMessage: text('error_message'),
+  createdAt: text('created_at')
+});
+
 // 系统设置表
 export const systemSettings = sqliteTable('system_settings', {
   key: text('key').primaryKey(),
@@ -85,6 +121,7 @@ export const aiProviders = sqliteTable('ai_providers', {
   apiUrl: text('api_url').notNull(),
   apiKeyEncrypted: text('api_key_encrypted'),
   model: text('model'),
+  modelCapabilities: text('model_capabilities'),
   isActive: integer('is_active').default(1),
   isDefault: integer('is_default').default(0),
   userId: text('user_id').references(() => users.id),

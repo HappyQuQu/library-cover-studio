@@ -1,7 +1,8 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIProvider, AIProviderConfig, TemplateContext, StreamChunk } from '../aiClient.service.js';
 import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/templateGenerator.js';
-import { extractJSON } from '../utils/jsonParser.js';
+import { parseTemplateResponse } from '../utils/jsonParser.js';
+import { referenceImageError } from '../utils/referenceImages.js';
 
 export class ClaudeProvider implements AIProvider {
   private client: Anthropic;
@@ -28,7 +29,7 @@ export class ClaudeProvider implements AIProvider {
       const systemPrompt = context?.systemPrompt || SYSTEM_PROMPT;
 
       // 构建消息历史
-      const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      const messages: Anthropic.MessageParam[] = [];
 
       // 添加历史对话
       if (context?.conversationHistory) {
@@ -43,27 +44,31 @@ export class ClaudeProvider implements AIProvider {
       }
 
       // 添加当前用户消息
-      messages.push({
-        role: 'user',
-        content: buildUserPrompt(prompt, {
+      const userPrompt = buildUserPrompt(prompt, {
           currentCanvas: context?.currentCanvas,
           canvasSize: context?.canvasSize,
           editMode: context?.editMode,
-          runtimeConfig: context?.runtimeConfig
-        })
-      });
+          runtimeConfig: context?.runtimeConfig,
+          referenceImageCount: context?.referenceImages?.length
+        });
+      messages.push({ role:'user', content: context?.referenceImages?.length
+        ? [...context.referenceImages.map(image => ({ type:'image' as const, source: {
+            type:'base64' as const, media_type:'image/jpeg' as const, data:image.dataUrl.split(',')[1]
+          } })), {type:'text', text:userPrompt}] : userPrompt });
 
       // 调用 Claude API（流式）
       const stream = await this.client.messages.stream({
         model: this.model,
-        max_tokens: 4096,
+        max_tokens: 8192,
         system: systemPrompt,
         messages
-      });
+      }, { signal: context?.signal });
 
       let fullResponse = '';
+      let finishReason: string | null = null;
 
       for await (const chunk of stream) {
+        if (chunk.type === 'message_delta' && chunk.delta.stop_reason) finishReason = chunk.delta.stop_reason;
         if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
           const text = chunk.delta.text;
           fullResponse += text;
@@ -76,7 +81,7 @@ export class ClaudeProvider implements AIProvider {
       }
 
       // 解析 JSON
-      const canvasJson = extractJSON(fullResponse);
+      const canvasJson = parseTemplateResponse(fullResponse, finishReason);
 
       yield {
         type: 'complete',
@@ -86,7 +91,7 @@ export class ClaudeProvider implements AIProvider {
     } catch (error: any) {
       yield {
         type: 'error',
-        error: error.message || 'Failed to generate template'
+        error: referenceImageError(error, !!context?.referenceImages?.length)
       };
     }
   }

@@ -1,11 +1,14 @@
 import { db } from '../config/database.js';
-import { tasks, mediaServers, templates, taskLogs, systemSettings } from '../config/schema.js';
+import { tasks, mediaServers, templates, taskLogs, taskLogCovers, systemSettings } from '../config/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
+import { fetchLibraryPosters, requiredPosterCount } from './libraryCover.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { logger } from '../utils/logger.js';
 import { getLocalISOString, getLocalTimestampForFile } from '../utils/time.js';
+import { v4 as uuidv4 } from 'uuid';
+import { saveHistoryCover } from './taskHistory.service.js';
 import fs from 'fs';
 import path from 'path';
 import { POSTERS_DIR, COVERS_DIR } from '../config/paths.js';
@@ -126,134 +129,32 @@ export async function runTask(taskId: string, logId?: string) {
 
     // 2. 每个媒体库生成一张封面
     for (const config of configs) {
+      const coverId = logId ? uuidv4() : undefined;
+      const templateDetail = getTemplate(config.templateId);
+      if (coverId && logId) {
+        db.insert(taskLogCovers).values({
+          id: coverId, logId, libraryId: config.libraryId,
+          libraryName: config.libraryName || config.libraryId,
+          templateName: templateDetail?.name || null,
+          status: 'generated', createdAt: getLocalISOString()
+        }).run();
+      }
       try {
         progress.current++;
         const libraryName = config.libraryName || config.libraryId;
         logger.info(`📂 Processing Library [${progress.current}/${progress.total}]: ${libraryName}`);
 
-        const templateDetail = getTemplate(config.templateId);
-        if (!templateDetail) {
-          logger.warn(`⚠️ Template ${config.templateId} not found for library ${libraryName}, skipping...`);
-          progress.failed++;
-          continue;
-        }
+        if (!templateDetail) throw new Error('模板不存在，无法生成封面');
 
-        // b. 下载每个媒体项的封面（直到凑齐9个有效海报）
-        const posterBuffers: Buffer[] = [];
-        let startIndex = 0;
-        let hasMoreItems = true;
-        const BATCH_SIZE = 10;
-        const sortBy = config.sortBy || 'DateCreated';
-
-        while (posterBuffers.length < 9 && hasMoreItems) {
-          logger.info(`  🔄 Fetching batch of items (Start: ${startIndex}, Limit: ${BATCH_SIZE})...`);
-
-          const itemsResult = await mediaClient.getLibraryItems(
-            serverDetail.type,
-            serverDetail.url,
-            apiKey,
-            config.libraryId,
-            {
-              limit: BATCH_SIZE,
-              startIndex: startIndex,
-              sortBy,
-              sortOrder: sortBy === 'Name' ? 'Ascending' : 'Descending'
-            }
-          );
-
-          const batchItems = itemsResult.items.filter(item =>
-            item.imageTags && Object.keys(item.imageTags).length > 0
-          );
-
-          if (itemsResult.items.length < BATCH_SIZE) {
-            hasMoreItems = false;
-          }
-          if (batchItems.length === 0 && hasMoreItems) {
-            startIndex += BATCH_SIZE;
-            continue;
-          }
-          if (batchItems.length === 0 && !hasMoreItems) {
-            break;
-          }
-
-          logger.info(`  📦 Processing batch: Found ${batchItems.length} items with potential cover`);
-
-          for (const item of batchItems) {
-            if (posterBuffers.length >= 9) break;
-
-            // 单项失败不应影响整个库，包一层 try/catch
-            try {
-            // logger.debug(`  🖼️ Processing item: ${item.name}`);
-
-            const imageTypes = ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile'];
-            let validPoster: Buffer | null = null;
-            let usedType = '';
-
-            for (const type of imageTypes) {
-              const tag = item.imageTags?.[type];
-              if (!tag) continue;
-
-              const poster = await mediaClient.downloadCover(
-                serverDetail.type,
-                serverDetail.url,
-                apiKey,
-                item.id,
-                type
-              );
-
-              if (!poster || poster.length === 0) continue;
-
-              // 1. Check black image size
-              if (poster.length === 11488) {
-                // logger.warn(`    ⚠️ Skipping invalid black image for type: ${type} (size: 11488 bytes)`);
-                continue;
-              }
-
-              // 2. Pixel analysis
-              const { isBlackImage } = await import('../utils/imageUtils.js');
-              const isBlack = await isBlackImage(poster);
-              if (isBlack) {
-                // logger.warn(`    ⚠️ Skipping invalid black image for type: ${type} (pixel analysis detected > 98 % black)`);
-                continue;
-              }
-
-              validPoster = poster;
-              usedType = type;
-              // logger.info(`    ✅ Found valid cover using type: ${type} (${poster.length} bytes)`);
-              break;
-            }
-
-            if (!validPoster) {
-              // logger.warn(`  ⚠️ No valid cover found for item: ${item.name}`);
-              continue;
-            }
-
-            posterBuffers.push(validPoster);
-
-            // Save poster if enabled
-            if (savePosters) {
-              const timestamp = getLocalTimestampForFile();
-              await saveFile('posters', `${libraryName}_${item.name}_${usedType}_${timestamp}.jpg`, validPoster);
-            }
-            } catch (itemErr) {
-              logger.warn(`  ⚠️ Item ${item.name} failed, skipping: ${(itemErr as any)?.message || itemErr}`);
-              // 不递增 progress.failed — 单项跳过不算整个库失败
-            }
-          }
-
-          startIndex += BATCH_SIZE;
-        }
-
-        if (posterBuffers.length === 0) {
-          logger.warn(`⚠️ No valid posters found for library ${libraryName}, skipping...`);
-          progress.failed++;
-          continue;
-        }
-
-        // Fill if less than 9
-        while (posterBuffers.length < 9) {
-          const index = posterBuffers.length % Math.max(posterBuffers.filter(p => p !== null).length, 1);
-          posterBuffers.push(posterBuffers[index]);
+        const requiredCount = requiredPosterCount(templateDetail.canvasJson);
+        const { posters: posterBuffers } = requiredCount ? await fetchLibraryPosters(
+          serverDetail, apiKey, config.libraryId, config.sortBy || 'DateCreated',
+          Number.POSITIVE_INFINITY, savePosters ? async (poster, name, imageType) => {
+            await saveFile('posters', `${libraryName}_${name}_${imageType}_${getLocalTimestampForFile()}.jpg`, poster);
+          } : undefined, config.libraryType, requiredCount
+        ) : { posters: [] };
+        if (requiredCount && !posterBuffers.length) {
+          throw new Error('媒体库没有可用海报，无法生成封面');
         }
 
         // c. Render cover
@@ -276,13 +177,9 @@ export async function runTask(taskId: string, logId?: string) {
 
         try {
           const tmpl = JSON.parse(canvasJson);
-          if (taskOptions.randomBackground || tmpl.randomOnGeneration) {
-            tmpl.background = renderer.generateRandomGradient();
-            if (tmpl.backgroundColor) {
-              tmpl.backgroundColor = tmpl.background;
-            }
+          if (taskOptions.randomBackground) {
+            tmpl.randomOnGeneration = true;
             canvasJson = JSON.stringify(tmpl);
-            logger.info('    🎲 Applied random background gradient');
           }
         } catch (err) {
           logger.error('    ❌ Failed to apply random background:', err);
@@ -295,17 +192,21 @@ export async function runTask(taskId: string, logId?: string) {
           { width: templateDetail.width || 1920, height: templateDetail.height || 1080 }
         );
 
+        if (coverId) {
+          try {
+            const snapshot = await saveHistoryCover(coverId, renderedBuffer);
+            db.update(taskLogCovers).set(snapshot).where(eq(taskLogCovers.id, coverId)).run();
+          } catch (error) {
+            logger.error('Failed to save history snapshot:', error);
+            db.update(taskLogCovers).set({ errorMessage: '历史图片保存失败，无法预览本次封面' }).where(eq(taskLogCovers.id, coverId)).run();
+          }
+        }
+
         // Save generated cover if enabled
         if (saveCovers) {
           const timestamp = getLocalTimestampForFile();
           await saveFile('covers', `${libraryName}_${timestamp}.png`, renderedBuffer);
         }
-
-        // Always save to output/library-covers for legacy/display purposes?
-        // Or just map to data/covers? Let's use saveFile logic above, plus keep the legacy output one if needed
-        // but user asked for data folder structure. Let's stick to the requested structure.
-        // Actually, let's keep the legacy basic save too but maybe redirect it? 
-        // For now, I'll remove the legacy ./output folder logic to be cleaner and use data/covers as the source of truth.
 
         // d. Upload cover
         logger.info(`  📤 Uploading library cover for ${libraryName}...`);
@@ -320,14 +221,15 @@ export async function runTask(taskId: string, logId?: string) {
         if (success) {
           logger.info(`  ✅ Successfully updated cover for ${libraryName}`);
           progress.success++;
+          if (coverId) db.update(taskLogCovers).set({ status: 'uploaded' }).where(eq(taskLogCovers.id, coverId)).run();
         } else {
-          logger.error(`  ❌ Failed to upload cover for ${libraryName}`);
-          progress.failed++;
+          throw new Error('封面已生成，但上传到媒体服务器失败');
         }
 
       } catch (err) {
         logger.error(`❌ Error processing library ${config.libraryName}: `, err);
         progress.failed++;
+        if (coverId) db.update(taskLogCovers).set({ status: 'failed', errorMessage: (err as Error).message || String(err) }).where(eq(taskLogCovers.id, coverId)).run();
       }
     }
 
@@ -339,7 +241,7 @@ export async function runTask(taskId: string, logId?: string) {
 
     if (logId) {
       db.update(taskLogs).set({
-        status: 'completed',
+        status: progress.failed && !progress.success ? 'failed' : 'completed',
         completedAt: now,
         itemsProcessed: progress.success,
         itemsFailed: progress.failed

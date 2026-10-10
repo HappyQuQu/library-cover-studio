@@ -8,10 +8,29 @@ export interface AIProvider {
   apiUrl: string;
   apiKey?: string;
   model?: string;
+  modelCapabilities?: Record<string, boolean>;
   isActive: boolean;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AIModel { id: string; name: string; imageInput: boolean | null; capabilitySource: 'api' | 'official' | 'manual' | 'unknown'; }
+export interface ModelCatalog { models: AIModel[]; source: 'api' | 'configured'; warning?: string; }
+export function modelImageLabel(model?: AIModel): string {
+  return model?.imageInput === true ? '支持图片' : model?.imageInput === false ? '不支持图片' : '图片能力待确认';
+}
+export function useAIProviderModels(providerId?: string, updatedAt?: string) {
+  return useQuery({
+    queryKey: ['ai-models', providerId, updatedAt], enabled: !!providerId, staleTime: 5 * 60 * 1000, retry: false,
+    queryFn: async () => (await apiClient.get<ModelCatalog>(`/ai-providers/${providerId}/models`, { timeout: 25000, params: { refresh: 1 } })).data
+  });
+}
+export function useDiscoverAIModels() {
+  return useMutation({
+    mutationFn: async (config: { providerId?: string; type: string; apiUrl: string; apiKey?: string; model?: string; modelCapabilities?: Record<string, boolean> }) =>
+      (await apiClient.post<ModelCatalog>('/ai-providers/models-config', config, { timeout: 25000 })).data
+  });
 }
 
 export interface AIConversation {
@@ -49,6 +68,7 @@ export function useCreateAIProvider() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-models'] });
     }
   });
 }
@@ -64,6 +84,7 @@ export function useUpdateAIProvider() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-models'] });
     }
   });
 }
@@ -78,6 +99,7 @@ export function useDeleteAIProvider() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-providers'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-models'] });
     }
   });
 }
@@ -95,7 +117,7 @@ export function useTestAIProvider() {
 // 测试未保存的 AI 配置（直接传参数，不需要先保存）
 export function useTestAIProviderConfig() {
   return useMutation({
-    mutationFn: async (config: { type: string; apiUrl: string; apiKey?: string; model?: string }) => {
+    mutationFn: async (config: { providerId?: string; type: string; apiUrl: string; apiKey?: string; model?: string }) => {
       const { data } = await apiClient.post<{ success: boolean }>('/ai-providers/test-config', config);
       return data;
     }

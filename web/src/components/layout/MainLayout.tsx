@@ -63,10 +63,10 @@ export function MainLayout({ children }: MainLayoutProps) {
   }, [settings, setMode, setBrand]);
 
   return (
-    <div className="flex flex-col min-h-screen" style={{ background: 'var(--bg-primary)' }}>
+    <div className="app-layout flex flex-col min-h-screen" style={{ background: 'var(--bg-primary)' }}>
       {/* Top Navigation Bar */}
       <header
-        className="h-14 shrink-0 flex items-center px-6 gap-6"
+        className="app-header"
         style={{
           background: 'var(--bg-primary)',
           borderBottom: '1px solid var(--border-color)',
@@ -75,7 +75,7 @@ export function MainLayout({ children }: MainLayoutProps) {
           zIndex: 100
         }}
       >
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="app-brand flex items-center gap-3 shrink-0">
           <img
             src={resolvedMode === 'light' ? '/logo-l.png' : '/logo-d.png'}
             alt="CoverStudio"
@@ -89,7 +89,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex items-center gap-1 flex-1">
+        <nav className="app-navigation" aria-label="主导航">
           {navItems.map((item) => {
             const isSettings = item.to.startsWith('/settings');
             const isUserMgmt = item.to.includes('tab=users');
@@ -110,14 +110,14 @@ export function MainLayout({ children }: MainLayoutProps) {
                   }
 
                   return cn(
-                    'h-9 px-4 rounded-lg flex items-center gap-2 text-sm font-medium transition-all',
+                    'app-nav-link h-9 rounded-lg flex items-center gap-2 text-sm font-medium transition-all',
                     active
                       ? 'bg-(--primary) text-white shadow-md'
                       : 'text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)'
                   );
                 }}
               >
-                <item.icon className="w-4 h-4" />
+                <item.icon className="w-4 h-4 shrink-0" />
                 <span>{item.label}</span>
               </NavLink>
             );
@@ -125,11 +125,13 @@ export function MainLayout({ children }: MainLayoutProps) {
         </nav>
 
         {/* Right Side - User Menu */}
-        <div className="flex items-center gap-3">
+        <div className="app-account">
           {/* User Dropdown */}
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
+              aria-label={`账号：${user?.username || 'User'}`}
+              aria-expanded={showUserMenu}
               className="flex items-center gap-2 h-9 pl-1 pr-2 rounded-lg transition-all hover:bg-(--bg-tertiary)"
             >
               <div
@@ -138,7 +140,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               >
                 {user?.username?.[0]?.toUpperCase() || 'U'}
               </div>
-              <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+              <span className="app-account-name text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                 {user?.username || 'User'}
               </span>
               <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
@@ -154,7 +156,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 }}
               >
                 <div className="px-3 py-2 border-b" style={{ borderColor: 'var(--border-color)' }}>
-                  <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                  <div className="app-account-name text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
                     {user?.username}
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
@@ -183,8 +185,8 @@ export function MainLayout({ children }: MainLayoutProps) {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-auto" style={{ background: 'var(--bg-primary)' }}>
-        <div style={{ padding: '24px' }}>
+      <main className="app-main flex-1" style={{ background: 'var(--bg-primary)' }}>
+        <div className="app-content">
           <div className="page-enter">
             {children}
           </div>

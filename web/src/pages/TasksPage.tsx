@@ -1,362 +1,36 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { TaskHistoryDialog } from '@/components/tasks/TaskHistoryDialog';
+import { TaskConfigDialog } from '@/components/tasks/TaskConfigDialog';
+import { describeSchedule } from '@/lib/taskConfig';
 import {
   Plus, Clock, Play, Loader2, Calendar, Zap,
   Palette, ChevronRight, Edit, Trash2,
-  AlertCircle, Film, Tv, Music, Folder, Check
+  AlertCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogTrigger
-} from '@/components/ui/dialog';
 import {
   useTasks,
-  useCreateTask,
-  useUpdateTask,
   useDeleteTask,
   useRunTask,
   useToggleTask,
-  useTaskLogs,
   useServers,
   useTemplates,
-  useServerLibraries,
-  MediaLibrary,
-  Task,
-  TaskLog
+  Task
 } from '@/api';
 import { toast } from '@/components/ui/use-toast';
-
-// Library configuration interface
-interface LibraryConfig {
-  libraryId: string;
-  libraryName: string;
-  libraryType: string;
-  templateId: string;
-  primaryTitle: string;
-  secondaryTitle: string;
-  sortBy: string;
-  maxItems: string;
-  enabled: boolean;
-}
-
-// Get library type icon
-function getLibraryIcon(type: string) {
-  switch (type?.toLowerCase()) {
-    case 'movies': return Film;
-    case 'tvshows': return Tv;
-    case 'music': return Music;
-    default: return Folder;
-  }
-}
-
-// Cron expression parser and next execution time calculator
-function parseCronExpression(cronExpr: string): { isValid: boolean; description: string } {
-  if (!cronExpr || cronExpr.trim() === '') return { isValid: false, description: '' };
-
-  const parts = cronExpr.trim().split(/\s+/);
-  if (parts.length !== 5) return { isValid: false, description: '格式错误：需要5个字段 (分 时 日 月 周)' };
-
-  const [minute, hour, day, month, weekday] = parts;
-
-  // Validate basic format
-  const cronPartRegex = /^(\*|(\d+(-\d+)?)(,(\d+(-\d+)?))*)(\/([\d]+))?$/;
-  for (const part of parts) {
-    if (!cronPartRegex.test(part) && part !== '*') {
-      return { isValid: false, description: '表达式格式无效' };
-    }
-  }
-
-  // Generate human-readable description
-  let desc = '';
-
-  // Time part
-  if (minute === '0' && hour !== '*') {
-    if (hour.includes('/')) {
-      const interval = hour.split('/')[1];
-      desc = `每 ${interval} 小时整点`;
-    } else if (hour.includes(',')) {
-      desc = `每天 ${hour.split(',').map(h => `${h}:00`).join(', ')}`;
-    } else {
-      desc = `每天 ${hour.padStart(2, '0')}:00`;
-    }
-  } else if (minute === '*' && hour === '*') {
-    desc = '每分钟';
-  } else if (minute === '0' && hour === '*') {
-    desc = '每小时整点';
-  } else if (hour.includes('/')) {
-    const interval = hour.split('/')[1];
-    desc = `每 ${interval} 小时`;
-  } else if (minute.includes('/')) {
-    const interval = minute.split('/')[1];
-    desc = `每 ${interval} 分钟`;
-  } else {
-    desc = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
-  }
-
-  // Day part
-  if (day !== '*' && month !== '*') {
-    desc += ` 在 ${month} 月 ${day} 日`;
-  } else if (day !== '*') {
-    desc += ` 每月 ${day} 日`;
-  }
-
-  // Weekday part
-  const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-  if (weekday !== '*') {
-    const days = weekday.split(',').map(d => weekdayNames[parseInt(d)] || d).join(', ');
-    desc += ` (${days})`;
-  }
-
-  return { isValid: true, description: desc };
-}
-
-// Calculate next N execution times from a cron expression
-function getNextExecutions(cronExpr: string, count: number = 10): Date[] {
-  if (!cronExpr || cronExpr.trim() === '') return [];
-
-  const parts = cronExpr.trim().split(/\s+/);
-  if (parts.length !== 5) return [];
-
-  const [minuteExpr, hourExpr, dayExpr, monthExpr, weekdayExpr] = parts;
-
-  const results: Date[] = [];
-  const now = new Date();
-  let current = new Date(now.getTime());
-  current.setSeconds(0);
-  current.setMilliseconds(0);
-
-  // Helper to parse cron field
-  const parseField = (expr: string, min: number, max: number): number[] => {
-    const values: number[] = [];
-
-    if (expr === '*') {
-      for (let i = min; i <= max; i++) values.push(i);
-      return values;
-    }
-
-    if (expr.includes('/')) {
-      const [range, step] = expr.split('/');
-      const stepVal = parseInt(step);
-      const startVal = range === '*' ? min : parseInt(range);
-      for (let i = startVal; i <= max; i += stepVal) values.push(i);
-      return values;
-    }
-
-    if (expr.includes(',')) {
-      return expr.split(',').map(v => parseInt(v)).filter(v => !isNaN(v));
-    }
-
-    if (expr.includes('-')) {
-      const [start, end] = expr.split('-').map(v => parseInt(v));
-      for (let i = start; i <= end; i++) values.push(i);
-      return values;
-    }
-
-    const num = parseInt(expr);
-    if (!isNaN(num)) values.push(num);
-    return values;
-  };
-
-  const minutes = parseField(minuteExpr, 0, 59);
-  const hours = parseField(hourExpr, 0, 23);
-  const days = parseField(dayExpr, 1, 31);
-  const months = parseField(monthExpr, 1, 12);
-  const weekdays = parseField(weekdayExpr, 0, 6);
-
-  const isValidDate = (date: Date): boolean => {
-    const m = date.getMinutes();
-    const h = date.getHours();
-    const d = date.getDate();
-    const mo = date.getMonth() + 1;
-    const wd = date.getDay();
-
-    return minutes.includes(m) && hours.includes(h) &&
-      (dayExpr === '*' || days.includes(d)) &&
-      (monthExpr === '*' || months.includes(mo)) &&
-      (weekdayExpr === '*' || weekdays.includes(wd));
-  };
-
-  // Advance minute by minute (with smarter jumps)
-  const maxIterations = 525600; // 1 year in minutes
-  let iterations = 0;
-
-  while (results.length < count && iterations < maxIterations) {
-    current = new Date(current.getTime() + 60000);
-    iterations++;
-
-    if (isValidDate(current)) {
-      results.push(new Date(current));
-    }
-  }
-
-  return results;
-}
-
-// Lazy configurator options
-interface LazyConfig {
-  frequency: 'minutely' | 'hourly' | 'daily' | 'weekly' | 'monthly';
-  minute: string;
-  hour: string;
-  dayOfMonth: string;
-  dayOfWeek: string;
-}
-
-function buildCronFromLazyConfig(config: LazyConfig): string {
-  switch (config.frequency) {
-    case 'minutely':
-      return '* * * * *';
-    case 'hourly':
-      return `${config.minute} * * * *`;
-    case 'daily':
-      return `${config.minute} ${config.hour} * * *`;
-    case 'weekly':
-      return `${config.minute} ${config.hour} * * ${config.dayOfWeek}`;
-    case 'monthly':
-      return `${config.minute} ${config.hour} ${config.dayOfMonth} * *`;
-    default:
-      return '0 4 * * *';
-  }
-}
 
 export function TasksPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [logsTaskId, setLogsTaskId] = useState<string | null>(null);
-  const [activeDialogTab, setActiveDialogTab] = useState<'basic' | 'schedule'>('basic');
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'manual' as 'manual' | 'scheduled',
-    serverId: '',
-    cronExpression: ''
-  });
-  const [libraryConfigs, setLibraryConfigs] = useState<LibraryConfig[]>([]);
-  const [lazyConfig, setLazyConfig] = useState<LazyConfig>({
-    frequency: 'daily',
-    minute: '0',
-    hour: '4',
-    dayOfMonth: '1',
-    dayOfWeek: '1'
-  });
-
   const { data: tasks = [], isLoading } = useTasks();
   const { data: servers = [] } = useServers();
   const { data: templates = [] } = useTemplates();
-  const { data: librariesData, isLoading: loadingLibraries } = useServerLibraries(formData.serverId);
-
-  const createMutation = useCreateTask();
-  const updateMutation = useUpdateTask();
   const deleteMutation = useDeleteTask();
   const runMutation = useRunTask();
   const toggleMutation = useToggleTask();
-  const { data: taskLogs = [], isLoading: logsLoading } = useTaskLogs(logsTaskId || '');
-
-  // Sort logs by time descending
-  const sortedTaskLogs = [...taskLogs].sort((a, b) => {
-    const timeA = new Date(a.startedAt || 0).getTime();
-    const timeB = new Date(b.startedAt || 0).getTime();
-    return timeB - timeA;
-  });
-
-  // Get first template ID as default (stable reference)
-  const defaultTemplateId = templates.length > 0 ? templates[0].id : '';
-
-  // Update library configs when libraries change
-  useEffect(() => {
-    if (librariesData && librariesData.length > 0) {
-      setLibraryConfigs(librariesData.map((lib: MediaLibrary) => ({
-        libraryId: lib.id,
-        libraryName: lib.name,
-        libraryType: lib.type,
-        templateId: defaultTemplateId,
-        primaryTitle: lib.name,
-        secondaryTitle: '',
-        sortBy: 'DateCreated',
-        maxItems: '',
-        enabled: true
-      })));
-    } else {
-      setLibraryConfigs([]);
-    }
-  }, [librariesData, defaultTemplateId]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const enabledConfigs = libraryConfigs.filter(c => c.enabled);
-
-    if (!formData.serverId || enabledConfigs.length === 0) {
-      toast({ title: '表单未完成', description: '请选择服务器和至少一个媒体库', variant: 'destructive' });
-      return;
-    }
-
-    try {
-      // Create task with library configurations
-      await createMutation.mutateAsync({
-        name: formData.name,
-        type: formData.type,
-        serverId: formData.serverId,
-        cronExpression: formData.cronExpression,
-        isEnabled: formData.type === 'scheduled',
-        // Store library configs as JSON in a field (backend needs to support this)
-        libraryConfigs: JSON.stringify(enabledConfigs)
-      } as any);
-      toast({ title: '任务创建成功 🚀', description: `任务 "${formData.name}" 已就绪` });
-      setIsDialogOpen(false);
-      setFormData({ name: '', type: 'manual', serverId: '', cronExpression: '' });
-      setLibraryConfigs([]);
-    } catch (error: any) {
-      toast({ title: '创建失败', description: '请检查输入', variant: 'destructive' });
-    }
-  };
-
-  const handleEdit = (task: Task) => {
-    setEditingTask(task);
-    setFormData({
-      name: task.name,
-      type: task.type,
-      serverId: task.serverId || '',
-      cronExpression: task.cronExpression || ''
-    });
-    // Parse existing library configs
-    if (task.libraryConfigs) {
-      try {
-        setLibraryConfigs(JSON.parse(task.libraryConfigs));
-      } catch (e) {
-        console.error('Failed to parse libraryConfigs', e);
-      }
-    }
-    setIsDialogOpen(true);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingTask) {
-      return handleCreate(e);
-    }
-
-    const enabledConfigs = libraryConfigs.filter(c => c.enabled);
-    try {
-      await updateMutation.mutateAsync({
-        id: editingTask.id,
-        name: formData.name,
-        type: formData.type,
-        serverId: formData.serverId,
-        cronExpression: formData.cronExpression,
-        isEnabled: formData.type === 'scheduled',
-        libraryConfigs: JSON.stringify(enabledConfigs)
-      } as any);
-      toast({ title: '任务更新成功 ✅', description: `任务 "${formData.name}" 已更新` });
-      setIsDialogOpen(false);
-      setEditingTask(null);
-      setFormData({ name: '', type: 'manual', serverId: '', cronExpression: '' });
-      setLibraryConfigs([]);
-    } catch (error: any) {
-      toast({ title: '更新失败', description: '请检查输入', variant: 'destructive' });
-    }
-  };
-
+  const handleEdit = (task: Task) => { setEditingTask(task); setIsDialogOpen(true); };
+  const handleNewTask = () => { setEditingTask(null); setIsDialogOpen(true); };
   const handleDelete = async (taskId: string) => {
     if (!confirm('确定要删除这个任务吗？')) return;
     try {
@@ -386,16 +60,10 @@ export function TasksPage() {
     }
   };
 
-  const updateLibraryConfig = (libraryId: string, updates: Partial<LibraryConfig>) => {
-    setLibraryConfigs(prev => prev.map(c =>
-      c.libraryId === libraryId ? { ...c, ...updates } : c
-    ));
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>自动化任务</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
@@ -403,604 +71,10 @@ export function TasksPage() {
           </p>
         </div>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="btn btn-primary">
-              <Plus style={{ width: 16, height: 16 }} />
-              新建任务
-            </Button>
-          </DialogTrigger>
-          <DialogContent style={{ maxWidth: 1100, height: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-            {/* Custom Header with Icon */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12, flexShrink: 0 }}>
-              <div
-                className="gradient-orange"
-                style={{
-                  width: 44, height: 44, borderRadius: 12,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 8px 24px rgba(245, 158, 11, 0.25)'
-                }}
-              >
-                <Zap style={{ width: 22, height: 22, color: 'white' }} />
-              </div>
-              <div>
-                <h2 style={{ fontSize: 17, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2 }}>{editingTask ? '编辑任务' : '配置新任务'}</h2>
-                <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>为每个媒体库选择模板和配置变量</p>
-              </div>
-            </div>
-
-            {/* Tab Switcher - Moved below header to avoid close button */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexShrink: 0 }}>
-              <button
-                type="button"
-                onClick={() => setActiveDialogTab('basic')}
-                style={{
-                  padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500,
-                  border: 'none', cursor: 'pointer',
-                  background: activeDialogTab === 'basic' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                  color: activeDialogTab === 'basic' ? 'white' : 'var(--text-secondary)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Palette style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                基本设置
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveDialogTab('schedule')}
-                style={{
-                  padding: '10px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500,
-                  border: 'none', cursor: 'pointer',
-                  background: activeDialogTab === 'schedule' ? 'var(--primary)' : 'var(--bg-tertiary)',
-                  color: activeDialogTab === 'schedule' ? 'white' : 'var(--text-secondary)',
-                  transition: 'all 0.2s'
-                }}
-              >
-                <Clock style={{ width: 14, height: 14, display: 'inline', marginRight: 6, verticalAlign: 'middle' }} />
-                定时调度
-                {formData.type === 'scheduled' && (
-                  <span style={{ marginLeft: 6, background: 'var(--success)', color: 'white', fontSize: 10, padding: '2px 6px', borderRadius: 10 }}>已启用</span>
-                )}
-              </button>
-            </div>
-
-            {/* Tab Content */}
-            <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
-              {/* Basic Tab */}
-              {activeDialogTab === 'basic' && (
-                <>
-                  <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    {/* Task Name */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>任务名称</label>
-                      <Input
-                        placeholder="例如: 每周电影墙更新"
-                        className="input"
-                        value={formData.name}
-                        onChange={e => setFormData({ ...formData, name: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    {/* Server Selection */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>选择服务器</label>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                        {servers.length === 0 ? (
-                          <div style={{ gridColumn: '1 / -1', padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', background: 'var(--bg-tertiary)', borderRadius: 12, border: '1px dashed var(--border-color)' }}>
-                            暂无服务器，请先添加媒体服务器
-                          </div>
-                        ) : servers.map(s => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, serverId: s.id })}
-                            style={{
-                              padding: '12px',
-                              borderRadius: '12px',
-                              border: `1px solid ${formData.serverId === s.id ? (s.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)') : 'var(--border-color)'}`,
-                              background: formData.serverId === s.id
-                                ? (s.type === 'jellyfin' ? 'rgba(170, 92, 195, 0.1)' : 'rgba(82, 181, 75, 0.1)')
-                                : 'var(--bg-primary)',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            <div style={{ fontSize: 13, fontWeight: 600, color: formData.serverId === s.id ? (s.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)') : 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {s.name}
-                            </div>
-                            <div style={{ fontSize: 10, color: 'var(--text-tertiary)', marginTop: 2, textTransform: 'capitalize' }}>{s.type}</div>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Library Configurations */}
-                    {formData.serverId && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                          媒体库配置
-                          <span style={{ fontWeight: 400, color: 'var(--text-tertiary)', marginLeft: 8 }}>
-                            ({libraryConfigs.filter(c => c.enabled).length}/{libraryConfigs.length} 已选)
-                          </span>
-                        </label>
-
-                        {loadingLibraries ? (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 30 }}>
-                            <Loader2 style={{ width: 20, height: 20, animation: 'spin 1s linear infinite', color: 'var(--text-tertiary)' }} />
-                          </div>
-                        ) : libraryConfigs.length === 0 ? (
-                          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-tertiary)', background: 'var(--bg-tertiary)', borderRadius: 12, border: '1px dashed var(--border-color)' }}>
-                            该服务器暂无媒体库
-                          </div>
-                        ) : (
-                          <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(3, 1fr)',
-                            gap: '12px'
-                          }}>
-                            {libraryConfigs.map(config => {
-                              const Icon = getLibraryIcon(config.libraryType);
-                              const selectedTemplate = templates.find(t => t.id === config.templateId);
-
-                              return (
-                                <div
-                                  key={config.libraryId}
-                                  style={{
-                                    padding: '12px',
-                                    borderRadius: '12px',
-                                    border: `1px solid ${config.enabled ? 'var(--primary)' : 'var(--border-color)'}`,
-                                    background: config.enabled ? 'rgba(99, 102, 241, 0.05)' : 'var(--bg-primary)',
-                                    transition: 'all 0.2s',
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    gap: '10px'
-                                  }}
-                                >
-                                  {/* Library Header */}
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => updateLibraryConfig(config.libraryId, { enabled: !config.enabled })}
-                                      style={{
-                                        width: 20, height: 20, borderRadius: 6,
-                                        border: `1px solid ${config.enabled ? 'var(--primary)' : 'var(--border-color)'}`,
-                                        background: config.enabled ? 'var(--primary)' : 'transparent',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        cursor: 'pointer', flexShrink: 0
-                                      }}
-                                    >
-                                      {config.enabled && <Check style={{ width: 12, height: 12, color: 'white' }} />}
-                                    </button>
-                                    <Icon style={{ width: 16, height: 16, color: 'var(--text-tertiary)', flexShrink: 0 }} />
-                                    <span style={{
-                                      fontSize: 13,
-                                      fontWeight: 500,
-                                      color: 'var(--text-primary)',
-                                      flex: 1,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis'
-                                    }}>
-                                      {config.libraryName}
-                                    </span>
-                                  </div>
-
-                                  {/* Expanded Config */}
-                                  {config.enabled && (
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                      {/* Template Selection with Preview */}
-                                      <div style={{ position: 'relative' }}>
-                                        <select
-                                          className="input"
-                                          value={config.templateId}
-                                          onChange={e => updateLibraryConfig(config.libraryId, { templateId: e.target.value })}
-                                          style={{ width: '100%', height: 32, fontSize: 12, padding: '0 8px' }}
-                                        >
-                                          <option value="">选择模板...</option>
-                                          {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                        </select>
-
-                                        {selectedTemplate && selectedTemplate.thumbnailPath && (
-                                          <div style={{
-                                            marginTop: 8,
-                                            width: '100%',
-                                            aspectRatio: `${selectedTemplate.width || 600} / ${selectedTemplate.height || 900}`,
-                                            borderRadius: 8,
-                                            overflow: 'hidden',
-                                            background: 'var(--bg-tertiary)',
-                                            border: '1px solid var(--border-color)'
-                                          }}>
-                                            <img
-                                              src={`${import.meta.env.VITE_API_URL || '/api'}${selectedTemplate.thumbnailPath}`}
-                                              alt={selectedTemplate.name}
-                                              style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                                            />
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      {/* Primary Title */}
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>主标题</label>
-                                        <Input
-                                          placeholder="{{primary_title}}"
-                                          value={config.primaryTitle}
-                                          onChange={e => updateLibraryConfig(config.libraryId, { primaryTitle: e.target.value })}
-                                          className="input"
-                                          style={{ height: 32, fontSize: 12, padding: '0 10px' }}
-                                        />
-                                      </div>
-
-                                      {/* Secondary Title */}
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>副标题</label>
-                                        <Input
-                                          placeholder="{{secondary_title}}"
-                                          value={config.secondaryTitle}
-                                          onChange={e => updateLibraryConfig(config.libraryId, { secondaryTitle: e.target.value })}
-                                          className="input"
-                                          style={{ height: 32, fontSize: 12, padding: '0 10px' }}
-                                        />
-                                      </div>
-
-                                      {/* Sorting */}
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                                        <label style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>抓取排序</label>
-                                        <select
-                                          className="input"
-                                          value={config.sortBy}
-                                          onChange={e => updateLibraryConfig(config.libraryId, { sortBy: e.target.value })}
-                                          style={{ height: 32, fontSize: 12, padding: '0 8px' }}
-                                        >
-                                          <option value="Name">名称</option>
-                                          <option value="Random">随机</option>
-                                          <option value="CommunityRating">公众评分</option>
-                                          <option value="CriticRating">影评人评分</option>
-                                          <option value="DateCreated">加入日期</option>
-                                          <option value="DateLastPlayed">播放日期</option>
-                                          <option value="OfficialRating">家长分级</option>
-                                          <option value="PlayCount">播放次数</option>
-                                          <option value="PremiereDate">发行日期</option>
-                                          <option value="Runtime">播放时长</option>
-                                        </select>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <DialogFooter>
-                      <Button type="button" className="btn btn-secondary" onClick={() => setIsDialogOpen(false)}>取消</Button>
-                      <Button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
-                        {createMutation.isPending && <Loader2 style={{ width: 14, height: 14, animation: 'spin 1s linear infinite' }} />}
-                        创建任务
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </>
-              )}
-
-              {/* Schedule Tab */}
-              {activeDialogTab === 'schedule' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {/* Enable/Disable Toggle */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, background: 'var(--bg-tertiary)', borderRadius: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: 10, background: formData.type === 'scheduled' ? 'var(--primary)' : 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Clock style={{ width: 20, height: 20, color: formData.type === 'scheduled' ? 'white' : 'var(--text-tertiary)' }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>启用定时调度</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>按计划自动执行任务</div>
-                      </div>
-                    </div>
-                    <label style={{ position: 'relative', display: 'inline-flex', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.type === 'scheduled'}
-                        onChange={e => setFormData({ ...formData, type: e.target.checked ? 'scheduled' : 'manual' })}
-                        style={{ display: 'none' }}
-                      />
-                      <div style={{
-                        width: 48, height: 26, borderRadius: 13,
-                        background: formData.type === 'scheduled' ? 'var(--primary)' : 'var(--bg-secondary)',
-                        transition: 'all 0.2s',
-                        position: 'relative'
-                      }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: '50%',
-                          background: 'white', position: 'absolute',
-                          top: 2, left: formData.type === 'scheduled' ? 24 : 2,
-                          transition: 'all 0.2s', boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                        }} />
-                      </div>
-                    </label>
-                  </div>
-
-                  {formData.type === 'scheduled' && (
-                    <>
-                      {/* Lazy Configurator - 懒人配置器 */}
-                      <div style={{
-                        padding: 20,
-                        background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05), rgba(168, 85, 247, 0.05))',
-                        borderRadius: 16,
-                        border: '1px solid rgba(99, 102, 241, 0.2)'
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                          <Zap style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-                          <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>懒人配置器</h4>
-                          <span style={{ fontSize: 11, color: 'var(--text-tertiary)', marginLeft: 'auto' }}>快速生成 Cron 表达式</span>
-                        </div>
-
-                        {/* Frequency Selector */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                            <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>执行频率</label>
-                            <select
-                              className="input"
-                              value={lazyConfig.frequency}
-                              onChange={e => {
-                                const freq = e.target.value as LazyConfig['frequency'];
-                                setLazyConfig({ ...lazyConfig, frequency: freq });
-                                setFormData({ ...formData, cronExpression: buildCronFromLazyConfig({ ...lazyConfig, frequency: freq }) });
-                              }}
-                              style={{ flex: 1, height: 36, fontSize: 13 }}
-                            >
-                              <option value="minutely">每分钟</option>
-                              <option value="hourly">每小时</option>
-                              <option value="daily">每天</option>
-                              <option value="weekly">每周</option>
-                              <option value="monthly">每月</option>
-                            </select>
-                          </div>
-
-                          {/* Minute Selector (for hourly+) */}
-                          {lazyConfig.frequency !== 'minutely' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>分钟</label>
-                              <select
-                                className="input"
-                                value={lazyConfig.minute}
-                                onChange={e => {
-                                  const newConfig = { ...lazyConfig, minute: e.target.value };
-                                  setLazyConfig(newConfig);
-                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
-                                }}
-                                style={{ flex: 1, height: 36, fontSize: 13 }}
-                              >
-                                {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55].map(m => (
-                                  <option key={m} value={m.toString()}>{m.toString().padStart(2, '0')} 分</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-
-                          {/* Hour Selector (for daily+) */}
-                          {['daily', 'weekly', 'monthly'].includes(lazyConfig.frequency) && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>小时</label>
-                              <select
-                                className="input"
-                                value={lazyConfig.hour}
-                                onChange={e => {
-                                  const newConfig = { ...lazyConfig, hour: e.target.value };
-                                  setLazyConfig(newConfig);
-                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
-                                }}
-                                style={{ flex: 1, height: 36, fontSize: 13 }}
-                              >
-                                {Array.from({ length: 24 }, (_, i) => (
-                                  <option key={i} value={i.toString()}>{i.toString().padStart(2, '0')}:00</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-
-                          {/* Day of Week Selector (for weekly) */}
-                          {lazyConfig.frequency === 'weekly' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>星期</label>
-                              <select
-                                className="input"
-                                value={lazyConfig.dayOfWeek}
-                                onChange={e => {
-                                  const newConfig = { ...lazyConfig, dayOfWeek: e.target.value };
-                                  setLazyConfig(newConfig);
-                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
-                                }}
-                                style={{ flex: 1, height: 36, fontSize: 13 }}
-                              >
-                                <option value="0">周日</option>
-                                <option value="1">周一</option>
-                                <option value="2">周二</option>
-                                <option value="3">周三</option>
-                                <option value="4">周四</option>
-                                <option value="5">周五</option>
-                                <option value="6">周六</option>
-                              </select>
-                            </div>
-                          )}
-
-                          {/* Day of Month Selector (for monthly) */}
-                          {lazyConfig.frequency === 'monthly' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <label style={{ fontSize: 13, color: 'var(--text-secondary)', width: 80, flexShrink: 0 }}>日期</label>
-                              <select
-                                className="input"
-                                value={lazyConfig.dayOfMonth}
-                                onChange={e => {
-                                  const newConfig = { ...lazyConfig, dayOfMonth: e.target.value };
-                                  setLazyConfig(newConfig);
-                                  setFormData({ ...formData, cronExpression: buildCronFromLazyConfig(newConfig) });
-                                }}
-                                style={{ flex: 1, height: 36, fontSize: 13 }}
-                              >
-                                {Array.from({ length: 28 }, (_, i) => (
-                                  <option key={i + 1} value={(i + 1).toString()}>每月 {i + 1} 日</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Custom Cron Expression */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>自定义 Cron 表达式</label>
-                          <a href="https://crontab.guru/" target="_blank" rel="noreferrer" style={{ fontSize: 12, color: 'var(--primary)' }}>在线帮助 →</a>
-                        </div>
-                        <Input
-                          placeholder="分 时 日 月 周 (例: 0 4 * * *)"
-                          value={formData.cronExpression}
-                          onChange={e => setFormData({ ...formData, cronExpression: e.target.value })}
-                          className="input"
-                          style={{ fontFamily: 'monospace', fontSize: 14 }}
-                        />
-                      </div>
-
-                      {/* Cron Expression Result & Next Executions */}
-                      {formData.cronExpression && (
-                        <div style={{
-                          padding: 20,
-                          background: 'var(--bg-tertiary)',
-                          borderRadius: 16,
-                          border: '1px solid var(--border-color)'
-                        }}>
-                          {/* Expression Display */}
-                          <div style={{ marginBottom: 16 }}>
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 4 }}>Crontab 表达式</div>
-                            <code style={{
-                              fontSize: 18,
-                              fontWeight: 700,
-                              color: 'var(--primary)',
-                              fontFamily: 'Consolas, Monaco, monospace',
-                              letterSpacing: '0.05em'
-                            }}>
-                              {formData.cronExpression}
-                            </code>
-                            {(() => {
-                              const parsed = parseCronExpression(formData.cronExpression);
-                              return parsed.isValid ? (
-                                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
-                                  📅 {parsed.description}
-                                </div>
-                              ) : (
-                                <div style={{ fontSize: 13, color: 'var(--error)', marginTop: 6 }}>
-                                  ⚠️ {parsed.description || '无效的表达式'}
-                                </div>
-                              );
-                            })()}
-                          </div>
-
-                          {/* Next 10 Executions */}
-                          <div>
-                            <div style={{ fontSize: 12, color: 'var(--text-tertiary)', marginBottom: 8 }}>未来 10 次执行时间</div>
-                            <div style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'repeat(2, 1fr)',
-                              gap: '6px 24px',
-                              fontFamily: 'Consolas, Monaco, monospace',
-                              fontSize: 13
-                            }}>
-                              {getNextExecutions(formData.cronExpression, 10).map((date, i) => (
-                                <div
-                                  key={i}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                    padding: '4px 0',
-                                    color: 'var(--text-primary)'
-                                  }}
-                                >
-                                  <span style={{
-                                    width: 18,
-                                    height: 18,
-                                    borderRadius: 4,
-                                    background: 'var(--primary)',
-                                    color: 'white',
-                                    fontSize: 10,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    fontWeight: 600
-                                  }}>
-                                    {i + 1}
-                                  </span>
-                                  {date.getFullYear()}-
-                                  {(date.getMonth() + 1).toString().padStart(2, '0')}-
-                                  {date.getDate().toString().padStart(2, '0')} {' '}
-                                  {date.getHours().toString().padStart(2, '0')}:
-                                  {date.getMinutes().toString().padStart(2, '0')}:00
-                                </div>
-                              ))}
-                              {getNextExecutions(formData.cronExpression, 10).length === 0 && (
-                                <div style={{ gridColumn: '1 / -1', color: 'var(--text-tertiary)', fontStyle: 'italic' }}>
-                                  无法计算执行时间（请检查表达式）
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Quick Presets - Moved to bottom */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>快速选择</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                          {[
-                            { label: '每天凌晨4点', cron: '0 4 * * *', desc: '每日更新' },
-                            { label: '每6小时', cron: '0 */6 * * *', desc: '频繁更新' },
-                            { label: '每12小时', cron: '0 */12 * * *', desc: '半日更新' },
-                            { label: '每周一凌晨', cron: '0 4 * * 1', desc: '每周更新' },
-                            { label: '每月1号', cron: '0 4 1 * *', desc: '每月更新' },
-                            { label: '每小时', cron: '0 * * * *', desc: '高频更新' },
-                          ].map(preset => (
-                            <button
-                              key={preset.cron}
-                              type="button"
-                              onClick={() => setFormData({ ...formData, cronExpression: preset.cron })}
-                              style={{
-                                padding: '12px 16px',
-                                borderRadius: 10,
-                                border: `1px solid ${formData.cronExpression === preset.cron ? 'var(--primary)' : 'var(--border-color)'}`,
-                                background: formData.cronExpression === preset.cron ? 'rgba(99, 102, 241, 0.1)' : 'var(--bg-primary)',
-                                textAlign: 'left',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                              }}
-                            >
-                              <div style={{ fontSize: 13, fontWeight: 600, color: formData.cronExpression === preset.cron ? 'var(--primary)' : 'var(--text-primary)' }}>
-                                {preset.label}
-                              </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>{preset.desc}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  <DialogFooter>
-                    <Button type="button" className="btn btn-secondary" onClick={() => setActiveDialogTab('basic')}>← 返回</Button>
-                    <Button type="button" className="btn btn-primary" onClick={() => { setActiveDialogTab('basic'); }}>
-                      确认调度设置
-                    </Button>
-                  </DialogFooter>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button className="btn btn-primary" onClick={handleNewTask}><Plus size={16} />新建任务</Button>
       </div>
+      {isDialogOpen && <TaskConfigDialog task={editingTask} onClose={() => { setIsDialogOpen(false); setEditingTask(null); }} />}
+
 
       {/* Task List */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
@@ -1018,7 +92,7 @@ export function TasksPage() {
               <div className="empty-state-description" style={{ marginBottom: '24px' }}>
                 通过自动化任务，您可以让服务器在后台静默美化您的海报墙
               </div>
-              <Button className="btn btn-primary" onClick={() => setIsDialogOpen(true)}>
+              <Button className="btn btn-primary" onClick={handleNewTask}>
                 <Plus style={{ width: 18, height: 18 }} />
                 创建首个任务
               </Button>
@@ -1035,7 +109,7 @@ export function TasksPage() {
             let libCount = 0;
             try {
               if (task.libraryConfigs) {
-                const configs = JSON.parse(task.libraryConfigs);
+                const configs = JSON.parse(task.libraryConfigs).filter((config: any) => config.enabled !== false);
                 libCount = configs.length;
                 if (libCount > 0) {
                   const firstLib = configs[0];
@@ -1068,7 +142,7 @@ export function TasksPage() {
 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <h3 style={{ fontWeight: 600, color: task.isEnabled ? 'var(--text-primary)' : 'var(--text-tertiary)', fontSize: 16 }}>{task.name}</h3>
+                      <h3 style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 16 }}>{task.name}</h3>
                       {task.type === 'scheduled' ? (
                         task.isEnabled ? (
                           <span className={`badge ${isJellyfin ? 'badge-primary' : 'badge-success'}`}>定时启用</span>
@@ -1091,7 +165,7 @@ export function TasksPage() {
                       {task.type === 'scheduled' && task.cronExpression && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
                           <Clock style={{ width: 14, height: 14 }} />
-                          {task.cronExpression}
+                          {describeSchedule(task.cronExpression)}
                         </div>
                       )}
                     </div>
@@ -1118,7 +192,7 @@ export function TasksPage() {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                       {/* Toggle Button */}
-                      <button
+                      {task.type === 'scheduled' && <button
                         className={`btn-icon ${task.isEnabled ? 'text-amber-500' : 'text-emerald-500'}`}
                         style={{
                           width: 36, height: 36, borderRadius: 10,
@@ -1130,7 +204,7 @@ export function TasksPage() {
                         }}
                         onClick={() => handleToggle(task.id)}
                         disabled={toggleMutation.isPending}
-                        title={task.isEnabled ? "暂停任务" : "启动任务"}
+                        title={task.isEnabled ? "暂停定时执行" : "启用定时执行"}
                       >
                         {toggleMutation.isPending ? (
                           <Loader2 style={{ width: 16, height: 16, animation: 'spin 1.5s linear infinite' }} />
@@ -1139,7 +213,7 @@ export function TasksPage() {
                         ) : (
                           <Play style={{ width: 16, height: 16, fill: 'currentColor' }} />
                         )}
-                      </button>
+                      </button>}
 
                       {/* Run Now Button - Enhanced with Gradient */}
                       <button
@@ -1209,7 +283,9 @@ export function TasksPage() {
                 <div style={{ padding: '10px 20px', background: 'rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
-                    <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>后端服务正常轮询中</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{task.nextRunAt && task.timezone
+                      ? `下次执行：${new Date(task.nextRunAt).toLocaleString('zh-CN', { timeZone: task.timezone })} · ${task.timezone}`
+                      : '每个已选媒体库生成一张封面'}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -1217,7 +293,7 @@ export function TasksPage() {
                     className="h-8 text-[12px] text-(--primary) hover:text-(--primary) hover:bg-(--primary)/10"
                     onClick={() => setLogsTaskId(task.id)}
                   >
-                    查看历史日志
+                    查看执行历史
                     <ChevronRight style={{ width: 12, height: 12, marginLeft: 4 }} />
                   </Button>
                 </div>
@@ -1227,75 +303,7 @@ export function TasksPage() {
         )}
       </div>
 
-      {/* Logs Dialog */}
-      <Dialog open={!!logsTaskId} onOpenChange={(open) => !open && setLogsTaskId(null)}>
-        <DialogContent style={{ maxWidth: 600, maxHeight: '80vh', overflowY: 'auto' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-            <div
-              className="gradient-primary"
-              style={{
-                width: 40, height: 40, borderRadius: 12,
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}
-            >
-              <Clock style={{ width: 20, height: 20, color: 'white' }} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>执行记录</h2>
-              <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>任务运行历史日志</p>
-            </div>
-          </div>
-
-          {logsLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}>
-              <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite', color: 'var(--text-tertiary)' }} />
-            </div>
-          ) : sortedTaskLogs.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)' }}>
-              暂无执行记录
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {sortedTaskLogs.map((log: TaskLog) => (
-                <div
-                  key={log.id}
-                  style={{
-                    padding: 12,
-                    borderRadius: 8,
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-color)'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <span style={{
-                      fontSize: 12,
-                      fontWeight: 500,
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      background: log.status === 'completed' ? 'rgba(34, 197, 94, 0.1)' : log.status === 'failed' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(99, 102, 241, 0.1)',
-                      color: log.status === 'completed' ? 'var(--success)' : log.status === 'failed' ? 'var(--error)' : 'var(--primary)'
-                    }}>
-                      {log.status === 'completed' ? '已完成' : log.status === 'failed' ? '失败' : '运行中'}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>
-                      {log.startedAt ? new Date(log.startedAt).toLocaleString() : '-'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-secondary)' }}>
-                    <span>处理: {log.itemsProcessed || 0} 项</span>
-                    <span>失败: {log.itemsFailed || 0} 项</span>
-                  </div>
-                  {log.errorMessage && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--error)', background: 'rgba(239, 68, 68, 0.05)', padding: 8, borderRadius: 4 }}>
-                      {log.errorMessage}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {logsTaskId && <TaskHistoryDialog taskId={logsTaskId} taskName={tasks.find(task => task.id === logsTaskId)?.name || '任务'} onClose={() => setLogsTaskId(null)} />}
 
       {/* Warning/Info Banner */}
       <div style={{
@@ -1309,7 +317,7 @@ export function TasksPage() {
           <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>提示：封面生成是资源密集型操作</h4>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
             自动化任务会在后台为您渲染海报并上传到您的媒体服务器。如果您有大量的媒体资源，请考虑将定时任务设置在访问量较低的时段（如凌晨）。
-            首次全量生成可能需要较长时间，后续增量更新会非常快。
+            可先在配置界面生成真实样张，确认效果后再启用定时计划。
           </p>
         </div>
       </div>

@@ -56,10 +56,32 @@ export async function initDatabase() {
       height INTEGER DEFAULT 900,
       user_id TEXT,
       is_public INTEGER DEFAULT 0,
+      is_locked INTEGER DEFAULT 0,
+      is_default INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
+
+    CREATE TABLE IF NOT EXISTS template_revisions (
+      sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT UNIQUE NOT NULL,
+      template_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      canvas_json TEXT NOT NULL,
+      thumbnail_path TEXT NOT NULL,
+      width INTEGER NOT NULL,
+      height INTEGER NOT NULL,
+      is_public INTEGER DEFAULT 0,
+      saved_by TEXT,
+      kind TEXT NOT NULL CHECK(kind IN ('save', 'restore', 'baseline')),
+      restored_from TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE,
+      FOREIGN KEY (saved_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_template_revisions_template ON template_revisions(template_id, sequence DESC);
 
     -- 任务表
     CREATE TABLE IF NOT EXISTS tasks (
@@ -114,6 +136,23 @@ export async function initDatabase() {
       FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
     );
 
+    CREATE TABLE IF NOT EXISTS task_log_covers (
+      id TEXT PRIMARY KEY,
+      log_id TEXT NOT NULL,
+      library_id TEXT NOT NULL,
+      library_name TEXT NOT NULL,
+      template_name TEXT,
+      status TEXT NOT NULL CHECK(status IN ('generated', 'uploaded', 'failed')),
+      image_name TEXT,
+      thumbnail_name TEXT,
+      width INTEGER,
+      height INTEGER,
+      error_message TEXT,
+      created_at TEXT,
+      FOREIGN KEY (log_id) REFERENCES task_logs(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_task_log_covers_log ON task_log_covers(log_id);
+
     -- 系统设置表
     CREATE TABLE IF NOT EXISTS system_settings (
       key TEXT PRIMARY KEY,
@@ -129,6 +168,7 @@ export async function initDatabase() {
       api_url TEXT NOT NULL,
       api_key_encrypted TEXT,
       model TEXT,
+      model_capabilities TEXT,
       is_active INTEGER DEFAULT 1,
       is_default INTEGER DEFAULT 0,
       user_id TEXT,
@@ -163,6 +203,18 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations(user_id);
     CREATE INDEX IF NOT EXISTS idx_ai_conversations_provider ON ai_conversations(provider_id);
   `);
+
+  const providerColumns = sqlite.prepare("PRAGMA table_info(ai_providers)").all() as { name: string }[];
+  if (!providerColumns.some(column => column.name === 'model_capabilities')) {
+    sqlite.exec('ALTER TABLE ai_providers ADD COLUMN model_capabilities TEXT;');
+  }
+
+  const templateColumns = sqlite.prepare('PRAGMA table_info(templates)').all() as { name: string }[];
+  for (const column of ['is_locked', 'is_default']) {
+    if (!templateColumns.some(existing => existing.name === column)) {
+      sqlite.exec(`ALTER TABLE templates ADD COLUMN ${column} INTEGER DEFAULT 0;`);
+    }
+  }
 
   // 初始化系统设置
   const defaultSettings = [
