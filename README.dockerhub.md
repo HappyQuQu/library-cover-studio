@@ -2,9 +2,9 @@
 
 **Jellyfin / Emby 媒体库封面设计与自动化工具。** 使用内置模板或可视化设计器，为电影、电视剧和动漫分类生成封面，再按计划自动上传更新。
 
-[项目源码](https://github.com/HappyQuQu/library-cover-studio) · [完整部署教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md) · [自动化图文教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Automation_Guide.md)
+[项目源码](https://github.com/HappyQuQu/library-cover-studio) · [完整部署教程](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Docker_Deployment.md) · [自动化图文教程](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Automation_Guide.md)
 
-![可视化封面设计器与图层面板](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/editor.jpg)
+![可视化封面设计器与图层面板](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/editor.jpg)
 
 ## 主要功能
 
@@ -15,7 +15,7 @@
 - **真实样张与执行历史**：上传前预览，执行后查看当次封面、逐库结果并下载原图。
 - **可选 AI 助手**：接入自己的 AI 服务生成可编辑设计，基础功能无需 AI。
 
-![模板库：六套内置样式](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/templates.jpg)
+![模板库：六套内置样式](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/templates.jpg)
 
 ## 镜像说明
 
@@ -25,7 +25,7 @@
 
 ## Docker Compose 部署
 
-只需 Docker 和 Compose v2。新建一个空目录，将下面内容保存为 **`compose.yaml`**（也可下载 [部署示例](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/compose.yaml)）：
+只需 Docker 和 Compose v2。新建一个空目录，将下面内容保存为 **`compose.yaml`**（也可下载 [部署示例](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/compose.yaml)）：
 
 ```yaml
 services:
@@ -53,7 +53,7 @@ docker compose up -d
 
 **一个镜像、一个容器、一个端口。** 网页、API、封面渲染和定时任务均在这个容器中运行，数据自动保存在同目录的 **`data` 文件夹**。改端口只需修改 `8080:8080` 的左侧；NAS 直接使用局域网地址访问，不必另配 `FRONTEND_URL`。镜像标签以 Docker Hub 实际发布结果为准。
 
-尚未发布所需镜像标签时，可按 [源码构建教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#从源码构建) 部署。
+尚未发布所需镜像标签时，可按 [源码构建教程](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Docker_Deployment.md#从源码构建) 部署。
 
 ## 自动化图文教程
 
@@ -63,19 +63,19 @@ docker compose up -d
 
 保存后测试连接，点击「媒体库」确认目标分类和海报可读取。密钥需要读取素材与更新封面的权限。
 
-![媒体源：在线状态与三个示例媒体库](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/servers.jpg)
+![媒体源：在线状态与三个示例媒体库](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/servers.jpg)
 
 ### 2. 选择媒体库并配置封面
 
 进入「自动化 → 新建任务」，选择服务器和需要更新的媒体库。下一步批量设置模板，再按库调整主标题、副标题和素材排序。右侧「生成真实样张」读取媒体库海报进行实际渲染，**不会上传或修改服务器**。
 
-![封面配置与真实样张预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/task-cover.jpg)
+![封面配置与真实样张预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/task-cover.jpg)
 
 ### 3. 设置时间并启用
 
 选择「按计划运行」，设置频率和执行时间，核对调度时区及未来三次执行，勾选「保存后启用此计划」。默认时区为 `Asia/Shanghai`，以任务页面显示为准。
 
-![定时计划：每周一凌晨四点、未来三次执行与启用选项](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/task-schedule.jpg)
+![定时计划：每周一凌晨四点、未来三次执行与启用选项](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/task-schedule.jpg)
 
 | 执行计划 | Cron |
 | --- | --- |
@@ -92,7 +92,7 @@ docker compose up -d
 
 可以先点一次「立即执行」验收，再打开「查看执行历史」，检查逐库状态、放大图片并下载原图。
 
-![执行历史和当次封面预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/task-history.jpg)
+![执行历史和当次封面预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/master/doc/images/screenshots/task-history.jpg)
 
 历史默认每个任务保留最多 50 次、30 天内的已结束执行，可在「设置 → 数据管理」调整。「保存生成的封面」开关控制额外导出，关闭后历史仍会保存独立图片。
 
@@ -102,7 +102,7 @@ docker compose up -d
 
 按上面的配置安装时，数据保存在部署目录的 `data` 文件夹。完整备份需要同时保存 **`compose.yaml` 和 `data`**；配置文件包含密钥，请妥善保管。配置导出不能代替完整备份。
 
-先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#备份) 备份。升级可修改镜像的版本标签，再执行：
+先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Docker_Deployment.md#备份) 备份。升级可修改镜像的版本标签，再执行：
 
 ```bash
 docker compose pull
@@ -127,4 +127,4 @@ docker compose logs --tail=100 library-cover-studio
 | 定时任务不执行 | 检查后端是否健康、任务是否启用、调度时区和下次运行时间。 |
 | 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和 `data` 中的加密盐是否保留。 |
 
-[完整部署与故障排查](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md) · [自动化使用指南](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Automation_Guide.md) · MIT License
+[完整部署与故障排查](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Docker_Deployment.md) · [自动化使用指南](https://github.com/HappyQuQu/library-cover-studio/blob/master/doc/Automation_Guide.md) · MIT License
