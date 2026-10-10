@@ -8,6 +8,7 @@ interface BackgroundTemplate {
   background?: any;
   backgroundColor?: any;
   backgroundImage?: any;
+  posterBackground?: any;
   objects?: any[];
 }
 
@@ -23,7 +24,7 @@ function hsl(hue: number, saturation: number, lightness: number) {
 
 /** Keep layout and style fixed; choose a fresh palette for each render, without mutating the saved template. */
 export function applyRandomBackground<T extends BackgroundTemplate>(template: T, random = Math.random): T {
-  if (!template.randomOnGeneration) return template;
+  if (!template.randomOnGeneration || template.posterBackground) return template;
   const result = structuredClone(template);
   const range = (min: number, max: number) => min + random() * (max - min);
   const hue = range(0, 360);

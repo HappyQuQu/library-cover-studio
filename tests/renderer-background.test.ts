@@ -14,6 +14,29 @@ async function pixel(image: Buffer, x: number, y: number): Promise<number[]> {
   return [...data.subarray(offset, offset + 4)];
 }
 
+for (const kind of ['single', 'library'] as const) test(`${kind} blurred background follows the first poster, fills the canvas and retains sharp foregrounds`, async () => {
+  const poster = await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="40"><rect width="40" height="40" fill="red"/><rect x="40" width="40" height="40" fill="blue"/></svg>')).png().toBuffer();
+  const green = await sharp({ create: { ...dimensions, channels: 3, background: '#00ff00' } }).png().toBuffer();
+  const json = JSON.stringify({ ...dimensions, background: '#ffffff', randomOnGeneration: true, randomBackgroundStyle: 'muted-wall',
+    posterBackground: { blur: 120, dim: .25 }, backgroundImage: { type: 'Image', src: 'invalid-stale-background' },
+    objects: [{ type: 'rect', left: 30, top: 15, width: 20, height: 10, fill: '#00ff00' }] });
+  const render = (first: Buffer) => kind === 'single' ? renderTemplate(json, metadata, first, dimensions)
+    : renderLibraryCover(json, metadata, [first, green], dimensions);
+  const image = await render(poster);
+  const edge = await pixel(image, 0, 0), other = await pixel(image, 79, 39), transition = await pixel(image, 40, 5);
+  assert.ok(edge[0] >= 185 && edge[0] <= 195, 'poster colors are dimmed, rather than randomized or copied from a saved preview');
+  assert.equal(edge[3], 255, 'expanded blur leaves no transparent border');
+  assert.ok(other[2] >= 185 && other[2] <= 195);
+  assert.ok(transition[0] > 40 && transition[2] > 40, 'the sharp color boundary is blurred');
+  assert.deepEqual(await pixel(image, 40, 20), [0, 255, 0, 255], 'foreground is not blurred or darkened');
+  assert.deepEqual(await pixel(await render(green), 0, 0), [0, 191, 0, 255], 'the next generation follows its new first poster');
+});
+
+test('missing first poster keeps the configured fallback background', async () => {
+  const image = await renderLibraryCover(JSON.stringify({ ...dimensions, background: '#123456', posterBackground: { blur: 60, dim: .35 }, objects: [] }), metadata, [], dimensions);
+  assert.deepEqual(await pixel(image, 10, 10), [18, 52, 86, 255]);
+});
+
 for (const kind of ['single', 'library'] as const) test(`${kind} cover retains URI/base64 SVG background beneath foreground layers`, async () => {
   for (const src of ['data:image/svg+xml,' + encodeURIComponent(svg), 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64')]) {
     const template = JSON.stringify({ ...dimensions, backgroundImage: { type: 'Image', src, ...dimensions, left: 0, top: 0 },

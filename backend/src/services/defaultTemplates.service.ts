@@ -36,7 +36,8 @@ export async function seedDefaultTemplates() {
     const existing = db.select().from(templates).where(eq(templates.id, definition.id)).get();
     if (existing && !existing.isDefault) continue;
     // Preserve any layout edits to the previously installed defaults during this palette migration.
-    const canvas = existing ? { ...JSON.parse(existing.canvasJson), randomOnGeneration: true,
+    const savedCanvas = existing ? JSON.parse(existing.canvasJson) : undefined;
+    const canvas = existing ? { ...savedCanvas, randomOnGeneration: !savedCanvas.posterBackground,
       randomBackgroundStyle: definition.canvas.randomBackgroundStyle } : definition.canvas;
     const filename = `${definition.id}.jpg`;
     if (existing) {

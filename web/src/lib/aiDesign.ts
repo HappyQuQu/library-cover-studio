@@ -1,7 +1,7 @@
 export type DesignScope = 'new' | 'canvas' | 'selection';
 export type CanvasJSON = Record<string, any> & { objects: Record<string, any>[] };
 
-export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle',
+export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle', 'posterBackground',
   'lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'selectable', 'evented'];
 
 export function isLocked(object: Record<string, any>): boolean {
@@ -70,6 +70,6 @@ export function describeChanges(baseline: CanvasJSON, result: CanvasJSON, scope:
     if (changed(original, object, ['fill', 'stroke', 'opacity', 'shadow', 'rx', 'ry'])) labels.add('调整配色与视觉效果');
   }
   if (baseline.objects.some(object => !result.objects.some(next => next.id === object.id))) labels.add('精简设计元素');
-  if (changed(baseline, result, ['background', 'backgroundImage'])) labels.add('调整封面背景');
+  if (changed(baseline, result, ['background', 'backgroundImage', 'posterBackground'])) labels.add('调整封面背景');
   return labels.size ? [...labels] : ['设计内容保持不变，可补充更具体的调整要求'];
 }

@@ -24,7 +24,8 @@ test('seamless wall fills the right two-thirds without gaps or leaking into the 
   assert.equal(new Set(cards.map((object: any) => object.posterVar)).size, 9);
   assert.ok(cards.every((object: any) => object.angle === 15 && object.clipPath.rx > 0 && !object.clipPath.absolutePositioned && object.shadow));
   assert.ok(cards.every((object: any) => Math.abs(object.width * object.scaleX - 420) < 1 && Math.abs(object.height * object.scaleY - 630) < 1));
-  assert.equal(reference.canvas.randomOnGeneration, true);
+  assert.equal(reference.canvas.randomOnGeneration, false);
+  assert.deepEqual(reference.canvas.posterBackground, { blur: 60, dim: .35 });
   assert.equal(reference.canvas.randomBackgroundStyle, 'muted-wall');
   const wall = definitions.find((template: any) => template.name === '直列海报墙')!;
   const posters = wall.canvas.objects.filter((object: any) => object.posterVar) as any[];

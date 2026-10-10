@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSamplePosterUrl } from '@/lib/posters';
+import { DEFAULT_POSTER_BACKGROUND, type PosterBackground } from '@/lib/posterBackground';
 
 interface ToolboxPanelProps {
   onAddText: () => void;
@@ -30,6 +31,7 @@ interface ToolboxPanelProps {
   onAddShape: (type: string, payload?: any) => void;
   onChangeBackground: (bg: any) => void;
   initialRandomOnGeneration?: boolean;
+  initialPosterBackground?: PosterBackground;
 }
 
 // Solid color presets (movie-poster friendly palettes)
@@ -91,9 +93,20 @@ const shapes = [
 // Reusable slider style
 const sliderCls = "w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md";
 
-export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false }: ToolboxPanelProps) {
+export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
   const [activeTab, setActiveTab] = useState<'elements' | 'background'>('elements');
-  const [bgType, setBgType] = useState<'color' | 'gradient' | 'random' | 'pattern'>('gradient');
+  const [bgType, setBgType] = useState<'color' | 'gradient' | 'random' | 'pattern' | 'poster-blur'>(initialPosterBackground ? 'poster-blur' : 'gradient');
+  const [posterBlur, setPosterBlur] = useState(initialPosterBackground?.blur ?? DEFAULT_POSTER_BACKGROUND.blur);
+  const [posterDim, setPosterDim] = useState(initialPosterBackground?.dim ?? DEFAULT_POSTER_BACKGROUND.dim);
+  useEffect(() => {
+    if (initialPosterBackground) {
+      setBgType('poster-blur');
+      setPosterBlur(initialPosterBackground.blur);
+      setPosterDim(initialPosterBackground.dim);
+    } else {
+      setBgType(current => current === 'poster-blur' ? 'gradient' : current);
+    }
+  }, [initialPosterBackground]);
 
   // Color state
   const [bgColor, setBgColor] = useState('#ffffff');
@@ -293,6 +306,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 { id: 'gradient' as const, icon: Sparkles, label: '渐变' },
                 { id: 'random' as const, icon: Shuffle, label: '随机渐变' },
                 { id: 'pattern' as const, icon: LayoutGrid, label: '图案' },
+                { id: 'poster-blur' as const, icon: ImageIcon, label: '海报模糊' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -309,6 +323,26 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 </button>
               ))}
             </div>
+
+            {bgType === 'poster-blur' && (
+              <div className="space-y-4">
+                <p className="text-xs text-(--text-tertiary) leading-relaxed">使用首张海报铺满背景并模糊，生成时自动跟随媒体库的真实海报。适当压暗背景可让标题更清晰。</p>
+                <label className="block space-y-2 text-xs text-(--text-secondary)">
+                  <span className="flex justify-between">模糊程度 <span>{posterBlur}</span></span>
+                  <input type="range" aria-label="海报背景模糊程度" min="0" max="150" step="5" value={posterBlur}
+                    onChange={e => setPosterBlur(Number(e.target.value))} className={sliderCls} />
+                </label>
+                <label className="block space-y-2 text-xs text-(--text-secondary)">
+                  <span className="flex justify-between">背景压暗 <span>{Math.round(posterDim * 100)}%</span></span>
+                  <input type="range" aria-label="海报背景压暗程度" min="0" max="80" step="5" value={Math.round(posterDim * 100)}
+                    onChange={e => setPosterDim(Number(e.target.value) / 100)} className={sliderCls} />
+                </label>
+                <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim })}
+                  className="w-full rounded-lg bg-(--primary) text-white py-2.5 text-xs font-medium hover:opacity-90 transition-opacity">
+                  应用首张海报背景
+                </button>
+              </div>
+            )}
 
             {/* ── Color Mode ── */}
             {bgType === 'color' && (

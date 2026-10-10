@@ -1,6 +1,7 @@
 import sharp from 'sharp';
 import { renderShape } from './shapeRenderer.service.js';
 import { applyRandomBackground } from './templateBackground.service.js';
+import { renderPosterBackground, type PosterBackground } from './posterBackground.service.js';
 export { generateRandomGradient } from './templateBackground.service.js';
 import pLimit from 'p-limit';
 import fs from 'fs';
@@ -45,6 +46,7 @@ interface TemplateData {
   background?: string | Record<string, any>;
   backgroundColor?: string | Record<string, any>;
   backgroundImage?: CanvasObject;
+  posterBackground?: PosterBackground;
   width: number;
   height: number;
 }
@@ -143,7 +145,9 @@ export async function renderTemplate(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
-      const backgroundLayer = await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
+      const backgroundLayer = processedTemplate.posterBackground && posterBuffer
+        ? await renderPosterBackground(posterBuffer, width, height, processedTemplate.posterBackground)
+        : await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
       if (backgroundLayer) layers.push(backgroundLayer);
 
       for (const obj of processedTemplate.objects) {
@@ -226,7 +230,9 @@ export async function renderLibraryCover(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
-      const backgroundLayer = await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
+      const backgroundLayer = processedTemplate.posterBackground && posterBuffers[0]
+        ? await renderPosterBackground(posterBuffers[0], width, height, processedTemplate.posterBackground)
+        : await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
       if (backgroundLayer) layers.push(backgroundLayer);
 
       for (const obj of processedTemplate.objects) {

@@ -9,7 +9,7 @@ export function requiredPosterCount(canvasJson: string): number {
     const variable = object.posterVar?.match(/post(\d+)/)?.[1];
     const asset = !variable && typeof object.src === 'string' ? (object.src.match(/\{\{poster(\d+)\}\}/)?.[1] || object.src.match(/\/posters\/(\d+)\.(?:jpg|png|jpeg)/i)?.[1]) : undefined;
     return Math.max(count, Number(variable || asset || (object.isPoster || object.src === '{{poster}}' ? 1 : 0)));
-  }, 0));
+  }, canvas.posterBackground ? 1 : 0));
 }
 
 /** Shared asset selection keeps preview and task execution consistent. */

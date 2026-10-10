@@ -19,6 +19,7 @@ const definitionSchema = z.object({
     objects: z.array(z.record(z.any())),
     randomOnGeneration: z.boolean(),
     randomBackgroundStyle: z.enum(['soft-mesh', 'muted-wall', 'cinema-mesh']),
+    posterBackground: z.object({ blur: z.number().min(0).max(150), dim: z.number().min(0).max(.8) }).optional(),
   }).passthrough(),
 });
 
