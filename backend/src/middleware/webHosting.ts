@@ -2,20 +2,43 @@ import express, { type Express, type Request } from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
+import { createError } from './errorHandler.js';
+
+const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]'];
+
+function originVariants(value: string | undefined): string[] {
+  if (!value) return [];
+  try {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password ||
+      url.pathname !== '/' || url.search || url.hash) return [];
+    const origins = [url.origin];
+    // Local frontends may use any loopback spelling, but must keep scheme and port.
+    if (LOOPBACK_HOSTS.includes(url.hostname)) {
+      for (const hostname of LOOPBACK_HOSTS) {
+        url.hostname = hostname;
+        origins.push(url.origin);
+      }
+    }
+    return origins;
+  } catch {
+    return [];
+  }
+}
 
 export function createCorsMiddleware(webHosted: boolean) {
   return cors<Request>((req, done) => {
-    const allowedOrigins = [
+    const allowedOrigins = new Set([
       'http://localhost:5173', 'http://localhost:5174',
       'http://localhost:5175', 'http://localhost:5176',
       process.env.FRONTEND_URL,
       ...(webHosted ? [`${req.protocol}://${req.get('host')}`] : [])
-    ].filter(Boolean);
+    ].flatMap(originVariants));
     done(null, {
       credentials: true,
       origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) callback(null, true);
-        else callback(new Error('Not allowed by CORS'));
+        if (!origin || allowedOrigins.has(origin)) callback(null, true);
+        else callback(createError('Not allowed by CORS', 403, 'CORS_ORIGIN_DENIED'));
       }
     });
   });

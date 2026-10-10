@@ -11,7 +11,7 @@ services:
       - PORT=3000
       - JWT_SECRET=${JWT_SECRET:?请在 .env 中设置 JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY:?请在 .env 中设置 ENCRYPTION_KEY}
-      - FRONTEND_URL=http://localhost:${WEB_PORT:-8080}
+      - FRONTEND_URL=${LCS_PUBLIC_URL:-${FRONTEND_URL:-http://localhost:${WEB_PORT:-8080}}}
     volumes:
       - backend_data:/app/backend/data
       - backend_uploads:/app/backend/uploads

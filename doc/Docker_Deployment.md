@@ -131,6 +131,8 @@ docker compose up -d
 
 旧数据在 `backend_data` 卷中，另有旧版 `backend_uploads` 挂载。先保存原 `.env`、Compose 文件及卷备份。仓库保留了 [旧版源码配置](../docker-compose.legacy.yml) 和 [旧版镜像配置](../docker-compose.legacy.release.yml)，用于识别旧部署及迁移。
 
+继续使用旧版双容器配置时，本机可通过 `localhost` 或 `127.0.0.1` 访问相同网页端口，协议和端口仍需一致；来源校验也兼容 IPv6 回环地址 `[::1]`（访问时需配置 IPv6 监听）。通过公网 IP、局域网 IP 或反向代理域名访问时，在部署目录 `.env` 中设置 `LCS_PUBLIC_URL` 为浏览器实际来源（例如 `https://cover.example.com`），再用原 Compose 文件执行 `up -d --force-recreate`。也可设置 `FRONTEND_URL`；两者都存在时优先使用 `LCS_PUBLIC_URL`。
+
 下面假设旧容器名为 `lcs-backend`，在原部署目录执行（已有局域网覆盖文件的命令继续加上原 `-f` 参数）：
 
 ```bash
@@ -176,7 +178,7 @@ docker compose -f docker-compose.yml up -d --build
 | `manifest unknown` / `pull access denied` | 检查目标镜像和标签是否已发布；尚未发布时使用源码构建。 |
 | 端口已占用 | 修改端口映射左侧，重新启动。 |
 | NAS 本机可打开，其他设备打不开 | 使用 NAS 局域网地址，检查端口映射与防火墙。 |
-| 页面出现 CORS 错误 | 直接访问自动识别来源；HTTPS 反向代理时增加 `FRONTEND_URL`，与浏览器来源一致。 |
+| 页面出现 CORS 错误 | 单容器直接访问自动识别来源；本机回环地址可互换，端口和协议需一致。旧版双容器公网访问或 HTTPS 反向代理时设置 `LCS_PUBLIC_URL` / `FRONTEND_URL` 为浏览器实际来源，并重建容器。拒绝来源返回 403 和 `CORS_ORIGIN_DENIED`。 |
 | 媒体服务器连接失败 | 检查容器网络、密钥权限和代理路径，避免误用 `localhost`。 |
 | 网页正常，任务没有执行 | 检查后端状态、任务启用状态、时区和下次执行时间。 |
 | API 密钥升级后无法解密 | 核对原 `ENCRYPTION_KEY`、数据目录和加密盐是否保留。 |
