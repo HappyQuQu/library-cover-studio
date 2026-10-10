@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.4.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.3.1...v1.4.0) (2026-10-10)
+
+
+### ✨ 新功能
+
+* combine frontend and backend into a single Docker image ([df47e65](https://github.com/HappyQuQu/library-cover-studio/commit/df47e65c1ce5fbededef7e59d0db945b7fe21dac))
+* 提供前后端合并的单容器部署 ([b45233f](https://github.com/HappyQuQu/library-cover-studio/commit/b45233f528c7e477ca4540b662af6578216ba4ba))
+
+
+### 🐛 修复
+
+* preserve proxy origin when migrating existing Compose deployments ([1e329bb](https://github.com/HappyQuQu/library-cover-studio/commit/1e329bba13a2260e89891b8696eea3765555cb9f))
+
 ## [1.3.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.3.0...v1.3.1) (2026-10-10)
 
 
