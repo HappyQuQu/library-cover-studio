@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
-import { templates, templateRevisions } from '../config/schema.js';
+import { templates, templateRevisions, tasks } from '../config/schema.js';
 import { saveTemplateVersion, getTemplateRevisions, getTemplateRevision, cleanupTemplateImages, TEMPLATE_HISTORY_LIMIT } from '../services/templateHistory.service.js';
 import { eq, sql } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
@@ -286,6 +286,19 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
     }
 
     if (existing.isLocked) throw createError('模板已锁定，请先解锁再删除', 409, 'TEMPLATE_LOCKED');
+
+    const references = d.select().from(tasks).all().filter(task => {
+      if (task.templateId === id) return true;
+      try { return JSON.parse(task.libraryConfigs || '[]').some(config => config.templateId === id); }
+      catch { return false; }
+    });
+    if (references.length) {
+      const readable = references.filter(task => req.user?.role === 'admin' || task.userId === req.user?.userId);
+      const details = readable.map(task => task.name);
+      const hiddenCount = references.length - readable.length;
+      if (hiddenCount) details.push(`另有 ${hiddenCount} 个其他用户的任务`);
+      throw createError(`模板正在被任务引用，请先更换任务模板：${details.join('、')}`, 409, 'TEMPLATE_IN_USE');
+    }
 
     const images = d.select().from(templateRevisions).where(eq(templateRevisions.templateId, id)).all().map(revision => revision.thumbnailPath);
     d.delete(templates).where(eq(templates.id, id)).run();

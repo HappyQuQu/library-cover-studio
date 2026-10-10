@@ -10,4 +10,5 @@ test('text-only and static-image layouts need no media artwork; stacked layers s
   assert.equal(count([{ type: 'Image', posterVar: 'post5' }]), 5);
   assert.equal(count([{ type: 'Image', posterVar: 'post9', visible: false }, { type: 'Image', posterVar: 'post1' }]), 1);
   assert.equal(count([{ type: 'Image', src: '/api/templates/posters/3.jpg' }]), 3);
+  assert.equal(count([{ type: 'Image', src: '{{poster4}}' }]), 4);
 });

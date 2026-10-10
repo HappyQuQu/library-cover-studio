@@ -121,6 +121,24 @@ test('history retains distinct images per run, including upload failures, with a
   assert.ok(!JSON.stringify(logs).includes(directory));
   assert.ok(!JSON.stringify(logs).includes('image_name'));
   assert.equal(history.historyImagePath('../../private.png'), undefined);
+  // The configured encoder is used for upload, optional export and the original history download.
+  sqlite.prepare('UPDATE tasks SET library_configs=? WHERE id=?').run(JSON.stringify(configs.slice(0, 1)), 'history-task');
+  for (const [format, extension] of [['WebP', 'webp'], ['JPEG', 'jpg']]) {
+    sqlite.prepare('UPDATE system_settings SET value=? WHERE key=?').run(format, 'rendering.outputFormat');
+    sqlite.prepare('UPDATE system_settings SET value=? WHERE key=?').run('true', 'storage.saveCovers');
+    sqlite.prepare('UPDATE system_settings SET value=? WHERE key=?').run('70', 'rendering.outputQuality');
+    const log = `format-${extension}`;
+    const result = (await run(log, '2026-10-09T06:00:00Z'))[0];
+    assert.ok(result.image_name.endsWith(`.${extension}`));
+    const buffer = uploaded[uploaded.length - 1];
+    assert.equal((await sharp(buffer).metadata()).format, format.toLowerCase());
+    assert.deepEqual(readFileSync(join(directory, 'data/task-history', result.image_name)), buffer);
+    const files = readdirSync(join(directory, 'data/covers')).filter((file: string) => file.endsWith(`.${extension}`));
+    assert.equal(files.length, 1);
+    assert.deepEqual(readFileSync(join(directory, 'data/covers', files[0])), buffer);
+    const response = await fetch(`${base}/history-task/logs/${log}/covers/${result.id}/image?download=1`, { headers: headers('owner') });
+    assert.equal(response.status, 200); assert.ok(response.headers.get('content-disposition')!.includes(`.${extension}`));
+  }
   if (process.env.LCS_HISTORY_VISUAL_FIXTURE === '1') {
     console.log(`VISUAL_FIXTURE_URL=http://127.0.0.1:${server.address().port}`);
     await new Promise<void>(r => process.once('SIGTERM', r));

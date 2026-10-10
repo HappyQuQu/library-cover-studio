@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { FONTS_DIR } from '../config/paths.js';
+import { createError } from '../middleware/errorHandler.js';
 
 const fontsDir = FONTS_DIR;
 
@@ -37,7 +38,7 @@ export async function getFonts(_req: Request, res: Response, next: NextFunction)
                     name: fontName,
                     size: stats.size,
                     uploadedAt: stats.mtime,
-                    url: `/api/uploads/fonts/${file}`
+                    url: `/api/uploads/fonts/${encodeURIComponent(file)}`
                 };
             });
 
@@ -64,7 +65,7 @@ export async function uploadFont(req: Request, res: Response, next: NextFunction
                 filename: req.file.filename,
                 name: fontName,
                 size: req.file.size,
-                url: `/api/uploads/fonts/${req.file.filename}`
+                url: `/api/uploads/fonts/${encodeURIComponent(req.file.filename)}`
             }
         });
     } catch (error) {
@@ -75,13 +76,22 @@ export async function uploadFont(req: Request, res: Response, next: NextFunction
 // Delete a font
 export async function deleteFont(req: Request, res: Response, next: NextFunction) {
     try {
-        const filename = req.params.filename;
-        const filePath = path.join(fontsDir, String(filename));
+        const filename = String(req.params.filename);
+        if (filename !== path.basename(filename) || /[\\/\x00-\x1f]/.test(filename)
+            || !['.ttf', '.otf', '.woff', '.woff2'].includes(path.extname(filename).toLowerCase())) {
+            throw createError('Invalid font filename', 400, 'INVALID_FONT_FILENAME');
+        }
+        const filePath = path.resolve(fontsDir, filename);
+        if (path.dirname(filePath) !== path.resolve(fontsDir)) {
+            throw createError('Invalid font path', 400, 'INVALID_FONT_FILENAME');
+        }
 
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ error: 'Font not found' });
         }
 
+        const stat = fs.lstatSync(filePath);
+        if (!stat.isFile() || stat.isSymbolicLink()) throw createError('Invalid font file', 400, 'INVALID_FONT_FILE');
         fs.unlinkSync(filePath);
         res.json({ message: 'Font deleted successfully' });
     } catch (error) {

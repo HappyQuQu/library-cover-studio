@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './config/env.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -8,11 +8,13 @@ import { errorHandler } from './middleware/errorHandler.js';
 import { initDatabase } from './config/database.js';
 import { seedDefaultTemplates } from './services/defaultTemplates.service.js';
 import { initializeTemplateHistory } from './services/templateHistory.service.js';
-import { initScheduler } from './services/scheduler.service.js';
+import { pruneTaskHistory } from './services/historyRetention.service.js';
+import { initScheduler, recoverInterruptedRuns } from './services/scheduler.service.js';
 import { addLogClient, logger } from './utils/logger.js';
 import { migrateLegacyEncryption } from './utils/migrateEncryption.js';
 import { consumeStreamTicket } from './utils/streamTicket.js';
 import { ensureDataDirs, UPLOADS_DIR } from './config/paths.js';
+import { APP_VERSION } from './config/version.js';
 
 // 启动时校验必需的环境变量
 const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -107,7 +109,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.3.0'
+    version: APP_VERSION
   });
 });
 
@@ -132,6 +134,8 @@ async function bootstrap() {
     migrateLegacyEncryption();
 
     // 初始化任务调度器
+    recoverInterruptedRuns();
+    await pruneTaskHistory().catch(error => logger.error('历史清理失败，将在后续执行结束时重试:', error));
     initScheduler();
     logger.info('✅ Scheduler initialized');
 

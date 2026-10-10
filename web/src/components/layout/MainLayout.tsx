@@ -10,8 +10,8 @@ import {
   ChevronDown,
   Users
 } from 'lucide-react';
-import { useAuthStore, useThemeStore } from '@/stores';
-import { useSettings } from '@/api/hooks';
+import { useThemeStore } from '@/stores/themeStore';
+import { useAuthStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 
@@ -20,9 +20,9 @@ interface MainLayoutProps {
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
+  const resolvedMode = useThemeStore(state => state.resolvedMode);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
-  const { setMode, setBrand, resolvedMode } = useThemeStore();
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,15 +52,6 @@ export function MainLayout({ children }: MainLayoutProps) {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Load settings from backend
-  const { data: settings } = useSettings();
-  useEffect(() => {
-    if (settings) {
-      if (settings.theme_mode) setMode(settings.theme_mode as any);
-      if (settings.brand_theme) setBrand(settings.brand_theme as any);
-    }
-  }, [settings, setMode, setBrand]);
 
   return (
     <div className="app-layout flex flex-col min-h-screen" style={{ background: 'var(--bg-primary)' }}>

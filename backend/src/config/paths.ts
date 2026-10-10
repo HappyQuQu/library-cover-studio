@@ -2,7 +2,7 @@ import path from 'path';
 import fs from 'fs';
 
 // Root data directory (absolute)
-export const DATA_DIR = path.resolve(process.cwd(), 'data');
+export const DATA_DIR = path.resolve(process.env.LCS_DATA_DIR || path.join(process.cwd(), 'data'));
 
 // Subdirectories
 export const UPLOADS_DIR = path.join(DATA_DIR, 'uploads');

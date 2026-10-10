@@ -9,6 +9,8 @@ import { logger } from '../utils/logger.js';
 import { getLocalISOString, getLocalTimestampForFile } from '../utils/time.js';
 import { v4 as uuidv4 } from 'uuid';
 import { saveHistoryCover } from './taskHistory.service.js';
+import { pruneTaskHistory } from './historyRetention.service.js';
+import { getRenderSettings } from './runtimeSettings.service.js';
 import fs from 'fs';
 import path from 'path';
 import { POSTERS_DIR, COVERS_DIR } from '../config/paths.js';
@@ -185,11 +187,12 @@ export async function runTask(taskId: string, logId?: string) {
           logger.error('    ❌ Failed to apply random background:', err);
         }
 
+        const renderSettings = getRenderSettings();
         const renderedBuffer = await renderer.renderLibraryCover(
           canvasJson,
           metadata,
           posterBuffers.filter((p): p is Buffer => p !== null),
-          { width: templateDetail.width || 1920, height: templateDetail.height || 1080 }
+          { width: templateDetail.width || 1920, height: templateDetail.height || 1080, ...renderSettings }
         );
 
         if (coverId) {
@@ -205,7 +208,8 @@ export async function runTask(taskId: string, logId?: string) {
         // Save generated cover if enabled
         if (saveCovers) {
           const timestamp = getLocalTimestampForFile();
-          await saveFile('covers', `${libraryName}_${timestamp}.png`, renderedBuffer);
+          const extension = renderSettings.format === 'jpeg' ? 'jpg' : renderSettings.format;
+          await saveFile('covers', `${libraryName}_${timestamp}.${extension}`, renderedBuffer);
         }
 
         // d. Upload cover
@@ -260,5 +264,6 @@ export async function runTask(taskId: string, logId?: string) {
     }
   } finally {
     runningTasks.delete(taskId);
+    try { await pruneTaskHistory(); } catch (error) { logger.error('历史清理失败:', error); }
   }
 }

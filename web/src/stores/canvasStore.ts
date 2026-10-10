@@ -61,7 +61,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
   readOnly: false,
   setReadOnly: (readOnly) => set({ readOnly }),
 
-  setCanvas: (canvas) => set({ canvas }),
+  setCanvas: (canvas) => set({ canvas, selectedObject: null }),
 
   setSelectedObject: (obj) => set({ selectedObject: obj }),
 

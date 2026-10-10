@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { renderShape } from './shapeRenderer.service.js';
 import { applyRandomBackground } from './templateBackground.service.js';
 export { generateRandomGradient } from './templateBackground.service.js';
 import pLimit from 'p-limit';
@@ -59,14 +60,9 @@ interface MediaMetadata {
 }
 
 // 并发限制
-const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_RENDERS || '3');
-const limit = pLimit(MAX_CONCURRENT);
-
-// 确保临时目录存在
-const TEMP_DIR = './temp';
-if (!fs.existsSync(TEMP_DIR)) {
-  fs.mkdirSync(TEMP_DIR, { recursive: true });
-}
+const configuredConcurrency = Number(process.env.MAX_CONCURRENT_RENDERS || '3');
+const limit = pLimit(Number.isInteger(configuredConcurrency) && configuredConcurrency > 0 ? configuredConcurrency : 3);
+export function setRenderConcurrency(concurrency: number) { limit.concurrency = concurrency; }
 
 // 已注册的字体
 const registeredFonts = new Set<string>();
@@ -302,7 +298,13 @@ async function renderObjectWithPosters(
 
   switch (objType) {
     case 'rect':
-      return renderRect(obj, left, top);
+    case 'circle':
+    case 'ellipse':
+    case 'triangle':
+    case 'line':
+    case 'path':
+    case 'polygon':
+      return renderShape(obj);
 
     case 'image':
       // First check posterVar property (e.g., "post1", "post2", etc.)
@@ -357,8 +359,6 @@ async function renderObjectWithPosters(
     case 'textbox':
       return renderText(obj, left, top);
 
-    case 'polygon':
-      return renderPolygon(obj, left, top);
 
     default:
       return null;
@@ -408,7 +408,13 @@ async function renderObject(
 
   switch (obj.type?.toLowerCase()) {
     case 'rect':
-      return renderRect(obj, left, top);
+    case 'circle':
+    case 'ellipse':
+    case 'triangle':
+    case 'line':
+    case 'path':
+    case 'polygon':
+      return renderShape(obj);
 
     case 'image':
       // 如果是海报容器，使用传入的海报图片
@@ -426,34 +432,10 @@ async function renderObject(
     case 'textbox':
       return renderText(obj, left, top);
 
-    case 'polygon':
-      return renderPolygon(obj, left, top);
 
     default:
       return null;
   }
-}
-
-// 渲染矩形
-async function renderRect(
-  obj: CanvasObject,
-  left: number,
-  top: number
-): Promise<sharp.OverlayOptions | null> {
-  const width = Math.round((obj.width || 100) * (obj.scaleX || 1));
-  const height = Math.round((obj.height || 100) * (obj.scaleY || 1));
-  const color = parseColor(obj.fill || '#000000');
-
-  const rect = await sharp({
-    create: {
-      width,
-      height,
-      channels: 4,
-      background: { ...color, alpha: obj.opacity || 1 }
-    }
-  }).png().toBuffer();
-
-  return { input: rect, left, top };
 }
 
 // 渲染海报
@@ -651,46 +633,6 @@ async function renderImage(
   }
 }
 
-// 渲染多边形 (使用 SVG)
-async function renderPolygon(
-  obj: CanvasObject,
-  left: number,
-  top: number
-): Promise<sharp.OverlayOptions | null> {
-  try {
-    const width = Math.round((obj.width || 100) * (obj.scaleX || 1));
-    const height = Math.round((obj.height || 100) * (obj.scaleY || 1));
-    const points = (obj as any).points; // Fabric.js points array
-
-    if (!points || !Array.isArray(points)) return null;
-
-    const fill = resolveColor(obj.fill || '#000000');
-    // 如果是对象颜色的 SVG 渐变，这里暂时简化处理，只支持纯色填充
-    // 如果需要支持多边形渐变，需要更复杂的 SVG 用于 defs
-    const fillStr = (typeof fill === 'string') ? fill : '#000000';
-
-    // 构造 points 字符串 "x,y x,y ..."
-    const pointsStr = points.map((p: any) => `${p.x},${p.y}`).join(' ');
-
-    // Fabric 的 polygon points 通常是相对于中心的
-    // 我们创建一个 SVG， viewBox 居中
-    const svg = `
-      <svg width="${width}" height="${height}" viewBox="${-width / 2} ${-height / 2} ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="${pointsStr}" fill="${fillStr}" />
-      </svg>
-    `;
-
-    const buffer = await sharp(Buffer.from(svg))
-      .png()
-      .toBuffer();
-
-    return { input: buffer, left, top };
-  } catch (error) {
-    console.error('Failed to render polygon:', error);
-    return null;
-  }
-}
-
 // 渲染文本 (使用 @napi-rs/canvas)
 async function renderText(
   obj: CanvasObject,
@@ -850,48 +792,5 @@ function resolveColor(color: any): string | object {
 
   console.warn('Unknown color format, defaulting to black:', color);
   return '#000000';
-}
-
-// 解析颜色为 Sharp 对像
-function parseColor(colorInput: any): { r: number; g: number; b: number; alpha: number } {
-  const color = resolveColor(colorInput);
-
-  if (typeof color === 'string') {
-    if (color.startsWith('#')) {
-      const hex = color.slice(1);
-      return {
-        r: parseInt(hex.slice(0, 2), 16) || 0,
-        g: parseInt(hex.slice(2, 4), 16) || 0,
-        b: parseInt(hex.slice(4, 6), 16) || 0,
-        alpha: 1
-      };
-    } else if (color.startsWith('rgba')) {
-      // 简单的 rgba 解析
-      const match = color.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
-      if (match) {
-        return {
-          r: parseInt(match[1]),
-          g: parseInt(match[2]),
-          b: parseInt(match[3]),
-          alpha: match[4] ? parseFloat(match[4]) : 1
-        };
-      }
-    } else if (color.startsWith('hsl')) {
-      // 需要引入 color 库或者简单的 hsl 转 rgb，或者直接交给 sharp 处理（sharp 支持 string color）
-      // 这里为了保持 safe，我们暂时只返回黑色，或者引入 color 库
-      // 但由于 sharp create.background 支持 string，我们其实不需要自己 parse hex。
-      // 我们可以修改 renderRect 让它直接传 string 给 sharp。
-      // 但 renderRect 目前用的 { ...color, alpha }，所以还是需要 parse。
-
-      // 简单修复：如果不以 # 开头，就暂不支持，或者仅仅修复渐变 crash
-    }
-  }
-
-  if (typeof color === 'object') {
-    return color as any;
-  }
-
-  // 默认黑色
-  return { r: 0, g: 0, b: 0, alpha: 1 };
 }
 

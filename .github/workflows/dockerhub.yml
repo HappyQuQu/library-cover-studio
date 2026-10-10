@@ -1,0 +1,272 @@
+name: Publish Docker image
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Docker image tag to publish
+        required: true
+        default: edge
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-${{ github.ref }}-${{ inputs.image_tag || 'release' }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE || 'evanqu' }}
+
+jobs:
+  verify:
+    name: Verify source before release
+    uses: ./.github/workflows/ci.yml
+
+  credentials:
+    name: Check publishing configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check required secrets and manual tag
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DISPATCH_TAG: ${{ inputs.image_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          test -n "${DOCKERHUB_USERNAME}" || { echo "::error::Configure DOCKERHUB_USERNAME in repository Actions secrets"; exit 1; }
+          test -n "${DOCKERHUB_TOKEN}" || { echo "::error::Configure DOCKERHUB_TOKEN in repository Actions secrets"; exit 1; }
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" && ! "${DISPATCH_TAG}" =~ ^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$ ]]; then
+            echo "::error::image_tag is not a valid Docker tag"
+            exit 1
+          fi
+
+  release:
+    name: Prepare, merge, and publish release
+    needs: [verify, credentials]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    timeout-minutes: 15
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    outputs:
+      eligible: ${{ steps.current.outputs.eligible }}
+      release_created: ${{ steps.result.outputs.release_created }}
+      tag_name: ${{ steps.result.outputs.tag_name }}
+      version: ${{ steps.result.outputs.version }}
+      major: ${{ steps.result.outputs.major }}
+      minor: ${{ steps.result.outputs.minor }}
+      build_sha: ${{ steps.result.outputs.build_sha }}
+    steps:
+      - name: Skip superseded main pushes
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "${main_sha}" == "${SOURCE_SHA}" ]]; then
+            echo 'eligible=true' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'eligible=false' >> "${GITHUB_OUTPUT}"
+            echo '::notice::A newer main commit exists; skipping this superseded release run'
+          fi
+
+      - name: Update release pull request or create release
+        id: prepare
+        if: steps.current.outputs.eligible == 'true'
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Automatically merge release pull request
+        if: steps.prepare.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_JSON: ${{ steps.prepare.outputs.pr }}
+        shell: bash
+        run: |
+          pr_number="$(jq -er '.number' <<<"${PR_JSON}")"
+          gh pr merge "${pr_number}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --squash \
+            --delete-branch
+
+      - name: Finalize automatically merged release
+        id: finalize
+        if: steps.prepare.outputs.prs_created == 'true'
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          skip-github-pull-request: true
+
+      - name: Normalize release outputs
+        id: result
+        shell: bash
+        env:
+          PREPARE_CREATED: ${{ steps.prepare.outputs.release_created }}
+          PREPARE_TAG: ${{ steps.prepare.outputs.tag_name }}
+          PREPARE_VERSION: ${{ steps.prepare.outputs.version }}
+          PREPARE_MAJOR: ${{ steps.prepare.outputs.major }}
+          PREPARE_MINOR: ${{ steps.prepare.outputs.minor }}
+          PREPARE_SHA: ${{ steps.prepare.outputs.sha }}
+          FINALIZE_CREATED: ${{ steps.finalize.outputs.release_created }}
+          FINALIZE_TAG: ${{ steps.finalize.outputs.tag_name }}
+          FINALIZE_VERSION: ${{ steps.finalize.outputs.version }}
+          FINALIZE_MAJOR: ${{ steps.finalize.outputs.major }}
+          FINALIZE_MINOR: ${{ steps.finalize.outputs.minor }}
+          FINALIZE_SHA: ${{ steps.finalize.outputs.sha }}
+        run: |
+          if [[ "${FINALIZE_CREATED}" == "true" ]]; then
+            release_created=true
+            tag_name="${FINALIZE_TAG}"
+            version="${FINALIZE_VERSION}"
+            major="${FINALIZE_MAJOR}"
+            minor="${FINALIZE_MINOR}"
+            build_sha="${FINALIZE_SHA}"
+          elif [[ "${PREPARE_CREATED}" == "true" ]]; then
+            release_created=true
+            tag_name="${PREPARE_TAG}"
+            version="${PREPARE_VERSION}"
+            major="${PREPARE_MAJOR}"
+            minor="${PREPARE_MINOR}"
+            build_sha="${PREPARE_SHA}"
+          else
+            release_created=false
+            tag_name=""
+            version=""
+            major=""
+            minor=""
+            build_sha="${GITHUB_SHA}"
+          fi
+          {
+            echo "release_created=${release_created}"
+            echo "tag_name=${tag_name}"
+            echo "version=${version}"
+            echo "major=${major}"
+            echo "minor=${minor}"
+            echo "build_sha=${build_sha}"
+          } >> "${GITHUB_OUTPUT}"
+
+  release-verify:
+    name: Verify generated release commit
+    needs: [verify, credentials, release]
+    if: needs.release.outputs.release_created == 'true'
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ needs.release.outputs.build_sha }}
+
+  publish:
+    name: Build and push ${{ matrix.component }}
+    needs: [verify, credentials, release, release-verify]
+    if: >-
+      always() &&
+      needs.verify.result == 'success' &&
+      needs.credentials.result == 'success' &&
+      (needs.release.result == 'success' || needs.release.result == 'skipped') &&
+      (needs.release-verify.result == 'success' || needs.release-verify.result == 'skipped') &&
+      (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.release.outputs.eligible == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        component: [backend, web]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.build_sha || github.sha }}
+
+      - name: Resolve image version and source commit
+        id: version
+        shell: bash
+        env:
+          RELEASE_CREATED: ${{ needs.release.outputs.release_created }}
+          RELEASE_TAG: ${{ needs.release.outputs.tag_name }}
+          DISPATCH_TAG: ${{ inputs.image_tag }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          BUILD_SHA: ${{ needs.release.outputs.build_sha || github.sha }}
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "${RELEASE_CREATED}" == "true" ]]; then
+            test "${RELEASE_TAG}" = "v${package_version}" || { echo "::error::Release tag and package version differ"; exit 1; }
+            value="${RELEASE_TAG}"
+          elif [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+            value="${DISPATCH_TAG}"
+          else
+            if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+              test "${REF_NAME}" = "v${package_version}" || { echo "::error::Git tag and package version differ"; exit 1; }
+            fi
+            value="${package_version}"
+          fi
+          {
+            echo "value=${value}"
+            echo "short_sha=${BUILD_SHA:0:7}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAMESPACE }}/library-cover-studio-${{ matrix.component }}
+          labels: |
+            org.opencontainers.image.revision=${{ needs.release.outputs.build_sha || github.sha }}
+            org.opencontainers.image.version=${{ steps.version.outputs.value }}
+          tags: |
+            type=raw,value=${{ inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+            type=raw,value=${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.release_created == 'true' }}
+            type=raw,value=${{ needs.release.outputs.major }}.${{ needs.release.outputs.minor }},enable=${{ needs.release.outputs.release_created == 'true' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=sha-${{ steps.version.outputs.short_sha }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.component }}/Dockerfile
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,scope=${{ matrix.component }},mode=max
+          sbom: true
+          provenance: true
+
+      - name: Update Docker Hub overview
+        uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN || secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.IMAGE_NAMESPACE }}/library-cover-studio-${{ matrix.component }}
+          readme-filepath: README.dockerhub.md
+          short-description: Visual cover designer and automation for Jellyfin and Emby libraries.

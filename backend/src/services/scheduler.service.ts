@@ -143,3 +143,12 @@ async function executeScheduledTask(taskId: string) {
 export function getActiveJobs(): string[] {
   return Array.from(scheduledJobs.keys());
 }
+
+/** Call only at process startup, before any task is dispatched. */
+export function recoverInterruptedRuns() {
+  const interrupted = db.select().from(taskLogs).where(eq(taskLogs.status, 'running')).all();
+  for (const log of interrupted) {
+    if (isTaskRunning(log.taskId)) continue;
+    db.update(taskLogs).set({ status: 'failed', completedAt: getLocalISOString(), errorMessage: '服务重启，本次执行已中断；请检查已上传封面后手动重试' }).where(eq(taskLogs.id, log.id)).run();
+  }
+}

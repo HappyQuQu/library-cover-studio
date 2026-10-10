@@ -218,6 +218,8 @@ export async function initDatabase() {
 
   // 初始化系统设置
   const defaultSettings = [
+    { key: 'history.maxRuns', value: '50' },
+    { key: 'history.maxDays', value: '30' },
     { key: 'storage.savePosters', value: 'false' },
     { key: 'storage.saveCovers', value: 'false' },
     { key: 'rendering.outputFormat', value: 'PNG' },
