@@ -76,6 +76,6 @@ GitHub 首页使用 `README.md`，通过相对路径引用 `doc/images/screensho
 - [CI 检查](../.github/workflows/ci.yml)
 - [Docker Hub 发布](../.github/workflows/dockerhub.yml)
 - [Release Please 配置](../release-please-config.json)
-- [镜像部署 Compose](../docker-compose.release.yml)
+- [新安装 Compose 示例](compose.yaml) · [已有命名卷部署配置](../docker-compose.release.yml)
 
 发布失败时先看失败的 job：检查错误先修复源码，登录 / 推送错误核对命名空间和 token，Overview 错误核对 description token 权限及 README 路径。Overview 同步失败时应检查镜像构建 job 是否已成功推送，避免把文档错误误判为镜像不存在。

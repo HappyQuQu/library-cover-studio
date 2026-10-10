@@ -45,62 +45,53 @@
 
 ## 🐳 Docker 部署
 
-推荐使用 Docker Compose，同时启动 **web 前端 + backend 后端**。镜像面向 `linux/amd64` 和 `linux/arm64`；镜像标签以 Docker Hub 实际发布结果为准。尚无可用标签时，可使用下方的源码构建方式。
+只需 Docker 和 Compose v2。新建一个空目录，将下面内容保存为 **`compose.yaml`**（也可下载 [部署示例](doc/compose.yaml)）：
 
-| 镜像 | 用途 |
-| --- | --- |
-| [`evanqu/library-cover-studio-web`](https://hub.docker.com/r/evanqu/library-cover-studio-web) | 网页界面与 `/api` 反向代理 |
-| [`evanqu/library-cover-studio-backend`](https://hub.docker.com/r/evanqu/library-cover-studio-backend) | API、SQLite、封面生成与任务调度 |
+```yaml
+services:
+  backend:
+    image: evanqu/library-cover-studio-backend:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
+      ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
+      FRONTEND_URL: "http://192.168.1.10:8080"
+    volumes:
+      - ./data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
-### 1. 获取部署文件
-
-安装 Docker Engine / Docker Desktop、Docker Compose v2、Git 和 OpenSSL，然后执行：
-
-```bash
-git clone https://github.com/HappyQuQu/library-cover-studio.git
-cd library-cover-studio
+  web:
+    image: evanqu/library-cover-studio-web:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 ```
 
-### 2. 首次生成配置
+启动前修改三处：
 
-下面的命令只在 `.env` 不存在时创建配置。已有安装请保留原有密钥，尤其是 `ENCRYPTION_KEY`，否则已保存的媒体服务器和 AI 密钥将无法解密。
+- `FRONTEND_URL`：换成实际访问地址，例如 NAS 的 `http://192.168.1.10:8080`；本机使用 `http://localhost:8080`。
+- `JWT_SECRET`、`ENCRYPTION_KEY`：分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
 
-```bash
-if [ -e .env ]; then
-  echo ".env 已存在，请保留现有配置和密钥"
-else
-  umask 077
-  cat > .env <<ENV
-JWT_SECRET=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-WEB_PORT=8080
-BACKEND_PORT=3000
-LCS_IMAGE_TAG=latest
-ENV
-fi
-```
-
-### 3. 启动并访问
+在这个目录执行：
 
 ```bash
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d --wait
-docker compose -f docker-compose.release.yml ps
+docker compose up -d
 ```
 
-打开 **[http://localhost:8080](http://localhost:8080)**，点击「立即注册」。第一个注册的账号成为管理员，随后添加媒体服务器。
+打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的地址），点击「立即注册」，第一个账号成为管理员。
 
-默认端口只绑定宿主机 `127.0.0.1`。在 NAS / Linux 服务器上供其他设备访问时，按照 [局域网访问配置](doc/Docker_Deployment.md#nas--局域网访问) 配置前端端口和访问地址。浏览器访问 web 即可，无需直接访问 backend。
+数据自动保存在同目录的 **`data` 文件夹**；只开放网页端口 `8080`，后端通过容器网络访问。改端口时同步修改 `8080:80` 的左侧和 `FRONTEND_URL`。前后端镜像保持相同标签，具体以 Docker Hub 已发布标签为准。
 
-### 源码构建方式
-
-同样先配置 `.env`，在项目根目录执行：
-
-```bash
-docker compose up -d --build --wait
-```
-
-两种方式使用相同的数据卷；在同一目录切换部署方式前先停止原来的服务，避免同名容器冲突。更完整的端口说明、NAS 配置、升级、备份、恢复和故障排查见 **[Docker 部署教程](doc/Docker_Deployment.md)**。
+NAS 与本机使用同一份配置。首次部署、反向代理、升级备份及源码构建见 **[完整部署教程](doc/Docker_Deployment.md)**。已有命名卷部署请继续使用原配置，迁移说明见教程。
 
 ## ⚡ 自动化任务教程
 

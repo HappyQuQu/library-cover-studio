@@ -30,81 +30,53 @@
 
 ## Docker Compose 部署
 
-准备 Docker Engine / Docker Desktop、Compose v2、Git 和 OpenSSL。无需安装 Node.js 或 pnpm。
-
-### 1. 获取配置文件
-
-```bash
-git clone https://github.com/HappyQuQu/library-cover-studio.git
-cd library-cover-studio
-```
-
-### 2. 首次生成随机密钥
-
-下面的命令不会覆盖已有 `.env`。升级时必须保留原来的 `ENCRYPTION_KEY` 与数据卷，否则已保存的媒体服务器和 AI 密钥无法解密。
-
-```bash
-if [ -e .env ]; then
-  echo ".env 已存在，请保留现有配置和密钥"
-else
-  umask 077
-  cat > .env <<ENV
-JWT_SECRET=$(openssl rand -hex 32)
-ENCRYPTION_KEY=$(openssl rand -hex 32)
-WEB_PORT=8080
-BACKEND_PORT=3000
-LCS_IMAGE_TAG=latest
-ENV
-fi
-```
-
-端口冲突时修改 `WEB_PORT` / `BACKEND_PORT`。稳定部署可将 `LCS_IMAGE_TAG` 改为已经发布的明确版本号；自行发布镜像时设置 `LCS_IMAGE_NAMESPACE`。
-
-### 3. 拉取并启动
-
-```bash
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d --wait
-docker compose -f docker-compose.release.yml ps
-```
-
-在 Docker 宿主机打开 **[http://localhost:8080](http://localhost:8080)**，点击「立即注册」。第一个注册的账号成为管理员。浏览器通过 web 访问 API，无需单独访问后端端口。
-
-默认端口只绑定宿主机 `127.0.0.1`，其他设备访问 NAS 部署时，请使用下面的局域网配置。
-
-### NAS / 局域网访问
-
-假设 NAS 地址为 `192.168.1.10`，在 `.env` 增加：
-
-```dotenv
-LCS_PUBLIC_URL=http://192.168.1.10:8080
-```
-
-创建 `docker-compose.lan.yml`（需 Compose 2.24.4+，详见 [Docker 合并规则](https://docs.docker.com/reference/compose-file/merge/)）：
+只需 Docker 和 Compose v2。新建一个空目录，将下面内容保存为 **`compose.yaml`**（也可下载 [部署示例](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/compose.yaml)）：
 
 ```yaml
 services:
   backend:
+    image: evanqu/library-cover-studio-backend:latest
+    restart: unless-stopped
     environment:
-      FRONTEND_URL: ${LCS_PUBLIC_URL:?请在 .env 中设置 LCS_PUBLIC_URL}
+      NODE_ENV: production
+      JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
+      ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
+      FRONTEND_URL: "http://192.168.1.10:8080"
+    volumes:
+      - ./data:/app/backend/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
   web:
-    ports: !override
-      - "${WEB_PORT:-8080}:80"
+    image: evanqu/library-cover-studio-web:latest
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
 ```
+
+启动前修改三处：
+
+- `FRONTEND_URL`：换成实际访问地址，例如 NAS 的 `http://192.168.1.10:8080`；本机使用 `http://localhost:8080`。
+- `JWT_SECRET`、`ENCRYPTION_KEY`：分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
+
+在这个目录执行：
 
 ```bash
-docker compose -f docker-compose.release.yml -f docker-compose.lan.yml up -d --wait
+docker compose up -d
 ```
 
-打开 `http://192.168.1.10:8080`。换成自己的地址和端口，并设置 NAS 防火墙允许可信设备访问网页端口。后续升级、停止和重启也使用这两份配置。反向代理域名则将 `LCS_PUBLIC_URL` 设置为真实的网页来源，并把整个站点转发至 web。
+打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的地址），点击「立即注册」，第一个账号成为管理员。
 
-### 尚未发布镜像时：源码构建
+数据自动保存在同目录的 **`data` 文件夹**；只开放网页端口 `8080`，后端通过容器网络访问。改端口时同步修改 `8080:80` 的左侧和 `FRONTEND_URL`。前后端镜像保持相同标签，具体以 Docker Hub 已发布标签为准。
 
-同样配置 `.env`，改用项目中的源码构建配置：
-
-```bash
-docker compose up -d --build --wait
-```
+尚未发布所需镜像标签时，可按 [源码构建教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#从源码构建) 部署。
 
 ## 自动化图文教程
 
@@ -151,31 +123,31 @@ docker compose up -d --build --wait
 
 ## 升级与数据维护
 
-数据保存在 `backend_data` / `backend_uploads` 命名卷中。普通重建容器会保留卷，`docker compose down -v` 会删除它们。完整备份需同时保存数据卷与 `.env`，配置导出不包含账号、密钥和图片，不能代替备份。
+按上面的配置安装时，数据保存在部署目录的 `data` 文件夹。完整备份需要同时保存 **`compose.yaml` 和 `data`**；配置文件包含密钥，请妥善保管。配置导出不能代替完整备份。
 
-先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#备份) 备份，再修改 `.env` 中的版本标签并执行：
+先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#备份) 备份。升级可修改两个镜像的版本标签，再执行：
 
 ```bash
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d --wait
+docker compose pull
+docker compose up -d
 ```
 
-保持原部署目录、项目名、加密密钥与数据卷。使用局域网覆盖配置时，在命令中继续加上 `-f docker-compose.lan.yml`。
+保留原密钥和 `data`。旧版命名卷部署继续使用原 Compose 文件与 `.env`，不要直接换成新安装示例。
 
 ## 排查问题
 
 ```bash
-docker compose -f docker-compose.release.yml ps
-docker compose -f docker-compose.release.yml logs --tail=100 backend web
+docker compose ps
+docker compose logs --tail=100 backend web
 ```
 
 | 问题 | 处理 |
 | --- | --- |
 | 镜像无法拉取 | 检查镜像名、命名空间及目标标签是否已发布；未发布时使用源码构建。 |
-| NAS 其他设备无法访问 | 默认绑定本机地址，需启用局域网覆盖配置并允许网页端口。 |
+| NAS 其他设备无法访问 | 使用 NAS 的局域网地址访问，检查端口映射和 NAS 防火墙。 |
 | 连接服务器失败 | 检查容器网络可达性、API 密钥权限和地址，避免误用 `localhost`。 |
-| CORS 错误 | `FRONTEND_URL` / `LCS_PUBLIC_URL` 与浏览器实际来源一致，包括协议和端口。 |
+| CORS 错误 | `FRONTEND_URL` 与浏览器实际来源一致，包括协议和端口。 |
 | 定时任务不执行 | 检查后端是否健康、任务是否启用、调度时区和下次运行时间。 |
-| 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和数据卷中的加密盐是否保留。 |
+| 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和`data` 中的加密盐是否保留。 |
 
 [完整部署与故障排查](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md) · [自动化使用指南](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Automation_Guide.md) · MIT License
