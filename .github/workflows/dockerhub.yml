@@ -3,7 +3,7 @@ name: Publish Docker image
 on:
   push:
     branches:
-      - master
+      - main
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -57,7 +57,7 @@ jobs:
       issues: write
       pull-requests: write
     timeout-minutes: 15
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     outputs:
       eligible: ${{ steps.current.outputs.eligible }}
@@ -68,19 +68,19 @@ jobs:
       minor: ${{ steps.result.outputs.minor }}
       build_sha: ${{ steps.result.outputs.build_sha }}
     steps:
-      - name: Skip superseded master pushes
+      - name: Skip superseded main pushes
         id: current
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
         shell: bash
         run: |
-          master_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/master" --jq '.object.sha')"
-          if [[ "${master_sha}" == "${SOURCE_SHA}" ]]; then
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "${main_sha}" == "${SOURCE_SHA}" ]]; then
             echo 'eligible=true' >> "${GITHUB_OUTPUT}"
           else
             echo 'eligible=false' >> "${GITHUB_OUTPUT}"
-            echo '::notice::A newer master commit exists; skipping this superseded release run'
+            echo '::notice::A newer main commit exists; skipping this superseded release run'
           fi
 
       - name: Update release pull request or create release
@@ -178,7 +178,7 @@ jobs:
       needs.credentials.result == 'success' &&
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
       (needs.release-verify.result == 'success' || needs.release-verify.result == 'skipped') &&
-      (github.event_name != 'push' || github.ref != 'refs/heads/master' || needs.release.outputs.eligible == 'true')
+      (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.release.outputs.eligible == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -237,7 +237,7 @@ jobs:
             org.opencontainers.image.version=${{ steps.version.outputs.value }}
           tags: |
             type=raw,value=${{ inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/master' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
             type=raw,value=${{ needs.release.outputs.version }},enable=${{ needs.release.outputs.release_created == 'true' }}
             type=raw,value=${{ needs.release.outputs.major }}.${{ needs.release.outputs.minor }},enable=${{ needs.release.outputs.release_created == 'true' }}
             type=semver,pattern={{version}}

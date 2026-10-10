@@ -7,12 +7,12 @@
 ## 发布顺序
 
 1. Pull request 运行隔离测试、前后端构建、单容器运行与备份恢复验收，以及 amd64 / arm64 两个平台的统一镜像构建。
-2. 合入 `master` 后运行相同检查，通过后由 Release Please 创建版本 PR。
+2. 合入 `main` 后运行相同检查，通过后由 Release Please 创建版本 PR。
 3. 工作流自动 squash merge 版本 PR，更新 `CHANGELOG.md`、三个 `package.json` 和版本清单，并创建 GitHub Release。
 4. 检查生成的版本提交，再构建并推送镜像，附带 SBOM 和 provenance。
 5. 将根目录 `README.dockerhub.md` 同步到镜像仓库的 Overview。
 
-如果提交不需要新版本，会按当前主分支发布 `latest` 与提交标签。被新提交取代的旧 `master` 发布运行会跳过发布，避免过期代码覆盖新镜像。
+如果提交不需要新版本，会按当前主分支发布 `latest` 与提交标签。被新提交取代的旧 `main` 发布运行会跳过发布，避免过期代码覆盖新镜像。
 
 ## 仓库配置
 
@@ -37,7 +37,7 @@ Fork / 改名发布时，除修改命名空间变量，也应调整 Compose 默�
 
 | 触发方式 | 标签 |
 | --- | --- |
-| 推送 `master` | `latest`、`sha-<7位提交号>`；生成正式版本时增加 `MAJOR.MINOR.PATCH` 和 `MAJOR.MINOR` |
+| 推送 `main` | `latest`、`sha-<7位提交号>`；生成正式版本时增加 `MAJOR.MINOR.PATCH` 和 `MAJOR.MINOR` |
 | 推送 `v*.*.*` Git 标签 | 对应语义化版本、主次版本及提交标签；Git 标签必须与包版本一致 |
 | Actions 手动运行 | 默认 `edge` 和提交标签，也可填写明确的 Docker 标签；填写语义化版本时元数据规则还会生成对应版本标签 |
 
@@ -53,7 +53,7 @@ PR 标题和提交使用 Conventional Commits，例如 `fix: 修复封面生成�
 
 GitHub 首页使用 `README.md`，通过相对路径引用 `doc/images/screenshots/*.jpg`。Docker Hub 使用 `README.dockerhub.md`，所有图片和教程链接都是完整 HTTPS 地址，以便在镜像页面渲染。
 
-**Docker Hub 的截图外链需要 GitHub 仓库和对应文件可以匿名访问。** 私有仓库或尚未合入 `master` 的新截图无法通过这些公开地址加载；应在仓库公开且图片进入 `master` 后执行 Overview 同步。不要把个人服务器、API 密钥或生产账号截入图片。
+**Docker Hub 的截图外链需要 GitHub 仓库和对应文件可以匿名访问。** 私有仓库或尚未合入 `main` 的新截图无法通过这些公开地址加载；应在仓库公开且图片进入 `main` 后执行 Overview 同步。不要把个人服务器、API 密钥或生产账号截入图片。
 
 当前截图来自隔离演示账号、模拟媒体 API 和内置海报。更新截图时使用相同的演示方式，检查图片加载完成、表单含义与教程一致，再替换对应文件。
 
