@@ -2,7 +2,7 @@
 
 [返回项目首页](../README.md) · [配置自动化任务](Automation_Guide.md)
 
-新安装只需要一份 `compose.yaml`，前后端一起启动，数据保存在旁边的 `data` 目录。无需挂载电影文件目录，应用通过 Jellyfin / Emby API 读取海报和上传媒体库封面。
+新安装只需要一份 `compose.yaml`，网页和后端在同一个容器运行，数据保存在旁边的 `data` 目录。无需挂载电影文件目录，应用通过 Jellyfin / Emby API 读取海报和上传媒体库封面。
 
 ## 快速开始
 
@@ -10,37 +10,19 @@
 
 ```yaml
 services:
-  backend:
-    image: evanqu/library-cover-studio-backend:latest
+  library-cover-studio:
+    image: evanqu/library-cover-studio:latest
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
       ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
-      FRONTEND_URL: "http://192.168.1.10:8080"
-    volumes:
-      - ./data:/app/backend/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      start_period: 20s
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  web:
-    image: evanqu/library-cover-studio-web:latest
-    restart: unless-stopped
     ports:
-      - "8080:80"
-    depends_on:
-      backend:
-        condition: service_healthy
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
 ```
 
-启动前修改三处：
-
-- `FRONTEND_URL`：换成实际访问地址，例如 NAS 的 `http://192.168.1.10:8080`；本机使用 `http://localhost:8080`。
-- `JWT_SECRET`、`ENCRYPTION_KEY`：分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
+把 `JWT_SECRET` 和 `ENCRYPTION_KEY` 分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
 
 在这个目录执行：
 
@@ -48,9 +30,9 @@ services:
 docker compose up -d
 ```
 
-打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的地址），点击「立即注册」，第一个账号成为管理员。
+打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的服务器地址；本机使用 `http://localhost:8080`），点击「立即注册」，第一个账号成为管理员。
 
-数据自动保存在同目录的 **`data` 文件夹**；只开放网页端口 `8080`，后端通过容器网络访问。改端口时同步修改 `8080:80` 的左侧和 `FRONTEND_URL`。前后端镜像保持相同标签，具体以 Docker Hub 已发布标签为准。
+**一个镜像、一个容器、一个端口。** 网页、API、封面渲染和定时任务均在这个容器中运行，数据自动保存在同目录的 **`data` 文件夹**。改端口只需修改 `8080:8080` 的左侧；NAS 直接使用局域网地址访问，不必另配 `FRONTEND_URL`。镜像标签以 Docker Hub 实际发布结果为准。
 
 首次启动后可进入仪表盘，添加服务器和创建任务：
 
@@ -58,17 +40,17 @@ docker compose up -d
 
 ## NAS / 局域网访问
 
-快速开始的配置已经可以用于 NAS。将 `FRONTEND_URL` 换成浏览器实际使用的地址，并访问该地址。例如 NAS 是 `192.168.1.10`，使用 `http://192.168.1.10:8080`。NAS 防火墙应允许局域网设备访问网页端口。
+快速开始的配置已经可以用于 NAS，直接访问 NAS 地址即可。例如 NAS 是 `192.168.1.10`，使用 `http://192.168.1.10:8080`。NAS 防火墙应允许局域网设备访问网页端口。
 
 | 要调整的内容 | 修改位置 |
 | --- | --- |
-| 网页端口改为 `8088` | web 的端口改为 `"8088:80"`，`FRONTEND_URL` 改为 `http://192.168.1.10:8088` |
-| 仅本机访问 | 端口改为 `"127.0.0.1:8080:80"`，`FRONTEND_URL` 改为 `http://localhost:8080` |
-| 反向代理域名 | 代理整个站点至网页端口，`FRONTEND_URL` 改为实际来源，如 `https://cover.example.com` |
-| 固定版本 | 将两个镜像的 `latest` 换成 Docker Hub 已发布的相同版本标签 |
-| 数据目录位置 | 将 `./data` 改为 NAS 上的绝对目录，保持容器路径 `/app/backend/data` |
+| 网页端口改为 `8088` | 端口改为 `"8088:8080"`，访问 `http://192.168.1.10:8088` |
+| 仅本机访问 | 端口改为 `"127.0.0.1:8080:8080"`，访问 `http://localhost:8080` |
+| 反向代理域名 | 代理整个站点至 `8080`，在 `environment` 下增加 `FRONTEND_URL: https://cover.example.com`（不要带路径或尾斜杠） |
+| 固定版本 | 将镜像的 `latest` 换成 Docker Hub 已发布的版本标签 |
+| 数据目录位置 | 将 `./data` 改为 NAS 上的绝对目录，保持容器路径 `/app/data` |
 
-修改后在部署目录执行 `docker compose up -d`。建议反向代理部署在域名根路径；web 已处理 `/api` 转发，后端不需要映射宿主机端口。
+修改后在部署目录执行 `docker compose up -d`。建议反向代理部署在域名根路径，并支持长连接；网页和 `/api` 都转发到同一个端口。
 
 ## 连接 Jellyfin / Emby
 
@@ -86,7 +68,7 @@ docker compose up -d
 
 ```text
 library-cover-studio/
-├── compose.yaml       # 镜像、端口、访问地址及密钥
+├── compose.yaml       # 镜像、端口及密钥
 └── data/              # SQLite、加密盐、模板、字体、图片和执行历史
 ```
 
@@ -111,7 +93,7 @@ docker compose start
 
 ### 升级
 
-先完成备份，再将两个镜像改为相同的已发布版本标签（使用 `latest` 时不必改文件），执行：
+先完成备份，再将镜像改为已发布版本标签（使用 `latest` 时不必改文件），执行：
 
 ```bash
 docker compose pull
@@ -134,31 +116,43 @@ docker compose up -d
 
 需要替换已有安装时，先停止原服务并备份当前状态，再恢复。优先使用备份时的镜像版本，启动确认后再升级。
 
-## 已有命名卷部署
+## 从旧版两个容器迁移
 
-之前使用 `docker-compose.release.yml` / `docker-compose.yml` 安装的实例，数据保存在 `backend_data` 命名卷中，另外保留了 `backend_uploads` 挂载。**继续使用原文件和 `.env` 即可升级**：
+旧版镜像 `evanqu/library-cover-studio-web` / `evanqu/library-cover-studio-backend` 不再随新版本发布。迁移前先停止旧服务并备份；不要让两个实例同时运行同一套定时任务。
 
-```bash
-docker compose -f docker-compose.release.yml pull
-docker compose -f docker-compose.release.yml up -d
-```
+### 之前按文档使用 `./data` 的安装
 
-源码部署使用 `docker-compose.yml`。此前有局域网覆盖文件的，继续沿用原来的 `-f` 参数。不要直接把新安装示例放到原目录：新的 `./data` 挂载不会自动导入命名卷，会显示为空的新安装。
+1. 用旧 Compose 文件执行 `docker compose down`。
+2. 将旧文件与 `data` 一起备份，再把配置改为本教程的单容器示例。
+3. 保留原来的两个密钥，将数据挂载目标从 `/app/backend/data` 改为 `/app/data`；`./data` 内容不需要调整。
+4. 执行 `docker compose up -d`，检查账号、模板、服务器连接和任务。
 
-迁移前先保存原 `.env`、Compose 配置及命名卷备份。可暂停原服务后导出数据（下面假设原容器名为 `lcs-backend`）：
+### 之前使用仓库命名卷的安装
+
+旧数据在 `backend_data` 卷中，另有旧版 `backend_uploads` 挂载。先保存原 `.env`、Compose 文件及卷备份。仓库保留了 [旧版源码配置](../docker-compose.legacy.yml) 和 [旧版镜像配置](../docker-compose.legacy.release.yml)，用于识别旧部署及迁移。
+
+下面假设旧容器名为 `lcs-backend`，在原部署目录执行（已有局域网覆盖文件的命令继续加上原 `-f` 参数）：
 
 ```bash
 mkdir -p backup
 chmod 700 backup
-docker compose -f docker-compose.release.yml stop
+docker compose -f docker-compose.legacy.release.yml stop
 docker run --rm --volumes-from lcs-backend \
   -v "$(pwd)/backup:/backup" alpine:3.22 \
   tar czf /backup/legacy-data.tar.gz -C /app/backend data uploads
 sudo chmod 600 backup/legacy-data.tar.gz
-docker compose -f docker-compose.release.yml start
 ```
 
-新建一个部署目录，放入新示例 `compose.yaml`，填入原 `.env` 中的密钥与实际访问地址；解压导出的数据后再启动。新配置使用解压出来的 `data`；`uploads` 是旧版保留目录，可以另行存档。切换前先停止原实例，避免定时任务重复上传；确认新实例的数据与连接正常后再停用旧部署，保留原备份和卷。
+在新目录保存单容器 `compose.yaml`，填入原 `.env` 中的两个密钥，解压备份：
+
+```bash
+sudo tar xzf /完整路径/legacy-data.tar.gz
+docker compose up -d
+```
+
+新配置使用解压出来的 `data`；`uploads` 是旧版保留目录，可另行存档。确认账号、服务器连接和任务正常后再停用旧部署，保留原备份和数据卷。
+
+如果继续使用仓库里的 Compose 文件，新的 `docker-compose.yml` 和 `docker-compose.release.yml` 都把原 `backend_data` 卷挂载到 `/app/data`；**保持相同部署目录和 Compose 项目名，并先停止旧容器**，即可沿用原数据。旧容器可用备份的原 Compose 文件执行 `down`（不加 `-v`），或在明确确认后用新配置的 `up -d --remove-orphans` 清理。不要对旧数据卷执行 `down -v`。
 
 ## 从源码构建
 
@@ -173,23 +167,23 @@ cp .env.example .env
 docker compose -f docker-compose.yml up -d --build
 ```
 
-源码配置沿用命名卷，默认仅本机访问。需要 NAS 访问时，直接编辑 `docker-compose.yml`：把 web 端口改为 `"8080:80"`，把 backend 的 `FRONTEND_URL` 改为自己的实际访问地址，然后用同一条命令重建。
+源码构建使用根目录 `Dockerfile`，输出相同的单容器应用，数据沿用 `backend_data` 命名卷。默认网页端口 `8080`，NAS 可直接访问。
 
 ## 常见问题
 
 | 现象 | 检查与处理 |
 | --- | --- |
 | `manifest unknown` / `pull access denied` | 检查目标镜像和标签是否已发布；尚未发布时使用源码构建。 |
-| 端口已占用 | 修改 web 端口映射左侧与 `FRONTEND_URL`，重新启动。 |
+| 端口已占用 | 修改端口映射左侧，重新启动。 |
 | NAS 本机可打开，其他设备打不开 | 使用 NAS 局域网地址，检查端口映射与防火墙。 |
-| 页面出现 CORS 错误 | `FRONTEND_URL` 必须与浏览器来源一致，包括协议、域名和端口。 |
+| 页面出现 CORS 错误 | 直接访问自动识别来源；HTTPS 反向代理时增加 `FRONTEND_URL`，与浏览器来源一致。 |
 | 媒体服务器连接失败 | 检查容器网络、密钥权限和代理路径，避免误用 `localhost`。 |
 | 网页正常，任务没有执行 | 检查后端状态、任务启用状态、时区和下次执行时间。 |
 | API 密钥升级后无法解密 | 核对原 `ENCRYPTION_KEY`、数据目录和加密盐是否保留。 |
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 backend web
+docker compose logs --tail=100 library-cover-studio
 ```
 
 [继续：配置第一个自动化任务 →](Automation_Guide.md)

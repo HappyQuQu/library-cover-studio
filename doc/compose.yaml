@@ -1,26 +1,11 @@
 services:
-  backend:
-    image: evanqu/library-cover-studio-backend:latest
+  library-cover-studio:
+    image: evanqu/library-cover-studio:latest
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
       ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
-      FRONTEND_URL: "http://192.168.1.10:8080"
-    volumes:
-      - ./data:/app/backend/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      start_period: 20s
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  web:
-    image: evanqu/library-cover-studio-web:latest
-    restart: unless-stopped
     ports:
-      - "8080:80"
-    depends_on:
-      backend:
-        condition: service_healthy
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data

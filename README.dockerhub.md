@@ -19,14 +19,9 @@
 
 ## 镜像说明
 
-**部署需要前后端两个镜像一起运行。** 当前 Overview 会同步至以下两个仓库：
+镜像 **`evanqu/library-cover-studio`** 包含网页、API、SQLite、封面渲染和任务调度，容器端口为 `8080`，支持 `linux/amd64` / `linux/arm64`。
 
-| 镜像 | 用途 | 容器内端口 |
-| --- | --- | --- |
-| `evanqu/library-cover-studio-web` | 网页与 `/api` 反向代理 | `80` |
-| `evanqu/library-cover-studio-backend` | API、SQLite、渲染和调度 | `3000` |
-
-支持 `linux/amd64` / `linux/arm64`。两个镜像应使用相同标签；`latest` 对应主分支发布，正式版本使用 `MAJOR.MINOR.PATCH` / `MAJOR.MINOR`，`sha-*` 对应具体提交，`edge` 用于手动验证。请以 Docker Hub Tags 页实际可用的标签为准。
+`latest` 对应主分支发布，正式版本使用 `MAJOR.MINOR.PATCH` / `MAJOR.MINOR`，`sha-*` 对应具体提交，`edge` 用于手动验证。请以 Docker Hub Tags 页实际可用的标签为准。旧版 `-web` / `-backend` 镜像不再随新版本发布，迁移方法见完整部署教程。
 
 ## Docker Compose 部署
 
@@ -34,37 +29,19 @@
 
 ```yaml
 services:
-  backend:
-    image: evanqu/library-cover-studio-backend:latest
+  library-cover-studio:
+    image: evanqu/library-cover-studio:latest
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
       ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
-      FRONTEND_URL: "http://192.168.1.10:8080"
-    volumes:
-      - ./data:/app/backend/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      start_period: 20s
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  web:
-    image: evanqu/library-cover-studio-web:latest
-    restart: unless-stopped
     ports:
-      - "8080:80"
-    depends_on:
-      backend:
-        condition: service_healthy
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
 ```
 
-启动前修改三处：
-
-- `FRONTEND_URL`：换成实际访问地址，例如 NAS 的 `http://192.168.1.10:8080`；本机使用 `http://localhost:8080`。
-- `JWT_SECRET`、`ENCRYPTION_KEY`：分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
+把 `JWT_SECRET` 和 `ENCRYPTION_KEY` 分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
 
 在这个目录执行：
 
@@ -72,9 +49,9 @@ services:
 docker compose up -d
 ```
 
-打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的地址），点击「立即注册」，第一个账号成为管理员。
+打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的服务器地址；本机使用 `http://localhost:8080`），点击「立即注册」，第一个账号成为管理员。
 
-数据自动保存在同目录的 **`data` 文件夹**；只开放网页端口 `8080`，后端通过容器网络访问。改端口时同步修改 `8080:80` 的左侧和 `FRONTEND_URL`。前后端镜像保持相同标签，具体以 Docker Hub 已发布标签为准。
+**一个镜像、一个容器、一个端口。** 网页、API、封面渲染和定时任务均在这个容器中运行，数据自动保存在同目录的 **`data` 文件夹**。改端口只需修改 `8080:8080` 的左侧；NAS 直接使用局域网地址访问，不必另配 `FRONTEND_URL`。镜像标签以 Docker Hub 实际发布结果为准。
 
 尚未发布所需镜像标签时，可按 [源码构建教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#从源码构建) 部署。
 
@@ -125,20 +102,20 @@ docker compose up -d
 
 按上面的配置安装时，数据保存在部署目录的 `data` 文件夹。完整备份需要同时保存 **`compose.yaml` 和 `data`**；配置文件包含密钥，请妥善保管。配置导出不能代替完整备份。
 
-先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#备份) 备份。升级可修改两个镜像的版本标签，再执行：
+先按 [备份与恢复教程](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md#备份) 备份。升级可修改镜像的版本标签，再执行：
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-保留原密钥和 `data`。旧版命名卷部署继续使用原 Compose 文件与 `.env`，不要直接换成新安装示例。
+保留原密钥和 `data`。旧版两容器安装请先按完整教程迁移，保留原密钥和数据；新的目录挂载不会自动读取旧命名卷。
 
 ## 排查问题
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 backend web
+docker compose logs --tail=100 library-cover-studio
 ```
 
 | 问题 | 处理 |
@@ -146,8 +123,8 @@ docker compose logs --tail=100 backend web
 | 镜像无法拉取 | 检查镜像名、命名空间及目标标签是否已发布；未发布时使用源码构建。 |
 | NAS 其他设备无法访问 | 使用 NAS 的局域网地址访问，检查端口映射和 NAS 防火墙。 |
 | 连接服务器失败 | 检查容器网络可达性、API 密钥权限和地址，避免误用 `localhost`。 |
-| CORS 错误 | `FRONTEND_URL` 与浏览器实际来源一致，包括协议和端口。 |
+| CORS 错误 | 直接访问无需配置；HTTPS 反向代理时设置 `FRONTEND_URL` 为浏览器实际来源。 |
 | 定时任务不执行 | 检查后端是否健康、任务是否启用、调度时区和下次运行时间。 |
-| 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和`data` 中的加密盐是否保留。 |
+| 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和 `data` 中的加密盐是否保留。 |
 
 [完整部署与故障排查](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Docker_Deployment.md) · [自动化使用指南](https://github.com/HappyQuQu/library-cover-studio/blob/main/doc/Automation_Guide.md) · MIT License

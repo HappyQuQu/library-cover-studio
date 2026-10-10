@@ -91,8 +91,10 @@ test('scheduled tasks trigger without manual runs, pause, recover registrations,
   assert.equal(row(task.id).next_run_at, null);
   assert.deepEqual(scheduler.getActiveJobs(), []);
   await delay(1200); assert.equal(logs(task.id).length, 0);
+  const enabledAt = Date.now();
   await request(`/${task.id}/toggle`, 'POST');
-  assert.ok(Date.parse(row(task.id).next_run_at) > Date.now(), 'enabling stores the next scheduled execution');
+  // A one-second schedule may become due before the HTTP response is read.
+  assert.ok(Date.parse(row(task.id).next_run_at) > enabledAt, 'enabling stores the next scheduled execution');
   const first = await until(() => logs(task.id).find((log: any) => log.status === 'completed'), 'first automatic execution');
   await request(`/${task.id}/toggle`, 'POST');
   assert.equal(row(task.id).next_run_at, null, 'pausing clears the scheduled execution');
