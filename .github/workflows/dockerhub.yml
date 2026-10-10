@@ -60,6 +60,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     outputs:
+      eligible: ${{ steps.current.outputs.eligible }}
       release_created: ${{ steps.result.outputs.release_created }}
       tag_name: ${{ steps.result.outputs.tag_name }}
       version: ${{ steps.result.outputs.version }}
@@ -67,8 +68,24 @@ jobs:
       minor: ${{ steps.result.outputs.minor }}
       build_sha: ${{ steps.result.outputs.build_sha }}
     steps:
+      - name: Skip superseded main pushes
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')"
+          if [[ "${main_sha}" == "${SOURCE_SHA}" ]]; then
+            echo 'eligible=true' >> "${GITHUB_OUTPUT}"
+          else
+            echo 'eligible=false' >> "${GITHUB_OUTPUT}"
+            echo '::notice::A newer main commit exists; skipping this superseded release run'
+          fi
+
       - name: Update release pull request or create release
         id: prepare
+        if: steps.current.outputs.eligible == 'true'
         uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-config.json
@@ -160,7 +177,8 @@ jobs:
       needs.verify.result == 'success' &&
       needs.credentials.result == 'success' &&
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
-      (needs.release-verify.result == 'success' || needs.release-verify.result == 'skipped')
+      (needs.release-verify.result == 'success' || needs.release-verify.result == 'skipped') &&
+      (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.release.outputs.eligible == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
