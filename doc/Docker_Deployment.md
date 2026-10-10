@@ -152,7 +152,7 @@ docker compose up -d
 
 新配置使用解压出来的 `data`；`uploads` 是旧版保留目录，可另行存档。确认账号、服务器连接和任务正常后再停用旧部署，保留原备份和数据卷。
 
-如果继续使用仓库里的 Compose 文件，新的 `docker-compose.yml` 和 `docker-compose.release.yml` 都把原 `backend_data` 卷挂载到 `/app/data`；**保持相同部署目录和 Compose 项目名，并先停止旧容器**，即可沿用原数据。旧容器可用备份的原 Compose 文件执行 `down`（不加 `-v`），或在明确确认后用新配置的 `up -d --remove-orphans` 清理。不要对旧数据卷执行 `down -v`。
+如果继续使用仓库里的 Compose 文件，新的 `docker-compose.yml` 和 `docker-compose.release.yml` 都把原 `backend_data` 卷挂载到 `/app/data`；**保持相同部署目录和 Compose 项目名，并先停止旧容器**，即可沿用原数据。HTTPS 反向代理的公开地址可以继续通过 `.env` 的 `LCS_PUBLIC_URL` 或 `FRONTEND_URL` 传入。旧容器可用备份的原 Compose 文件执行 `down`（不加 `-v`），或在明确确认后用新配置的 `up -d --remove-orphans` 清理。不要对旧数据卷执行 `down -v`。
 
 ## 从源码构建
 

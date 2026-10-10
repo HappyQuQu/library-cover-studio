@@ -7,6 +7,7 @@ services:
     environment:
       JWT_SECRET: ${JWT_SECRET:?请设置 JWT_SECRET}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?请设置 ENCRYPTION_KEY}
+      FRONTEND_URL: ${LCS_PUBLIC_URL:-${FRONTEND_URL:-}}
     volumes:
       - backend_data:/app/data
 
