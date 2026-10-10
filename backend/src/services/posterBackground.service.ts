@@ -1,6 +1,6 @@
 import sharp from 'sharp';
 
-export interface PosterBackground { blur?: number; dim?: number }
+export interface PosterBackground { blur?: number; dim?: number; source?: 'poster' | 'backdrop' }
 
 /** The first selected media poster supplies the colors; expand before blurring to avoid dark edges. */
 export async function renderPosterBackground(poster: Buffer, width: number, height: number, settings: PosterBackground): Promise<sharp.OverlayOptions> {

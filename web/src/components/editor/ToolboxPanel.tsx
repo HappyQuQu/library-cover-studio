@@ -96,11 +96,13 @@ const sliderCls = "w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none 
 export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
   const [activeTab, setActiveTab] = useState<'elements' | 'background'>('elements');
   const [bgType, setBgType] = useState<'color' | 'gradient' | 'random' | 'pattern' | 'poster-blur'>(initialPosterBackground ? 'poster-blur' : 'gradient');
+  const [posterSource, setPosterSource] = useState<'poster' | 'backdrop'>(initialPosterBackground?.source ?? 'poster');
   const [posterBlur, setPosterBlur] = useState(initialPosterBackground?.blur ?? DEFAULT_POSTER_BACKGROUND.blur);
   const [posterDim, setPosterDim] = useState(initialPosterBackground?.dim ?? DEFAULT_POSTER_BACKGROUND.dim);
   useEffect(() => {
     if (initialPosterBackground) {
       setBgType('poster-blur');
+      setPosterSource(initialPosterBackground.source ?? 'poster');
       setPosterBlur(initialPosterBackground.blur);
       setPosterDim(initialPosterBackground.dim);
     } else {
@@ -306,7 +308,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 { id: 'gradient' as const, icon: Sparkles, label: '渐变' },
                 { id: 'random' as const, icon: Shuffle, label: '随机渐变' },
                 { id: 'pattern' as const, icon: LayoutGrid, label: '图案' },
-                { id: 'poster-blur' as const, icon: ImageIcon, label: '海报模糊' },
+                { id: 'poster-blur' as const, icon: ImageIcon, label: '影片背景' },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -326,7 +328,14 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
 
             {bgType === 'poster-blur' && (
               <div className="space-y-4">
-                <p className="text-xs text-(--text-tertiary) leading-relaxed">使用首张海报铺满背景并模糊，生成时自动跟随媒体库的真实海报。适当压暗背景可让标题更清晰。</p>
+                <label className="block space-y-2 text-xs text-(--text-secondary)">
+                  <span>背景来源</span>
+                  <select aria-label="影片背景来源" value={posterSource} onChange={e => setPosterSource(e.target.value as 'poster' | 'backdrop')}
+                    className="w-full rounded-lg border border-(--border-default) bg-(--bg-secondary) p-2">
+                    <option value="poster">首张海报</option><option value="backdrop">首个影片的横向背景图</option>
+                  </select>
+                </label>
+                <p className="text-xs text-(--text-tertiary) leading-relaxed">生成时跟随首张海报对应的影片；横向背景图缺失时使用海报。编辑器展示内置背景示例，真实样张会读取媒体库图片。</p>
                 <label className="block space-y-2 text-xs text-(--text-secondary)">
                   <span className="flex justify-between">模糊程度 <span>{posterBlur}</span></span>
                   <input type="range" aria-label="海报背景模糊程度" min="0" max="150" step="5" value={posterBlur}
@@ -337,9 +346,9 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   <input type="range" aria-label="海报背景压暗程度" min="0" max="80" step="5" value={Math.round(posterDim * 100)}
                     onChange={e => setPosterDim(Number(e.target.value) / 100)} className={sliderCls} />
                 </label>
-                <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim })}
+                <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim, source: posterSource })}
                   className="w-full rounded-lg bg-(--primary) text-white py-2.5 text-xs font-medium hover:opacity-90 transition-opacity">
-                  应用首张海报背景
+                  应用影片背景
                 </button>
               </div>
             )}

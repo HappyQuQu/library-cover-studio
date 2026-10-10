@@ -190,3 +190,48 @@ test('saved sorting aliases remain compatible, while unsupported Emby sorting is
   assert.throws(() => normalizeServerUrl('http://user:password@example.test'), { code: 'MEDIA_INVALID_URL' });
   assert.throws(() => normalizeServerUrl('bad url'), { code: 'MEDIA_INVALID_URL' });
 });
+
+for (const type of ['jellyfin', 'emby']) test(`${type} background belongs to the first usable poster and uses its tagged landscape image`, async t => {
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname.endsWith('/Items')) return { body: { Items: [
+      { Id: 'broken', ImageTags: { Primary: 'bad' } },
+      { Id: 'first', ImageTags: { Primary: 'p1' }, BackdropImageTags: ['b1'] },
+      { Id: 'second', ImageTags: { Primary: 'p2' }, BackdropImageTags: ['b2'] }
+    ], TotalRecordCount: 3 } };
+    if (req.url.pathname.includes('/broken/')) return { status: 404 };
+    return { image: poster };
+  });
+  const result = await fetchLibraryPosters({ type, url: fixture.url }, key, 'lib', 'DateCreated', 1, undefined, 'tvshows', 5, true);
+  assert.equal(result.uniqueCount, 2); assert.equal(result.posters.length, 5);
+  assert.deepEqual(result.backdrop, poster);
+  const backgrounds = fixture.requests.filter(req => req.url.pathname.includes('/Backdrop/'));
+  assert.equal(backgrounds.length, 1);
+  assert.ok(backgrounds[0].url.pathname.endsWith('/Items/first/Images/Backdrop/0'));
+  assert.equal(backgrounds[0].url.searchParams.get('Tag'), 'b1');
+  assert.equal(backgrounds[0].url.searchParams.get('MaxWidth'), '1920');
+});
+
+test('missing/corrupt backdrop falls back to its poster; other templates skip backdrop downloads', async t => {
+  let mode = 'missing';
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname === '/Items') return { body: { Items: [
+      { Id: 'first', ImageTags: { Primary: 'p1' }, BackdropImageTags: ['b1'] },
+      { Id: 'second', ImageTags: { Primary: 'p2' }, BackdropImageTags: ['b2'] }
+    ], TotalRecordCount: 2 } };
+    if (req.url.pathname.includes('/Backdrop/')) return mode === 'missing' ? { status: 404 }
+      : mode === 'corrupt' ? { body: {} } : { status: 403 };
+    return { image: poster };
+  });
+  const fetch = (backdrop: boolean) => fetchLibraryPosters({ type: 'jellyfin', url: fixture.url }, key, 'lib', 'DateCreated', 1, undefined, undefined, 5, backdrop);
+  for (mode of ['missing', 'corrupt']) {
+    const result = await fetch(true);
+    assert.equal(result.backdrop, undefined); assert.deepEqual(result.posters[0], poster);
+  }
+  mode = 'blocked';
+  await assert.rejects(fetch(true), { code: 'MEDIA_FORBIDDEN' });
+  const requestsBefore = fixture.requests.filter(req => req.url.pathname.includes('/Backdrop/')).length;
+  assert.equal((await fetch(false)).backdrop, undefined);
+  assert.equal(fixture.requests.filter(req => req.url.pathname.includes('/Backdrop/')).length, requestsBefore);
+});

@@ -39,7 +39,7 @@ test('reference defaults are editable variable layouts, seed once, and enforce t
   for (const id of cinematicIds) sqlite.prepare('DELETE FROM templates WHERE id = ?').run(id);
   sqlite.prepare('DELETE FROM system_settings WHERE key = ?').run('templates.defaults.cinematic-three-v1');
   await defaults.seedDefaultTemplates();
-  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE is_default = 1').get().count, 6);
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE is_default = 1').get().count, 7);
   for (const row of oldDefaults) assert.deepEqual(sqlite.prepare('SELECT * FROM templates WHERE id = ?').get(row.id), row);
   const customCinematicId = cinematicIds[0];
   sqlite.prepare('UPDATE templates SET name = ? WHERE id = ?').run('My cinematic layout', customCinematicId);
@@ -227,11 +227,11 @@ test('reference defaults are editable variable layouts, seed once, and enforce t
   await defaults.seedDefaultTemplates();
   assert.equal(JSON.parse(sqlite.prepare('SELECT canvas_json FROM templates WHERE id = ?').get(wallId).canvas_json).objects[0].left, balancedWall.objects[0].left);
   const builtin = sqlite.prepare('SELECT * FROM templates WHERE is_default = 1').all();
-  assert.equal(builtin.length, 6);
+  assert.equal(builtin.length, 7);
   for (const template of builtin) {
     assert.equal(template.is_locked, 1); assert.equal(template.is_public, 1);
     const canvas = JSON.parse(template.canvas_json);
-    assert.equal(canvas.randomOnGeneration, true);
+    assert.equal(canvas.randomOnGeneration, !template.id.endsWith('1109'));
     assert.ok(['soft-mesh', 'muted-wall', 'cinema-mesh'].includes(canvas.randomBackgroundStyle));
     assert.deepEqual(canvas.objects.filter((o: any) => o.textVar).map((o: any) => o.textVar), ['{{primary_title}}', '{{secondary_title}}']);
     const slots = canvas.objects.filter((o: any) => o.posterVar);
@@ -291,5 +291,5 @@ test('reference defaults are editable variable layouts, seed once, and enforce t
   assert.equal((await request('admin', `/${templateId}`, 'DELETE')).status, 200);
   await defaults.seedDefaultTemplates();
   assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE id = ?').get(templateId).count, 0);
-  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE is_default = 1').get().count, 5);
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE is_default = 1').get().count, 6);
 });

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { SYSTEM_PROMPT } from '../services/ai/prompts/templateGenerator.js';
 import { readRuntimeSettings, getRenderSettings } from '../services/runtimeSettings.service.js';
 import { initScheduler } from '../services/scheduler.service.js';
+import { getDefaultTemplateStatus, restoreDefaultTemplates } from '../services/defaultTemplateReset.service.js';
 import { createError } from '../middleware/errorHandler.js';
 
 const integer = (min: number, max: number) => z.string().regex(/^\d+$/).refine(value => Number(value) >= min && Number(value) <= max);
@@ -50,4 +51,16 @@ export function updateSettings(req: Request, res: Response, next: NextFunction) 
 
 export function getDefaultPrompt(_req: Request, res: Response) {
   res.json({ defaultPrompt: SYSTEM_PROMPT });
+}
+
+
+export async function defaultTemplateStatus(_req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getDefaultTemplateStatus()); } catch (error) { next(error); }
+}
+
+export async function resetDefaultTemplates(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (req.body?.confirm !== true) throw createError('请确认还原默认模板', 400, 'RESET_CONFIRMATION_REQUIRED');
+    res.json(await restoreDefaultTemplates(req.user!.userId));
+  } catch (error) { next(error); }
 }

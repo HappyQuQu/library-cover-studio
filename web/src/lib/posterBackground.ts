@@ -1,7 +1,7 @@
 import { FabricImage, type StaticCanvas } from 'fabric';
 import { getSamplePosterUrl } from '@/lib/posters';
 
-export interface PosterBackground { blur: number; dim: number }
+export interface PosterBackground { blur: number; dim: number; source?: 'poster' | 'backdrop' }
 export const DEFAULT_POSTER_BACKGROUND: PosterBackground = { blur: 60, dim: .35 };
 const pending = new WeakMap<StaticCanvas, object>();
 
@@ -12,8 +12,13 @@ export async function applyPosterBackground(canvas: StaticCanvas, width: number,
   const request = {};
   pending.set(canvas, request);
   const first = canvas.getObjects().find((object: any) => object.posterVar === 'post1') as FabricImage | undefined;
-  const source = first?.getSrc?.() || getSamplePosterUrl(1);
-  const poster = await FabricImage.fromURL(source, { crossOrigin: 'anonymous' });
+  const posterSource = first?.getSrc?.() || getSamplePosterUrl(1);
+  // The editor uses a portable sample; real generation receives the matching media backdrop.
+  const source = settings.source === 'backdrop' ? getSamplePosterUrl('backdrop') : posterSource;
+  const poster = await FabricImage.fromURL(source, { crossOrigin: 'anonymous' }).catch(error => {
+    if (settings.source !== 'backdrop') throw error;
+    return FabricImage.fromURL(posterSource, { crossOrigin: 'anonymous' });
+  });
   const ratio = Math.min(1, 960 / width);
   const w = Math.round(width * ratio), h = Math.round(height * ratio);
   const blur = Math.max(0, Math.min(150, Number.isFinite(settings.blur) ? settings.blur : 60)) * w / 1920;

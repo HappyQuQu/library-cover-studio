@@ -12,14 +12,16 @@ const definitionSchema = z.object({
   primaryTitle: z.string(),
   secondaryTitle: z.string(),
   previewFile: assetName.refine(value => value.endsWith('.jpg')),
+  sampleFirstPoster: assetName.refine(value => value.endsWith('.jpg')).optional(),
   samplePosters: z.array(z.number().int().min(1).max(9)).length(9),
   canvas: z.object({
     width: z.literal(1920),
     height: z.literal(1080),
     objects: z.array(z.record(z.any())),
     randomOnGeneration: z.boolean(),
+    posterBackground: z.object({ blur: z.number().min(0).max(150), dim: z.number().min(0).max(.8),
+      source: z.enum(['poster', 'backdrop']).optional() }).optional(),
     randomBackgroundStyle: z.enum(['soft-mesh', 'muted-wall', 'cinema-mesh']),
-    posterBackground: z.object({ blur: z.number().min(0).max(150), dim: z.number().min(0).max(.8) }).optional(),
   }).passthrough(),
 });
 
@@ -36,9 +38,13 @@ export async function buildDefaultTemplates() {
   }
   const buffers = await Promise.all(Array.from({ length: 9 }, (_, index) =>
     fs.readFile(new URL(`${index + 1}.jpg`, posterDirectory))));
-  return definitions.map(definition => ({
+  const backdropBuffer = definitions.some(definition => definition.canvas.posterBackground?.source === 'backdrop')
+    ? await fs.readFile(new URL('backdrop.jpg', posterDirectory)) : undefined;
+  return Promise.all(definitions.map(async definition => ({
     ...definition,
+    backdropBuffer: definition.canvas.posterBackground?.source === 'backdrop' ? backdropBuffer : undefined,
     previewPath: fileURLToPath(new URL(definition.previewFile, directory)),
-    posterBuffers: definition.samplePosters.map(index => buffers[index - 1]),
-  }));
+    posterBuffers: await Promise.all(definition.samplePosters.map((index, position) => position === 0 && definition.sampleFirstPoster
+      ? fs.readFile(new URL(definition.sampleFirstPoster, posterDirectory)) : buffers[index - 1])),
+  })));
 }

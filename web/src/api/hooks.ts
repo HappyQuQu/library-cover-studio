@@ -187,7 +187,7 @@ export interface TemplateRevision {
   width: number;
   height: number;
   createdAt: string;
-  kind: 'save' | 'restore' | 'baseline';
+  kind: 'save' | 'restore' | 'baseline' | 'default-reset' | 'before-default-reset';
   previewUrl: string;
 }
 

@@ -1,6 +1,6 @@
 import { exportConfiguration, previewCache, clearCache } from '../controllers/maintenance.controller.js';
 import { Router } from 'express';
-import { getSettings, updateSettings, getDefaultPrompt } from '../controllers/settings.controller.js';
+import { getSettings, updateSettings, getDefaultPrompt, defaultTemplateStatus, resetDefaultTemplates } from '../controllers/settings.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = Router();
@@ -15,3 +15,6 @@ export { router as settingsRouter };
 router.get('/export', authenticate, requireRole('admin'), exportConfiguration);
 router.get('/cache', authenticate, requireRole('admin'), previewCache);
 router.post('/cache/clear', authenticate, requireRole('admin'), clearCache);
+
+router.get('/default-templates', authenticate, requireRole('admin'), defaultTemplateStatus);
+router.post('/default-templates/restore', authenticate, requireRole('admin'), resetDefaultTemplates);

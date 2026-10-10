@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { resolveApiUrl } from '@/lib/apiUrl';
 import { apiClient } from '@/api/client';
+import { DefaultTemplateSettings } from '@/components/settings/DefaultTemplateSettings';
 import { AIProviderSettings } from '@/components/settings/AIProviderSettings';
 
 interface Font {
@@ -659,6 +660,7 @@ export function SettingsPage() {
               数据管理
             </div>
             <div>
+              {isAdmin && <DefaultTemplateSettings />}
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>导出数据</h3>

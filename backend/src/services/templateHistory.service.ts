@@ -13,7 +13,7 @@ import { renderLibraryCover } from './renderer.service.js';
 export const TEMPLATE_HISTORY_LIMIT = 50;
 type Template = typeof templates.$inferSelect;
 type Revision = typeof templateRevisions.$inferInsert;
-type Kind = 'save' | 'restore' | 'baseline';
+type Kind = 'save' | 'restore' | 'baseline' | 'default-reset' | 'before-default-reset';
 const postersDirectory = fileURLToPath(new URL('../../src/template/poster/', import.meta.url));
 
 export function getTemplateRevisions(templateId: string) {
@@ -40,10 +40,15 @@ async function previewBuffer(template: Template, thumbnail?: string) {
   // A version preview represents the saved palette, rather than a new randomized generation.
   canvas.randomOnGeneration = false;
   const buffers = await Promise.all(Array.from({ length: 9 }, (_, index) => fs.readFile(path.join(postersDirectory, `${index + 1}.jpg`))));
+  const backdropBuffer = canvas.posterBackground?.source === 'backdrop'
+    ? await fs.readFile(path.join(postersDirectory, 'backdrop.jpg')) : undefined;
+  if (canvas.objects?.some((object: any) => object.posterVar === 'post1' && object.src === '/api/templates/posters/backdrop-poster.jpg')) {
+    buffers[0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
+  }
   const title = (variable: string, fallback: string) => canvas.objects?.find((object: any) => object.textVar === variable)?.text || fallback;
   const rendered = await renderLibraryCover(JSON.stringify(canvas), {
     title: template.name, primaryTitle: title('{{primary_title}}', template.name), secondaryTitle: title('{{secondary_title}}', '')
-  }, buffers, { width: template.width || 1920, height: template.height || 1080 });
+  }, buffers, { width: template.width || 1920, height: template.height || 1080, backdropBuffer });
   return sharp(rendered).resize(480, 270, { fit: 'inside' }).jpeg({ quality: 88 }).toBuffer();
 }
 
@@ -99,6 +104,55 @@ export async function saveTemplateVersion(existing: Template | undefined, next: 
     return { ...next, thumbnailPath: snapshot.thumbnailPath, updatedAt: snapshot.createdAt, revisionId: snapshot.id };
   } catch (error) {
     await cleanupTemplateImages(prepared.map(revision => revision.thumbnailPath));
+    throw error;
+  }
+}
+
+/** Explicit admin reset: preserve the previous design and replace the entire set atomically. */
+export async function resetDefaultTemplateVersions(replacements: { existing?: Template; next: Template; preview: Buffer }[], savedBy: string, expected?: { id: string; existing?: Template }[]) {
+  if (!replacements.length) return;
+  const prepared: { existing?: Template; next: Template; revisions: Revision[] }[] = [];
+  const files: string[] = [];
+  try {
+    for (const replacement of replacements) {
+      const revisions: Revision[] = [];
+      if (replacement.existing) {
+        let before: Revision;
+        try { before = await prepareRevision(replacement.existing, savedBy, 'before-default-reset'); }
+        catch {
+          // A broken legacy design must remain recoverable without blocking restoration.
+          const placeholder = await sharp(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="480" height="270"><rect width="480" height="270" fill="#202020"/><text x="240" y="135" text-anchor="middle" fill="#eeeeee" font-family="sans-serif" font-size="20">原设计无法生成预览</text></svg>')).png().toBuffer();
+          before = await prepareRevision(replacement.existing, savedBy, 'before-default-reset', `data:image/png;base64,${placeholder.toString('base64')}`);
+        }
+        revisions.push(before); files.push(before.thumbnailPath!);
+      }
+      const reset = await prepareRevision(replacement.next, savedBy, 'default-reset',
+        `data:image/jpeg;base64,${replacement.preview.toString('base64')}`);
+      revisions.push(reset); files.push(reset.thumbnailPath!);
+      prepared.push({ ...replacement, next: { ...replacement.next, thumbnailPath: reset.thumbnailPath!, updatedAt: reset.createdAt }, revisions });
+    }
+    const removed = db.transaction(tx => {
+      // Validate all rows before any writes: concurrent edits cannot produce a partial reset.
+      for (const { id, existing } of expected || prepared.map(item => ({ id: item.next.id, existing: item.existing }))) {
+        const current = tx.select().from(templates).where(eq(templates.id, id)).get();
+        if (JSON.stringify(current) !== JSON.stringify(existing)) throw createError('模板已发生变化，请刷新后重试', 409, 'TEMPLATE_CHANGED');
+        if (current && !current.isDefault) throw createError('不能覆盖自建模板', 409, 'DEFAULT_TEMPLATE_CONFLICT');
+      }
+      const paths: (string | null)[] = [];
+      for (const { existing, next, revisions } of prepared) {
+        if (existing) tx.update(templates).set(next).where(eq(templates.id, next.id)).run();
+        else tx.insert(templates).values(next).run();
+        for (const revision of revisions) tx.insert(templateRevisions).values(revision).run();
+        const stale = tx.select().from(templateRevisions).where(eq(templateRevisions.templateId, next.id))
+          .orderBy(desc(templateRevisions.sequence)).all().slice(TEMPLATE_HISTORY_LIMIT);
+        for (const revision of stale) tx.delete(templateRevisions).where(eq(templateRevisions.id, revision.id)).run();
+        paths.push(existing?.thumbnailPath || null, ...stale.map(revision => revision.thumbnailPath));
+      }
+      return paths;
+    });
+    await cleanupTemplateImages(removed);
+  } catch (error) {
+    await cleanupTemplateImages(files);
     throw error;
   }
 }

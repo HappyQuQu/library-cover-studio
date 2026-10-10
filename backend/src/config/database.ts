@@ -75,7 +75,7 @@ export async function initDatabase() {
       height INTEGER NOT NULL,
       is_public INTEGER DEFAULT 0,
       saved_by TEXT,
-      kind TEXT NOT NULL CHECK(kind IN ('save', 'restore', 'baseline')),
+      kind TEXT NOT NULL CHECK(kind IN ('save', 'restore', 'baseline', 'default-reset', 'before-default-reset')),
       restored_from TEXT,
       created_at TEXT NOT NULL,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE,
@@ -108,6 +108,26 @@ export async function initDatabase() {
     -- 检查并添加 library_configs 列 (如果表已存在但列不存在)
     PRAGMA table_info(tasks);
   `);
+
+  // Expand the history kind constraint while preserving every existing revision and sequence.
+  const revisionTable = sqlite.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'template_revisions'").get() as { sql: string };
+  if (!revisionTable.sql.includes("'default-reset'")) {
+    const expanded = revisionTable.sql.replace(/CHECK\s*\(\s*kind\s+IN\s*\([^)]*\)\s*\)/i,
+      "CHECK(kind IN ('save', 'restore', 'baseline', 'default-reset', 'before-default-reset'))");
+    if (expanded === revisionTable.sql) throw new Error('Cannot migrate template history constraint');
+    sqlite.transaction(() => {
+      const sequence = sqlite.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'template_revisions'").get() as { seq: number } | undefined;
+      sqlite.exec(expanded.replace(/CREATE TABLE (?:IF NOT EXISTS )?["`]?template_revisions["`]?/i, 'CREATE TABLE template_revisions_reset_migration'));
+      sqlite.exec(`INSERT INTO template_revisions_reset_migration SELECT * FROM template_revisions;
+        DROP TABLE template_revisions;
+        ALTER TABLE template_revisions_reset_migration RENAME TO template_revisions;
+        CREATE INDEX idx_template_revisions_template ON template_revisions(template_id, sequence DESC);`);
+      if (sequence) {
+        sqlite.prepare("DELETE FROM sqlite_sequence WHERE name = 'template_revisions'").run();
+        sqlite.prepare('INSERT INTO sqlite_sequence (name,seq) VALUES (?,?)').run('template_revisions', sequence.seq);
+      }
+    })();
+  }
 
   // 检查 library_configs 列是否存在，不存在则添加
   const tableInfo = sqlite.prepare("PRAGMA table_info(tasks)").all() as any[];

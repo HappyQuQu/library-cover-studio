@@ -14,6 +14,7 @@ interface RenderOptions {
   height: number;
   quality?: number;
   format?: 'png' | 'jpeg' | 'webp';
+  backdropBuffer?: Buffer;
 }
 
 interface CanvasObject {
@@ -145,8 +146,9 @@ export async function renderTemplate(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
-      const backgroundLayer = processedTemplate.posterBackground && posterBuffer
-        ? await renderPosterBackground(posterBuffer, width, height, processedTemplate.posterBackground)
+      const backgroundBuffer = processedTemplate.posterBackground?.source === 'backdrop' ? options.backdropBuffer || posterBuffer : posterBuffer;
+      const backgroundLayer = processedTemplate.posterBackground && backgroundBuffer
+        ? await renderPosterBackground(backgroundBuffer, width, height, processedTemplate.posterBackground)
         : await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
       if (backgroundLayer) layers.push(backgroundLayer);
 
@@ -230,8 +232,9 @@ export async function renderLibraryCover(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
-      const backgroundLayer = processedTemplate.posterBackground && posterBuffers[0]
-        ? await renderPosterBackground(posterBuffers[0], width, height, processedTemplate.posterBackground)
+      const backgroundBuffer = processedTemplate.posterBackground?.source === 'backdrop' ? options.backdropBuffer || posterBuffers[0] : posterBuffers[0];
+      const backgroundLayer = processedTemplate.posterBackground && backgroundBuffer
+        ? await renderPosterBackground(backgroundBuffer, width, height, processedTemplate.posterBackground)
         : await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
       if (backgroundLayer) layers.push(backgroundLayer);
 

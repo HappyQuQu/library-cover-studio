@@ -12,10 +12,15 @@ export function requiredPosterCount(canvasJson: string): number {
   }, canvas.posterBackground ? 1 : 0));
 }
 
+export function usesBackdropBackground(canvasJson: string): boolean {
+  return JSON.parse(canvasJson).posterBackground?.source === 'backdrop';
+}
+
 /** Shared asset selection keeps preview and task execution consistent. */
 export async function fetchLibraryPosters(server: { type: string; url: string }, apiKey: string, libraryId: string,
-  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = 9) {
+  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = 9, includeBackdrop = false) {
   const posters: Buffer[] = [];
+  let backdrop: Buffer | undefined;
   for (let batch = 0; posters.length < requiredCount && batch < maxBatches; batch++) {
     const result = await mediaClient.getLibraryItems(server.type, server.url, apiKey, libraryId, {
       limit: 10, startIndex: batch * 10, sortBy, sortOrder: ['Name', 'SortName'].includes(sortBy) ? 'Ascending' : 'Descending', libraryType
@@ -27,6 +32,16 @@ export async function fetchLibraryPosters(server: { type: string; url: string },
           if (!item.imageTags?.[type]) continue;
           const poster = await mediaClient.downloadCover(server.type, server.url, apiKey, item.id, type, { tag: item.imageTags[type] });
           if (!poster?.length || poster.length === 11488 || await isBlackImage(poster)) continue;
+          // Bind the backdrop to the first usable poster, skipping items with broken covers.
+          if (includeBackdrop && !posters.length && item.imageTags?.Backdrop) {
+            try {
+              const candidate = type === 'Backdrop' ? poster : await mediaClient.downloadCover(server.type, server.url, apiKey,
+                item.id, 'Backdrop', { tag: item.imageTags.Backdrop, maxWidth: 1920 });
+              if (candidate?.length && !await isBlackImage(candidate)) backdrop = candidate;
+            } catch (error) {
+              if (!(error instanceof mediaClient.MediaServerError) || error.code !== 'MEDIA_INVALID_IMAGE') throw error;
+            }
+          }
           posters.push(poster); await onPoster?.(poster, item.name, type); break;
         } catch (error) {
           // Missing/corrupt artwork can be skipped; connection and permission errors must surface.
@@ -38,5 +53,5 @@ export async function fetchLibraryPosters(server: { type: string; url: string },
   }
   const uniqueCount = posters.length;
   if (uniqueCount) while (posters.length < requiredCount) posters.push(posters[posters.length % uniqueCount]);
-  return { posters, uniqueCount };
+  return { posters, uniqueCount, backdrop };
 }

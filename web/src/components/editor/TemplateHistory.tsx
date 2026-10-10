@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 
-const labels = { baseline: '初始版本', save: '保存', restore: '回退保存' };
+const labels = { baseline: '初始版本', save: '保存', restore: '回退保存', 'default-reset': '还原默认模板', 'before-default-reset': '还原前快照' };
 const date = (value: string) => new Date(value).toLocaleString('zh-CN', { hour12: false });
 const fallback = <div className="template-history-image-fallback"><ImageIcon size={28} /><span>预览图暂不可用</span></div>;
 

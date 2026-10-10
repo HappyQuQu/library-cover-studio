@@ -21,11 +21,11 @@ test('a clean installation imports bundled designs, previews and history once wi
   const sharp = createRequire(new URL('../backend/package.json', import.meta.url))('sharp');
   const sqlite = database.db.$client;
   const definitions = await defaults.buildDefaultTemplates();
-  assert.equal(definitions.length, 6);
+  assert.equal(definitions.length, 7);
   await defaults.seedDefaultTemplates();
   await history.initializeTemplateHistory();
-  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates').get().count, 6);
-  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM template_revisions').get().count, 6);
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates').get().count, 7);
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM template_revisions').get().count, 7);
   for (const definition of definitions) {
     const row = sqlite.prepare('SELECT * FROM templates WHERE id = ?').get(definition.id);
     assert.deepEqual(JSON.parse(row.canvas_json), definition.canvas);
@@ -50,8 +50,21 @@ test('a clean installation imports bundled designs, previews and history once wi
     };
     collectSources(definition.canvas);
     assert.ok(sources.every(source => /^data:image\/svg\+xml;base64,/.test(source)
-      || /^\/api\/templates\/posters\/[1-9]\.jpg$/.test(source)), 'designs only reference packaged assets');
+      || /^\/api\/templates\/posters\/(?:[1-9]|backdrop-poster)\.jpg$/.test(source)), 'designs only reference packaged assets');
   }
+  // Simulate upgrading a six-template installation: install the new one without touching existing rows.
+  const newId = definitions.find((definition: any) => definition.id.endsWith('1109')).id;
+  sqlite.prepare('DELETE FROM templates WHERE id = ?').run(newId);
+  sqlite.prepare('DELETE FROM system_settings WHERE key = ?').run('templates.defaults.backdrop-strip-v1');
+  const oldRows = sqlite.prepare('SELECT * FROM templates ORDER BY id').all();
+  await defaults.seedDefaultTemplates();
+  await history.initializeTemplateHistory();
+  assert.deepEqual(sqlite.prepare('SELECT * FROM templates WHERE id != ? ORDER BY id').all(newId), oldRows);
+  assert.equal(sqlite.prepare('SELECT is_locked FROM templates WHERE id = ?').get(newId).is_locked, 1);
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM template_revisions WHERE template_id = ?').get(newId).count, 1);
+  sqlite.prepare('DELETE FROM templates WHERE id = ?').run(newId);
+  await defaults.seedDefaultTemplates();
+  assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE id = ?').get(newId).count, 0);
   // User changes, unlocks, and deliberate deletions remain intact after startup.
   const edited = definitions[0], deleted = definitions[1];
   const canvas = structuredClone(edited.canvas);

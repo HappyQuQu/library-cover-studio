@@ -1032,7 +1032,7 @@ export function EditorPage() {
     };
 
     if (bg.type === 'poster-blur') {
-      const settings = { blur: bg.blur, dim: bg.dim };
+      const settings: PosterBackground = { blur: bg.blur, dim: bg.dim, source: bg.source === 'backdrop' ? 'backdrop' : 'poster' };
       (canvas as any).posterBackground = settings;
       setPosterBackground(settings);
       (canvas as any).randomOnGeneration = false;

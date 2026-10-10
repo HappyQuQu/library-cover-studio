@@ -17,6 +17,7 @@ const layoutMigrationKeys = [
   'templates.defaults.wall-reference-original-v1',
   'templates.defaults.cinematic-three-v1',
   'templates.defaults.fan-wide-v1',
+  'templates.defaults.backdrop-strip-v1',
 ];
 
 /** Install/migrate once; later restarts preserve edits, locks, and deliberate deletions. */
@@ -28,6 +29,7 @@ export async function seedDefaultTemplates() {
     await restoreReferenceWallLayout();
     await installCinematicDefaults();
     await widenDefaultFan();
+    await installBackdropStrip();
     return;
   }
   const freshInstallation = db.select({ id: templates.id }).from(templates).limit(1).all().length === 0;
@@ -42,7 +44,7 @@ export async function seedDefaultTemplates() {
     const filename = `${definition.id}.jpg`;
     if (existing) {
       const rendered = await renderLibraryCover(JSON.stringify(canvas), { title: definition.primaryTitle,
-        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height });
+        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height, backdropBuffer: definition.backdropBuffer });
       await fs.writeFile(path.join(THUMBNAILS_DIR, filename), await sharp(rendered).resize(480, 270).jpeg({ quality: 88 }).toBuffer());
     } else {
       await fs.copyFile(definition.previewPath, path.join(THUMBNAILS_DIR, filename));
@@ -93,6 +95,22 @@ export async function seedDefaultTemplates() {
   await restoreReferenceWallLayout();
   await installCinematicDefaults();
   await widenDefaultFan();
+  await installBackdropStrip();
+}
+
+/** Add the new default once to existing installations; respect later edits and deletions. */
+async function installBackdropStrip() {
+  const key = 'templates.defaults.backdrop-strip-v1';
+  if (db.select().from(systemSettings).where(eq(systemSettings.key, key)).get()) return;
+  const definition = (await buildDefaultTemplates()).find(template => template.id.endsWith('1109'))!;
+  if (!db.select().from(templates).where(eq(templates.id, definition.id)).get()) {
+    await fs.copyFile(definition.previewPath, path.join(THUMBNAILS_DIR, `${definition.id}.jpg`));
+    const now = new Date().toISOString();
+    db.insert(templates).values({ id: definition.id, name: definition.name, description: definition.description,
+      canvasJson: JSON.stringify(definition.canvas), width, height, thumbnailPath: `/thumbnails/${definition.id}.jpg`,
+      isPublic: 1, isLocked: 1, isDefault: 1, createdAt: now, updatedAt: now }).run();
+  }
+  db.insert(systemSettings).values({ key, value: 'installed', updatedAt: new Date().toISOString() }).run();
 }
 
 /** Reframe the original fan once without resetting artwork, titles, or later edits. */
@@ -132,7 +150,7 @@ async function widenDefaultFan() {
           clipPath: object.clipPath ? { ...object.clipPath, rx: radius / scaleX, ry: radius / scaleY } : object.clipPath };
       });
       const rendered = await renderLibraryCover(JSON.stringify(canvas), { title: definition.primaryTitle,
-        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height });
+        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height, backdropBuffer: definition.backdropBuffer });
       await fs.writeFile(path.join(THUMBNAILS_DIR, `${id}.jpg`), await sharp(rendered).resize(480, 270).jpeg({ quality: 88 }).toBuffer());
       db.update(templates).set({ canvasJson: JSON.stringify(canvas), thumbnailPath: `/thumbnails/${id}.jpg`,
         updatedAt: new Date().toISOString() }).where(eq(templates.id, id)).run();
@@ -284,7 +302,7 @@ async function restoreReferenceWallLayout() {
           clipPath: { ...object.clipPath, rx: 40 / scaleX, ry: 40 / scaleY } };
       });
       const rendered = await renderLibraryCover(JSON.stringify(canvas), { title: definition.primaryTitle,
-        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height });
+        primaryTitle: definition.primaryTitle, secondaryTitle: definition.secondaryTitle }, definition.posterBuffers, { width, height, backdropBuffer: definition.backdropBuffer });
       await fs.writeFile(path.join(THUMBNAILS_DIR, `${id}.jpg`), await sharp(rendered).resize(480, 270).jpeg({ quality: 88 }).toBuffer());
       db.update(templates).set({ canvasJson: JSON.stringify(canvas), thumbnailPath: `/thumbnails/${id}.jpg`,
         updatedAt: new Date().toISOString() }).where(eq(templates.id, id)).run();

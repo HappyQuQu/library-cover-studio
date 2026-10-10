@@ -174,3 +174,23 @@ test('variable subtitles wrap into centered lines with serif italic styling', as
   assert.ok(occupied.some((y, i) => i && y - occupied[i - 1] > 10), 'there is a visible gap between the two lines');
   assert.ok(occupied[occupied.length - 1] > 100, 'subtitle height includes the second line');
 });
+
+test('landscape backgrounds use the supplied backdrop, preserve sharp posters, and fall back to post1', async () => {
+  const red = await sharp({ create: { width: 40, height: 60, channels: 3, background: '#ff0000' } }).png().toBuffer();
+  const blue = await sharp({ create: { width: 80, height: 40, channels: 3, background: '#0000ff' } }).png().toBuffer();
+  const json = JSON.stringify({ ...dimensions, background: '#ffffff', posterBackground: { source: 'backdrop', blur: 0, dim: .2 },
+    backgroundImage: { type: 'Image', src: 'invalid-stale-background' }, objects: [
+      { type: 'Image', posterVar: 'post1', src: '{{poster}}', left: 30, top: 15, width: 20, height: 25 }
+    ] });
+  for (const render of [
+    (options: any) => renderLibraryCover(json, metadata, [red], options),
+    (options: any) => renderTemplate(json, metadata, red, options)
+  ]) {
+    const image = await render({ ...dimensions, backdropBuffer: blue });
+    assert.deepEqual(await pixel(image, 0, 0), [0, 0, 204, 255]);
+    assert.deepEqual(await pixel(image, 40, 20), [255, 0, 0, 255]);
+    assert.deepEqual(await pixel(await render(dimensions), 0, 0), [204, 0, 0, 255]);
+  }
+  const unchanged = await renderLibraryCover(JSON.stringify({ ...dimensions, posterBackground: { blur: 0, dim: 0 }, objects: [] }), metadata, [red], { ...dimensions, backdropBuffer: blue });
+  assert.deepEqual(await pixel(unchanged, 0, 0), [255, 0, 0, 255], 'existing poster backgrounds keep their source');
+});
