@@ -3,7 +3,7 @@
 **为 Jellyfin / Emby 设计媒体库封面，让电影、剧集和动漫分类按计划自动焕新。**
 
 [![CI](https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/evanqu/library-cover-studio-web)
+[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/evanqu/library-cover-studio)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
 [Docker 部署](#-docker-部署) · [自动化教程](#-自动化任务教程) · [界面预览](#界面预览) · [完整部署指南](doc/Docker_Deployment.md) · [发布流程](doc/Publishing.md)
@@ -49,37 +49,19 @@
 
 ```yaml
 services:
-  backend:
-    image: evanqu/library-cover-studio-backend:latest
+  library-cover-studio:
+    image: evanqu/library-cover-studio:latest
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       JWT_SECRET: "REPLACE_WITH_RANDOM_JWT_SECRET"
       ENCRYPTION_KEY: "REPLACE_WITH_RANDOM_ENCRYPTION_KEY"
-      FRONTEND_URL: "http://192.168.1.10:8080"
-    volumes:
-      - ./data:/app/backend/data
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      start_period: 20s
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  web:
-    image: evanqu/library-cover-studio-web:latest
-    restart: unless-stopped
     ports:
-      - "8080:80"
-    depends_on:
-      backend:
-        condition: service_healthy
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
 ```
 
-启动前修改三处：
-
-- `FRONTEND_URL`：换成实际访问地址，例如 NAS 的 `http://192.168.1.10:8080`；本机使用 `http://localhost:8080`。
-- `JWT_SECRET`、`ENCRYPTION_KEY`：分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
+把 `JWT_SECRET` 和 `ENCRYPTION_KEY` 分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
 
 在这个目录执行：
 
@@ -87,11 +69,11 @@ services:
 docker compose up -d
 ```
 
-打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的地址），点击「立即注册」，第一个账号成为管理员。
+打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的服务器地址；本机使用 `http://localhost:8080`），点击「立即注册」，第一个账号成为管理员。
 
-数据自动保存在同目录的 **`data` 文件夹**；只开放网页端口 `8080`，后端通过容器网络访问。改端口时同步修改 `8080:80` 的左侧和 `FRONTEND_URL`。前后端镜像保持相同标签，具体以 Docker Hub 已发布标签为准。
+**一个镜像、一个容器、一个端口。** 网页、API、封面渲染和定时任务均在这个容器中运行，数据自动保存在同目录的 **`data` 文件夹**。改端口只需修改 `8080:8080` 的左侧；NAS 直接使用局域网地址访问，不必另配 `FRONTEND_URL`。镜像标签以 Docker Hub 实际发布结果为准。
 
-NAS 与本机使用同一份配置。首次部署、反向代理、升级备份及源码构建见 **[完整部署教程](doc/Docker_Deployment.md)**。已有命名卷部署请继续使用原配置，迁移说明见教程。
+NAS 与本机使用同一份配置。首次部署、反向代理、升级备份及源码构建见 **[完整部署教程](doc/Docker_Deployment.md)**。已有安装请先按教程的迁移说明保留原密钥和数据。
 
 ## ⚡ 自动化任务教程
 

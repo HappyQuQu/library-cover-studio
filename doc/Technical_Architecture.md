@@ -116,8 +116,9 @@ library-cover-studio/
 
 ### 4.1 容器化 (Docker)
 
-- **Backend**: `node:22-alpine`。镜像轻量化，预装中文字体 (`wqy-zenhei`) 解决乱码问题。
-- **Frontend**: 多阶段构建。Build 阶段生成静态文件，Run 阶段使用 `nginx:alpine` 纯静态托管，开启 Gzip/Brotli 压缩。
+- **单容器部署**：根目录 `Dockerfile` 在构建阶段编译前后端，运行阶段使用 Node.js 22 Debian slim，预装 Noto CJK 字体。Express 在同一个 `8080` 端口提供网页、API 和流式接口，并负责封面渲染与调度，无需另启动 Nginx。
+- **网页托管**：`LCS_WEB_DIR=/app/web` 指向构建文件；支持 SPA 深链接刷新，未知 API 和缺失资源返回 404，带哈希的 assets 使用长期缓存。直接访问自动校验同源请求；HTTPS 反向代理来源通过 `FRONTEND_URL` 显式配置。
+- **持久化**：`LCS_DATA_DIR=/app/data` 保存 SQLite、加密盐、模板、字体和历史图片。旧部署迁移保留密钥和完整数据目录；仓库 Compose 配置沿用 `backend_data` 卷名。
 
 ### 4.2 扩展性规划
 

@@ -64,14 +64,10 @@ jobs:
         run: pnpm build
 
   docker:
-    name: Build ${{ matrix.component }} image
+    name: Build unified image
     needs: checks
     runs-on: ubuntu-24.04
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        component: [backend, web]
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -85,12 +81,26 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Build native image for runtime verification
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: lcs-smoke:ci
+          cache-from: type=gha,scope=unified
+          cache-to: type=gha,scope=unified,mode=max
+
+      - name: Verify single-container runtime and persistence
+        run: python3 scripts/smoke-container.py --image lcs-smoke:ci
+
       - name: Build both architectures without publishing
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ matrix.component }}/Dockerfile
+          file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: false
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,scope=${{ matrix.component }},mode=max
+          cache-from: type=gha,scope=unified
+          cache-to: type=gha,scope=unified,mode=max

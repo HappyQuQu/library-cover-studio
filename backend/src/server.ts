@@ -1,6 +1,5 @@
 import './config/env.js';
 import express from 'express';
-import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { router as apiRouter } from './routes/index.js';
@@ -15,6 +14,7 @@ import { migrateLegacyEncryption } from './utils/migrateEncryption.js';
 import { consumeStreamTicket } from './utils/streamTicket.js';
 import { ensureDataDirs, UPLOADS_DIR } from './config/paths.js';
 import { APP_VERSION } from './config/version.js';
+import { createCorsMiddleware, mountWebApp } from './middleware/webHosting.js';
 
 // 启动时校验必需的环境变量
 const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -34,25 +34,14 @@ const PORT = process.env.PORT || 3000;
 // 中间件
 app.use(helmet({
   crossOriginResourcePolicy: false,
-}));
-app.use(cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:5176',
-      process.env.FRONTEND_URL
-    ].filter(Boolean);
-
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+  contentSecurityPolicy: {
+    directives: {
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:', 'http:'],
+      upgradeInsecureRequests: null,
     }
   },
-  credentials: true
 }));
+app.use(createCorsMiddleware(Boolean(process.env.LCS_WEB_DIR)));
 app.use(morgan('dev')); // Dev output to console
 app.use(morgan(':method :url :status :response-time ms - :res[content-length]', {
   stream: logger.stream,
@@ -112,6 +101,8 @@ app.get('/api/health', (_req, res) => {
     version: APP_VERSION
   });
 });
+
+if (process.env.LCS_WEB_DIR) mountWebApp(app, process.env.LCS_WEB_DIR);
 
 // 404 处理
 app.use((_req, res) => {
