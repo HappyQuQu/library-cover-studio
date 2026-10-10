@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import { retry } from '../utils/retry.js';
+import { APP_VERSION } from '../config/version.js';
 
 export interface MediaLibrary {
   id: string; name: string; type: string; itemCount?: number; imageUrl?: string; imageItemId?: string;
@@ -44,7 +45,7 @@ export function normalizeServerUrl(input: string): string {
 export function getAuthHeaders(serverType: string, apiKey: string): Record<string, string> {
   if (serverType === 'jellyfin') return {
     Accept: 'application/json',
-    Authorization: `MediaBrowser Client="LibraryCoverStudio", Device="Server", DeviceId="library-cover-studio", Version="1.3.0", Token=${JSON.stringify(apiKey)}`
+    Authorization: `MediaBrowser Client="LibraryCoverStudio", Device="Server", DeviceId="library-cover-studio", Version="${APP_VERSION}", Token=${JSON.stringify(apiKey)}`
   };
   return { Accept: 'application/json', 'X-Emby-Token': apiKey };
 }

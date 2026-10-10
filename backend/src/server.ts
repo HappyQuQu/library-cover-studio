@@ -14,6 +14,7 @@ import { addLogClient, logger } from './utils/logger.js';
 import { migrateLegacyEncryption } from './utils/migrateEncryption.js';
 import { consumeStreamTicket } from './utils/streamTicket.js';
 import { ensureDataDirs, UPLOADS_DIR } from './config/paths.js';
+import { APP_VERSION } from './config/version.js';
 
 // 启动时校验必需的环境变量
 const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -108,7 +109,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '1.3.0'
+    version: APP_VERSION
   });
 });
 

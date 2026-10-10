@@ -389,7 +389,7 @@ export function SettingsPage() {
 
         {/* About */}
         <div style={{ marginTop: 16, padding: 16, textAlign: 'center', opacity: 0.7 }}>
-          <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>CoverStudio v1.3.0</p>
+          <p style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>CoverStudio v{import.meta.env.VITE_APP_VERSION}</p>
         </div>
       </div>
 

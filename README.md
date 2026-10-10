@@ -34,7 +34,7 @@
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/library-cover-studio.git
+git clone https://github.com/HappyQuQu/library-cover-studio.git
 cd library-cover-studio
 
 # 安装依赖
@@ -70,6 +70,36 @@ docker compose logs -f
 ```
 
 默认访问 `http://localhost:8080`，前端会代理 `/api` 到后端。端口冲突时可在 `.env` 中修改 `WEB_PORT` 和 `BACKEND_PORT`。数据保存在 Docker 命名卷中；首次使用请在页面注册管理员账号。
+
+### GitHub Actions 与 Docker Hub 发布
+
+发布流程参照 FolioPath：PR 运行测试、前后端构建和 amd64/arm64 镜像构建；合入 `main` 后通过同样的检查，再由 Release Please 自动创建并 squash merge 版本 PR、更新 `CHANGELOG.md` 和三个 `package.json`，创建 GitHub Release。新版本提交会再次检查后发布前后端镜像，包含 SBOM 与 provenance，并同步 Docker Hub Overview。该流程只发布镜像，部署由使用者执行。
+
+在仓库 **Settings → Actions → General** 开启 **Allow GitHub Actions to create and approve pull requests**。工作流只对发布 job 授予写权限，PR 检查保持只读。
+
+在 **Settings → Secrets and variables → Actions** 配置：
+
+| 类型 | 名称 | 用途 |
+| --- | --- | --- |
+| Secret | `DOCKERHUB_USERNAME` | Docker Hub 登录账号 |
+| Secret | `DOCKERHUB_TOKEN` | 可推送两个目标镜像并更新 Overview 的 access token |
+| Secret（可选） | `DOCKERHUB_DESCRIPTION_TOKEN` | 独立 Overview 更新 token，未设置时复用上述 token |
+| Variable（可选） | `DOCKERHUB_NAMESPACE` | 镜像命名空间，默认 `evanqu` |
+
+默认镜像为 `evanqu/library-cover-studio-backend` 和 `evanqu/library-cover-studio-web`，支持 `linux/amd64` 与 `linux/arm64`。`main` 发布 `latest`、`sha-*`；创建正式版本时追加 `MAJOR.MINOR.PATCH`、`MAJOR.MINOR`。手工推送 `v*.*.*` 标签也可触发发布。Actions 手动运行默认只发布 `edge` 与 `sha-*`，可填写其他明确的 Docker 标签。
+
+PR 标题和提交使用 Conventional Commits，例如 `fix: 修复封面生成缺失图形`。`feat:`、`fix:`、`perf:`、`refactor:`、`note:` 进入面向用户的更新日志；`ci:`、`build:`、`test:`、`docs:`、`chore:` 不进入。自动发布从当前 `1.3.0` 基线开始，后端健康接口、媒体服务器请求头和前端设置页从各自包版本读取版本号。
+
+已发布镜像可以使用独立 Compose 文件部署，与源码构建使用相同的端口和数据卷：
+
+```bash
+# .env 中仍需配置 JWT_SECRET 和 ENCRYPTION_KEY；升级前备份数据卷
+# 使用已发布的明确版本号，也可通过 LCS_IMAGE_NAMESPACE 指定其他命名空间
+LCS_IMAGE_TAG=1.3.1 docker compose -f docker-compose.release.yml pull
+LCS_IMAGE_TAG=1.3.1 docker compose -f docker-compose.release.yml up -d --wait
+```
+
+首次发布完成后，上例的 `1.3.1` 才可拉取。工作流配置见 [CI](.github/workflows/ci.yml) 和 [Docker Hub 发布](.github/workflows/dockerhub.yml)。
 
 ## Jellyfin / Emby 接口兼容
 

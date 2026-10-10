@@ -1,0 +1,29 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "bootstrap-sha": "d15dcd08a5cf6ac6477fe7811568c8e2dd1cf6a5",
+  "changelog-sections": [
+    { "type": "feat", "section": "✨ 新功能" },
+    { "type": "perf", "section": "🚀 改进" },
+    { "type": "refactor", "section": "🚀 改进" },
+    { "type": "fix", "section": "🐛 修复" },
+    { "type": "note", "section": "⚠️ 注意事项" },
+    { "type": "revert", "section": "🐛 修复" },
+    { "type": "docs", "section": "Documentation", "hidden": true },
+    { "type": "test", "section": "Tests", "hidden": true },
+    { "type": "build", "section": "Build", "hidden": true },
+    { "type": "ci", "section": "CI", "hidden": true },
+    { "type": "chore", "section": "Miscellaneous", "hidden": true }
+  ],
+  "packages": {
+    ".": {
+      "component": "library-cover-studio",
+      "extra-files": [
+        { "type": "json", "path": "backend/package.json", "jsonpath": "$.version" },
+        { "type": "json", "path": "web/package.json", "jsonpath": "$.version" }
+      ]
+    }
+  }
+}
