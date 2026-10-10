@@ -21,6 +21,7 @@ import { calculateFitZoom } from '@/lib/editorLayout';
 import { useEditorDraft } from '@/hooks/useEditorDraft';
 import { resolveApiUrl } from '@/lib/apiUrl';
 import { getSamplePosterUrl } from '@/lib/posters';
+import { applyPosterBackground, type PosterBackground } from '@/lib/posterBackground';
 
 // ── Background generation helpers ──────────────────────────────────────────
 
@@ -147,6 +148,7 @@ export function EditorPage() {
   const [customFonts, setCustomFonts] = useState<Font[]>([]);
 
   const [randomOnGeneration, setRandomOnGeneration] = useState(false);
+  const [posterBackground, setPosterBackground] = useState<PosterBackground>();
 
   const {
     canvas, setCanvas, selectedObject, setSelectedObject,
@@ -156,6 +158,9 @@ export function EditorPage() {
   const historyLength = useCanvasStore((s) => s.history.length);
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < historyLength - 1;
+  useEffect(() => {
+    setPosterBackground((canvas as any)?.posterBackground);
+  }, [canvas, canvasReady, historyIndex]);
 
   // Fetch and inject custom fonts
   useEffect(() => {
@@ -585,6 +590,8 @@ export function EditorPage() {
           setRandomOnGeneration(Boolean(jsonData.randomOnGeneration));
           (canvas as any).randomOnGeneration = Boolean(jsonData.randomOnGeneration);
           (canvas as any).randomBackgroundStyle = jsonData.randomBackgroundStyle;
+          (canvas as any).posterBackground = jsonData.posterBackground;
+          setPosterBackground(jsonData.posterBackground);
 
           // Restore custom properties from JSON data
           const objects = canvas.getObjects();
@@ -603,6 +610,8 @@ export function EditorPage() {
             });
           }
           // Restore dimensions and zoom after JSON load as it might overwrite it
+          await applyPosterBackground(canvas, width, height);
+          if (cancelled) return;
           canvas.setDimensions({
             width: width * currentZoom,
             height: height * currentZoom
@@ -980,6 +989,11 @@ export function EditorPage() {
       return;
     }
 
+    const previousBackground = {
+      posterBackground: (canvas as any).posterBackground,
+      randomOnGeneration: (canvas as any).randomOnGeneration,
+      randomBackgroundStyle: (canvas as any).randomBackgroundStyle
+    };
     // Handle random generation flag
     if (bg.randomOnGeneration !== undefined) {
       setRandomOnGeneration(bg.randomOnGeneration);
@@ -991,8 +1005,10 @@ export function EditorPage() {
       return;
     }
     // A manually chosen replacement background opts out of the template's style-specific palette.
-    if (['color', 'gradient', 'random-gradient', 'mesh', 'stripes'].includes(bg.type)) {
+    if (['color', 'gradient', 'random-gradient', 'mesh', 'stripes', 'poster-blur'].includes(bg.type)) {
       (canvas as any).randomBackgroundStyle = undefined;
+      (canvas as any).posterBackground = undefined;
+      setPosterBackground(undefined);
     }
 
     // Get gradient coords based on direction
@@ -1015,7 +1031,22 @@ export function EditorPage() {
       }
     };
 
-    if (bg.type === 'color') {
+    if (bg.type === 'poster-blur') {
+      const settings = { blur: bg.blur, dim: bg.dim };
+      (canvas as any).posterBackground = settings;
+      setPosterBackground(settings);
+      (canvas as any).randomOnGeneration = false;
+      setRandomOnGeneration(false);
+      try {
+        await applyPosterBackground(canvas, canvasWidth, canvasHeight);
+      } catch {
+        Object.assign(canvas, previousBackground);
+        setPosterBackground(previousBackground.posterBackground);
+        setRandomOnGeneration(Boolean(previousBackground.randomOnGeneration));
+        toast({ title: '背景加载失败', description: '请检查首张海报素材后重试', variant: 'destructive' });
+        return;
+      }
+    } else if (bg.type === 'color') {
       canvas.backgroundImage = undefined as any;
       canvas.backgroundColor = bg.color;
     } else if (bg.type === 'gradient') {
@@ -1209,6 +1240,7 @@ export function EditorPage() {
           onAddShape={(type, payload) => addObject(type, payload)}
           onChangeBackground={changeBackground}
           initialRandomOnGeneration={randomOnGeneration}
+          initialPosterBackground={posterBackground}
         />}
       </aside>
 
@@ -1576,6 +1608,7 @@ export function EditorPage() {
                         canvas.setActiveObject(fabricImg);
                         setSelectedObject(fabricImg);
 
+                        await applyPosterBackground(canvas, canvasWidth, canvasHeight);
                         canvas.renderAll();
                         saveToHistory();
                       }

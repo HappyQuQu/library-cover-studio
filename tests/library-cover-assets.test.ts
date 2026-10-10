@@ -12,3 +12,8 @@ test('text-only and static-image layouts need no media artwork; stacked layers s
   assert.equal(count([{ type: 'Image', src: '/api/templates/posters/3.jpg' }]), 3);
   assert.equal(count([{ type: 'Image', src: '{{poster4}}' }]), 4);
 });
+
+test('a blurred poster background alone requests artwork even when there are no poster layers', () => {
+  assert.equal(requiredPosterCount(JSON.stringify({ posterBackground: { blur: 60, dim: .35 }, objects: [{ type: 'Textbox' }] })), 1);
+  assert.equal(requiredPosterCount(JSON.stringify({ posterBackground: { blur: 60, dim: .35 }, objects: [{ type: 'Image', posterVar: 'post9' }] })), 9);
+});

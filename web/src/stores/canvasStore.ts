@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import * as fabric from 'fabric';
 import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
+import { applyPosterBackground } from '@/lib/posterBackground';
 
 /**
  * Fabric.js 6 的 loadFromJSON 会把 gradient background 赋值为 plain object 而非 Gradient 实例，
@@ -10,6 +11,7 @@ import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
 async function reapplyBackground(canvas: fabric.Canvas, json: any) {
   (canvas as any).randomOnGeneration = Boolean(json.randomOnGeneration);
   (canvas as any).randomBackgroundStyle = json.randomBackgroundStyle;
+  (canvas as any).posterBackground = json.posterBackground;
   // 修复 gradient backgroundColor
   const bg = (canvas as any).backgroundColor;
   if (bg && typeof bg === 'object' && !(bg instanceof fabric.Gradient)) {
@@ -27,6 +29,7 @@ async function reapplyBackground(canvas: fabric.Canvas, json: any) {
       (canvas as any).backgroundImage = img;
     } catch { /* ignore */ }
   }
+  await applyPosterBackground(canvas, json.width || canvas.getWidth() / canvas.getZoom(), json.height || canvas.getHeight() / canvas.getZoom());
 }
 
 interface CanvasState {

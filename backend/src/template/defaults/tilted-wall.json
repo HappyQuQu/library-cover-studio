@@ -1,33 +1,14 @@
 {
   "id": "7de80a91-0d2c-4d9a-8e3a-902c8d241105",
   "name": "倾斜圆角海报墙",
-  "description": "参考动漫封面：左侧大标题，右侧圆角海报倾斜排列，保留海报间距、阴影和斜向边界。每次生成按同色系渐变随机配色，海报与标题自动替换。",
+  "description": "左侧大标题，右侧九张圆角海报倾斜排列。使用首张海报的模糊压暗背景，保留海报间距、阴影和斜向边界，海报与标题自动替换。",
   "canvas": {
     "version": "6.0.0",
     "width": 1920,
     "height": 1080,
-    "randomOnGeneration": true,
+    "randomOnGeneration": false,
     "randomBackgroundStyle": "muted-wall",
-    "background": {
-      "type": "linear",
-      "gradientUnits": "pixels",
-      "coords": {
-        "x1": 0,
-        "y1": 0,
-        "x2": 1920,
-        "y2": 0
-      },
-      "colorStops": [
-        {
-          "offset": 0,
-          "color": "#773d42"
-        },
-        {
-          "offset": 1,
-          "color": "#c56770"
-        }
-      ]
-    },
+    "background": "#202020",
     "objects": [
       {
         "version": "6.0.0",
@@ -554,7 +535,11 @@
         "lineHeight": 1.16,
         "fitText": true
       }
-    ]
+    ],
+    "posterBackground": {
+      "blur": 60,
+      "dim": 0.35
+    }
   },
   "primaryTitle": "电影",
   "secondaryTitle": "MOVIES",

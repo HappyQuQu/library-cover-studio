@@ -3,6 +3,7 @@ import { StaticCanvas, Gradient } from 'fabric';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { apiClient } from '@/api/client';
 import type { CanvasJSON } from '@/lib/aiDesign';
+import { applyPosterBackground } from '@/lib/posterBackground';
 
 export function normalizeDesignAssets(json: CanvasJSON): CanvasJSON {
   return JSON.parse(JSON.stringify(json, (key, value) => {
@@ -45,6 +46,9 @@ export function DesignPreview({ json, width, height, onReady }: {
         validateSVGImages(json);
         await document.fonts.ready;
         await preview.loadFromJSON(normalizeDesignAssets(json), undefined, { signal: controller.signal });
+        if (disposed) return;
+        (preview as any).posterBackground = json.posterBackground;
+        await applyPosterBackground(preview, width, height);
         if (disposed) return;
         if (json.background && typeof json.background === 'object') preview.backgroundColor = json.background.type === 'radial'
           ? new Gradient<'radial'>({ ...json.background, type: 'radial' }) : new Gradient<'linear'>({ ...json.background, type: 'linear' });
