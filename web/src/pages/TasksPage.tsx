@@ -23,7 +23,7 @@ export function TasksPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [logsTaskId, setLogsTaskId] = useState<string | null>(null);
-  const { data: tasks = [], isLoading } = useTasks();
+  const { data: tasks = [], isLoading, isError, refetch } = useTasks();
   const { data: servers = [] } = useServers();
   const { data: templates = [] } = useTemplates();
   const deleteMutation = useDeleteTask();
@@ -36,8 +36,8 @@ export function TasksPage() {
     try {
       await deleteMutation.mutateAsync(taskId);
       toast({ title: '任务已删除' });
-    } catch (error) {
-      toast({ title: '删除失败', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: '删除失败', description: error.response?.data?.error?.message, variant: 'destructive' });
     }
   };
 
@@ -45,8 +45,8 @@ export function TasksPage() {
     try {
       await runMutation.mutateAsync(id);
       toast({ title: '任务已启动', description: '正在后台处理图片...' });
-    } catch (error) {
-      toast({ title: '执行失败', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: '执行失败', description: error.response?.data?.error?.message, variant: 'destructive' });
     }
   };
 
@@ -76,13 +76,14 @@ export function TasksPage() {
       {isDialogOpen && <TaskConfigDialog task={editingTask} onClose={() => { setIsDialogOpen(false); setEditingTask(null); }} />}
 
 
+      {isError && <div className="card" role="alert" style={{ padding: 20 }}>任务列表加载失败，请检查连接。<Button onClick={() => refetch()}>重试</Button></div>}
       {/* Task List */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
         {isLoading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '100px 0' }}>
             <Loader2 style={{ width: 32, height: 32, color: 'var(--text-tertiary)', animation: 'spin 1s linear infinite' }} />
           </div>
-        ) : tasks.length === 0 ? (
+        ) : isError && tasks.length === 0 ? null : tasks.length === 0 ? (
           <div className="card" style={{ padding: '60px 0' }}>
             <div className="empty-state">
               <div className="empty-state-icon">

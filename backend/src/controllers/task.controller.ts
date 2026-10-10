@@ -10,7 +10,8 @@ import { createError } from '../middleware/index.js';
 import { scheduleTask, removeScheduledTask, getSchedulerTimezone } from '../services/scheduler.service.js';
 import { getUpcomingExecutions } from '../utils/schedulePreview.js';
 import cron from 'node-cron';
-import { runTask } from '../services/taskRunner.service.js';
+import path from 'node:path';
+import { runTask, isTaskRunning } from '../services/taskRunner.service.js';
 import { getLocalISOString } from '../utils/time.js';
 
 // 验证 Schema
@@ -58,10 +59,8 @@ export const createTaskSchema = z.object({
   libraryConfigs: libraryConfigsSchema.optional(),
   isEnabled: z.boolean().optional(),
   options: z.object({
-    skipLocked: z.boolean().default(true),
-    overwriteExisting: z.boolean().default(false),
     randomBackground: z.boolean().default(false)
-  }).optional()
+  }).strict().optional()
 }).refine(
   (data) => data.type !== 'scheduled' || !!data.cronExpression,
   { message: 'cronExpression is required for scheduled tasks', path: ['cronExpression'] }
@@ -76,10 +75,8 @@ export const updateTaskSchema = z.object({
   libraryIds: z.array(z.string()).optional(),
   libraryConfigs: libraryConfigsSchema.optional(),
   options: z.object({
-    skipLocked: z.boolean().default(true),
-    overwriteExisting: z.boolean().default(false),
     randomBackground: z.boolean().default(false)
-  }).optional(),
+  }).strict().optional(),
   isEnabled: z.boolean().optional()
 });
 
@@ -136,7 +133,9 @@ export async function getById(req: Request, res: Response, next: NextFunction) {
     if (!task) {
       return next(createError('Task not found', 404, 'TASK_NOT_FOUND'));
     }
-
+    if (req.user?.role !== 'admin' && task.userId !== req.user?.userId) {
+      throw createError('无权查看此任务', 403, 'FORBIDDEN');
+    }
     res.json(task);
   } catch (error) {
     next(error);
@@ -272,6 +271,7 @@ export async function remove(req: Request, res: Response, next: NextFunction) {
       return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
     }
 
+    if (isTaskRunning(idStr)) throw createError('任务正在执行，请等待执行结束后删除', 409, 'TASK_RUNNING');
     removeScheduledTask(idStr);
 
     const logIds = db.select({ id: taskLogs.id }).from(taskLogs).where(eq(taskLogs.taskId, idStr)).all().map(log => log.id);
@@ -301,6 +301,7 @@ export async function runNow(req: Request, res: Response, next: NextFunction) {
       return next(createError('Forbidden: Access denied to this task', 403, 'FORBIDDEN'));
     }
 
+    if (isTaskRunning(idStr)) throw createError('任务正在执行', 409, 'TASK_RUNNING');
     // 创建任务日志
     const logId = uuidv4();
     const now = getLocalISOString();
@@ -386,7 +387,7 @@ export async function getLogCover(req: Request, res: Response, next: NextFunctio
     if (!file || !fs.existsSync(file)) throw createError('本次图片未保存或已被清理', 404, 'HISTORY_IMAGE_NOT_FOUND');
     res.setHeader('Cache-Control', 'private, no-store');
     if (req.query.download === '1') {
-      res.download(file, `${cover.libraryName.replace(/[<>:"/\\|?*\r\n]/g, '_') || 'cover'}-${cover.id.slice(0, 8)}.png`);
+      res.download(file, `${cover.libraryName.replace(/[<>:"/\\|?*\r\n]/g, '_') || 'cover'}-${cover.id.slice(0, 8)}${path.extname(file)}`);
     } else {
       res.sendFile(file);
     }

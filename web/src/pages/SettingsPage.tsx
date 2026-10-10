@@ -2,10 +2,11 @@ import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
-import { useUpdateSettings, useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
+import { useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
 import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
+import { resolveApiUrl } from '@/lib/apiUrl';
 import { apiClient } from '@/api/client';
 import { AIProviderSettings } from '@/components/settings/AIProviderSettings';
 
@@ -27,7 +28,10 @@ export function SettingsPage() {
   const user = useAuthStore((state) => state.user);
   const { mode, setMode, brand, setBrand } = useThemeStore();
   const { toast } = useToast();
-  const updateSettings = useUpdateSettings();
+  const isAdmin = user?.role === 'admin';
+  const [retention, setRetention] = useState({ maxRuns: '50', maxDays: '30' });
+  const [maintenanceBusy, setMaintenanceBusy] = useState(false);
+  const [cachePreview, setCachePreview] = useState<{ files: number; bytes: number } | null>(null);
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -95,7 +99,7 @@ export function SettingsPage() {
       try {
         const { data } = await apiClient.post<{ ticket: string }>('/auth/stream-ticket');
         if (cancelled) return;
-        eventSource = new EventSource(`/api/logs/stream?ticket=${encodeURIComponent(data.ticket)}`);
+        eventSource = new EventSource(resolveApiUrl(`/api/logs/stream?ticket=${encodeURIComponent(data.ticket)}`, import.meta.env.VITE_API_URL || '/api'));
 
         eventSource.onmessage = (event) => {
           try {
@@ -177,28 +181,43 @@ export function SettingsPage() {
     }
   };
 
-  const handleModeChange = async (newMode: any) => {
-    setMode(newMode);
-    try {
-      await updateSettings.mutateAsync({ theme_mode: newMode });
-    } catch (error) {
-      console.error('Failed to sync theme mode:', error);
-    }
-  };
+  const handleModeChange = (newMode: any) => setMode(newMode);
+  const handleBrandChange = (newBrand: any) => setBrand(newBrand);
 
-  const handleBrandChange = async (newBrand: any) => {
-    setBrand(newBrand);
+  const handleExport = async () => {
+    setMaintenanceBusy(true);
     try {
-      await updateSettings.mutateAsync({ brand_theme: newBrand });
-    } catch (error) {
-      console.error('Failed to sync brand theme:', error);
-    }
+      const response = await apiClient.get('/settings/export');
+      const url = URL.createObjectURL(new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' }));
+      const anchor = document.createElement('a'); anchor.href = url; anchor.download = `cover-studio-config-${new Date().toISOString().slice(0, 10)}.json`; anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast({ title: '配置已导出', description: '不包含账号密码、连接密钥和图片文件。' });
+    } catch { toast({ title: '导出失败', variant: 'destructive' }); }
+    finally { setMaintenanceBusy(false); }
+  };
+  const handleCache = async () => {
+    setMaintenanceBusy(true);
+    try {
+      if (!cachePreview) {
+        setCachePreview((await apiClient.get('/settings/cache')).data);
+      } else {
+        const { data } = await apiClient.post('/settings/cache/clear');
+        setCachePreview(null);
+        toast({ title: '清理完成', description: `已清理 ${data.files} 个文件。` });
+      }
+    } catch { toast({ title: '缓存操作失败', variant: 'destructive' }); }
+    finally { setMaintenanceBusy(false); }
+  };
+  const saveRetention = async (key: 'maxRuns' | 'maxDays', value: string) => {
+    try { await apiClient.post('/settings', { [`history.${key}`]: value }); toast({ title: '历史保留设置已保存' }); }
+    catch { toast({ title: '保存失败，请输入有效整数', variant: 'destructive' }); await loadStorageSettings(); }
   };
 
   const loadStorageSettings = async () => {
     try {
       const res = await apiClient.get('/settings');
       const settings = res.data || {};
+      setRetention({ maxRuns: settings['history.maxRuns'] || '50', maxDays: settings['history.maxDays'] || '30' });
       setStorageSettings({
         savePosters: settings['storage.savePosters'] === 'true',
         saveCovers: settings['storage.saveCovers'] === 'true'
@@ -236,14 +255,14 @@ export function SettingsPage() {
   };
 
   const saveRenderingSetting = async (key: 'outputFormat' | 'outputQuality' | 'concurrency', value: string) => {
-    const oldValue = renderingSettings[key];
     setRenderingSettings(prev => ({ ...prev, [key]: value }));
     try {
       await apiClient.post('/settings', { [`rendering.${key}`]: value });
     } catch (error) {
       console.error('Failed to save rendering setting', error);
       // Revert on error
-      setRenderingSettings(prev => ({ ...prev, [key]: oldValue }));
+      toast({ title: '保存失败，请检查输入范围', variant: 'destructive' });
+      await loadRenderingSettings();
     }
   };
 
@@ -461,7 +480,8 @@ export function SettingsPage() {
               <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
               渲染设置
             </div>
-            <div>
+            {!isAdmin && <p style={{ padding: 16 }}>全局设置仅管理员可修改。</p>}
+            <fieldset disabled={!isAdmin} style={{ border: 0, padding: 0, margin: 0 }}>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出格式</h3>
@@ -481,7 +501,7 @@ export function SettingsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出质量</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>压缩质量 (1-100)</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>JPEG / WebP 压缩质量 (1-100)，PNG 为无损格式</p>
                 </div>
                 <Input
                   type="number"
@@ -497,7 +517,7 @@ export function SettingsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>并发数量</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>同时处理任务数</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>同时渲染的图片数量</p>
                 </div>
                 <Input
                   type="number"
@@ -510,7 +530,7 @@ export function SettingsPage() {
                   style={{ width: 120 }}
                 />
               </div>
-            </div>
+            </fieldset>
           </div>
         )}
 
@@ -521,7 +541,8 @@ export function SettingsPage() {
               <Server style={{ width: 18, height: 18, color: 'var(--primary)' }} />
               存储设置
             </div>
-            <div>
+            {!isAdmin && <p style={{ padding: 16 }}>全局设置仅管理员可修改。</p>}
+            <fieldset disabled={!isAdmin} style={{ border: 0, padding: 0, margin: 0 }}>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存原海报</h3>
@@ -539,7 +560,7 @@ export function SettingsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存生成的封面</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>将生成的最终封面保存到 <code>./data/covers</code></p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>额外保存一份封面文件；执行历史中的图片由下方保留策略管理</p>
                 </div>
                 <label className="switch">
                   <input
@@ -550,7 +571,13 @@ export function SettingsPage() {
                   <span className="slider round"></span>
                 </label>
               </div>
-            </div>
+              <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-color)' }}>
+                <h3>执行历史保留</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0' }}>每个任务保留最近指定次数、指定天数内的已结束记录和图片；超出任一上限会在启动或执行结束后清理。正在执行的记录会保留。</p>
+                <label>每任务最多次数 <Input type="number" min={1} max={500} value={retention.maxRuns} onChange={e => setRetention(p => ({ ...p, maxRuns: e.target.value }))} onBlur={e => saveRetention('maxRuns', e.target.value)} /></label>
+                <label>最多保留天数 <Input type="number" min={1} max={365} value={retention.maxDays} onChange={e => setRetention(p => ({ ...p, maxDays: e.target.value }))} onBlur={e => saveRetention('maxDays', e.target.value)} /></label>
+              </div>
+            </fieldset>
           </div>
         )}
 
@@ -635,9 +662,9 @@ export function SettingsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>导出数据</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>导出所有模板和配置文件</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>导出模板和配置 JSON；不包含账号密码、API 密钥、历史图片与字体文件</p>
                 </div>
-                <Button className="btn btn-secondary">
+                <Button className="btn btn-secondary" disabled={!isAdmin || maintenanceBusy} onClick={handleExport}>
                   <Download style={{ width: 16, height: 16 }} />
                   导出
                 </Button>
@@ -645,13 +672,15 @@ export function SettingsPage() {
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>清理缓存</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>清除临时生成文件和缓存</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>清理超过 24 小时的临时文件和未被历史引用的图片，保留模板、字体和有效历史</p>
                 </div>
-                <Button className="btn btn-secondary">
+                <Button className="btn btn-secondary" disabled={!isAdmin || maintenanceBusy} onClick={handleCache}>
                   <Trash2 style={{ width: 16, height: 16 }} />
-                  清理
+                  {cachePreview ? '确认清理' : '查看可清理文件'}
                 </Button>
               </div>
+              {cachePreview && <div style={{ padding: '0 24px 20px' }} role="status">可清理 {cachePreview.files} 个文件，约 {(cachePreview.bytes / 1024 / 1024).toFixed(2)} MB。<Button variant="ghost" onClick={() => setCachePreview(null)}>取消</Button></div>}
+              {!isAdmin && <p style={{ padding: 16 }}>配置导出和缓存清理仅管理员可操作。</p>}
             </div>
           </div>
         )}

@@ -18,6 +18,8 @@ import { apiClient } from '@/api/client';
 import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
 import { TemplateHistory } from '@/components/editor/TemplateHistory';
 import { calculateFitZoom } from '@/lib/editorLayout';
+import { useEditorDraft } from '@/hooks/useEditorDraft';
+import { resolveApiUrl } from '@/lib/apiUrl';
 import { getSamplePosterUrl } from '@/lib/posters';
 
 // ── Background generation helpers ──────────────────────────────────────────
@@ -172,13 +174,13 @@ export function EditorPage() {
           document.head.appendChild(styleEl);
         }
 
-        const baseUrl = import.meta.env.VITE_API_URL || '';
+        const baseUrl = import.meta.env.VITE_API_URL || '/api';
         const fontRules = fonts.map(font => {
-          const fontUrl = font.url.startsWith('http') ? font.url : `${baseUrl}${font.url}`;
+          const fontUrl = resolveApiUrl(font.url, baseUrl);
           return `
             @font-face {
-              font-family: "${font.name}";
-              src: url("${fontUrl}");
+              font-family: ${JSON.stringify(font.name)};
+              src: url(${JSON.stringify(fontUrl)});
               font-display: swap;
             }
           `;
@@ -214,6 +216,23 @@ export function EditorPage() {
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
   const saving = createMutation.isPending || updateMutation.isPending;
+  const drafts = useEditorDraft(canvas, canvasReady, readOnly, id, templateName, canvasWidth, canvasHeight);
+  const loadedTemplate = useRef('');
+  const loadedCanvas = useRef(canvas);
+  const dirtyRef = useRef(false); dirtyRef.current = drafts.dirty;
+  const hasChangesRef = useRef(drafts.hasChanges); hasChangesRef.current = drafts.hasChanges;
+  const markLoadedRef = useRef(drafts.markLoaded); markLoadedRef.current = drafts.markLoaded;
+  const restoreDraft = async () => {
+    const draft = drafts.pendingDraft;
+    if (!canvas || !draft || readOnly) return;
+    try {
+      await useCanvasStore.getState().applyCanvasJSON(JSON.parse(draft.canvasJson));
+      setTemplateName(draft.name); setCanvasWidth(draft.width); setCanvasHeight(draft.height);
+      setRandomOnGeneration(Boolean((canvas as any).randomOnGeneration));
+      syncLayersRef.current(); drafts.acknowledgeDraft();
+      toast({ title: '草稿已恢复', description: '请检查内容并保存。' });
+    } catch { toast({ title: '草稿恢复失败', variant: 'destructive' }); }
+  };
 
   useEffect(() => {
     useCanvasStore.getState().setReadOnly(readOnly);
@@ -511,6 +530,9 @@ export function EditorPage() {
     const defaultW = 1920;
     const defaultH = 1080;
 
+    if (loadedCanvas.current !== canvas) { loadedCanvas.current = canvas; loadedTemplate.current = ''; }
+    const version = `${id || 'new'}:${templateData?.updatedAt || ''}`;
+    if (loadedTemplate.current === version || (loadedTemplate.current.startsWith(`${id || 'new'}:`) && hasChangesRef.current())) return;
     // Basic initialization
     if (canvas && !id) {
       setCanvasWidth(defaultW);
@@ -523,13 +545,16 @@ export function EditorPage() {
       canvas.setZoom(initialZoom);
       setZoom(initialZoom);
       resetHistory();
+      loadedTemplate.current = version;
       setCanvasReady(true);
       return;
     }
 
     if (!canvas || !templateData) return;
 
+    let cancelled = false;
     const loadTemplate = async () => {
+      setCanvasReady(false);
       setTemplateName(templateData.name || '');
       const width = templateData.width || defaultW;
       const height = templateData.height || defaultH;
@@ -550,6 +575,7 @@ export function EditorPage() {
           const jsonData = JSON.parse(templateData.canvasJson);
           setIsRestoring(true);
           await canvas.loadFromJSON(jsonData);
+          if (cancelled) return;
           if (jsonData.background && typeof jsonData.background === 'object') {
             canvas.backgroundColor = jsonData.background.type === 'radial'
               ? new fabric.Gradient<'radial'>(jsonData.background)
@@ -587,16 +613,24 @@ export function EditorPage() {
           resetHistory(jsonData);
         } catch (err) {
           console.error('Failed to load canvas JSON:', err);
+          toast({ title: '模板加载失败', description: '请检查模板数据后重新打开。', variant: 'destructive' });
+          return;
         } finally {
           setIsRestoring(false);
         }
       } else {
         resetHistory();
       }
+      if (cancelled) return;
+      loadedTemplate.current = version;
+      if (dirtyRef.current === false && canvasReady) {
+        markLoadedRef.current({ name: templateData.name || '', width, height, canvasJson: JSON.stringify(canvas.toObject(CANVAS_PROPERTIES)) });
+      }
       setCanvasReady(true);
     };
 
     loadTemplate();
+    return () => { cancelled = true; };
   }, [canvas, templateData, id, setZoom, setIsRestoring, resetHistory]);
 
   // Sync fabric zoom and dimensions when zoom state changes
@@ -801,7 +835,7 @@ export function EditorPage() {
         break;
       }
       case 'arrow': {
-        const pathData = 'M 0 0 L 110 0 L 110 -20 L 150 0 L 110 20 L 110 0 Z';
+        const pathData = 'M 0 -8 L 110 -8 L 110 -20 L 150 0 L 110 20 L 110 8 L 0 8 Z';
         const arrow = new fabric.Path(pathData, {
           left: centerX, top: centerY,
           originX: 'center', originY: 'center',
@@ -920,6 +954,7 @@ export function EditorPage() {
         canvas.renderAll();
       }
       const canvasJson = JSON.stringify(canvas.toObject(CANVAS_PROPERTIES));
+      const savedSnapshot = { name: templateName, width: canvasWidth, height: canvasHeight, canvasJson };
       if (id && templateData?.canManage !== false) {
         await updateMutation.mutateAsync({ id, name: templateName, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
       } else {
@@ -927,8 +962,10 @@ export function EditorPage() {
           name: id ? `${templateName} · 副本` : templateName || t('designer.newTemplate'), canvasJson,
           width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
         });
+        drafts.markSaved(savedSnapshot);
         navigate(`/editor/${result.id}`, { replace: true });
       }
+      drafts.markSaved(savedSnapshot);
       toast({ title: t('common.success'), description: '设计已保存，并记录到保存历史。' });
     } catch (error: any) {
       toast({ title: '保存失败', description: error.response?.data?.error?.message || '请检查图片素材后重试', variant: 'destructive' });
@@ -1214,6 +1251,8 @@ export function EditorPage() {
                 className="bg-transparent text-lg font-bold text-(--text-primary) focus:outline-none focus:border-b-2 focus:border-(--primary) transition-all"
               />
               <Edit className="w-4 h-4 text-(--text-tertiary)" />
+              {drafts.draftUnavailable && <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>草稿无法保存，请先保存模板</span>}
+              {drafts.dirty && <span style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-secondary)' }}>未保存</span>}
               {templateData?.isLocked && <span className="template-lock-badge" title="已锁定：不可编辑、保存、回退或删除"><Lock size={12} />已锁定 · 只读</span>}
             </div>
           </div>
@@ -1666,6 +1705,10 @@ export function EditorPage() {
 
       </aside>
 
+      {drafts.pendingDraft && !readOnly && <div role="dialog" aria-label="恢复编辑草稿" style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, padding: 20, background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 12, boxShadow: '0 8px 30px #0004' }}>
+        <p>发现本浏览器未保存的草稿（{new Date(drafts.pendingDraft.savedAt).toLocaleString()}）。恢复会替换当前画布。</p>
+        <Button onClick={restoreDraft}>恢复草稿</Button><Button variant="ghost" onClick={drafts.discardDraft}>丢弃草稿</Button>
+      </div>}
       {id && templateData?.canManage && <TemplateHistory id={id} open={saveHistoryOpen} onOpenChange={setSaveHistoryOpen} locked={templateData.isLocked} saving={saving} />}
 
       {/* Preview Modal */}

@@ -7,7 +7,7 @@ export function requiredPosterCount(canvasJson: string): number {
   return Math.min(9, (canvas.objects || []).reduce((count: number, object: any) => {
     if (object.visible === false || object.opacity === 0) return count;
     const variable = object.posterVar?.match(/post(\d+)/)?.[1];
-    const asset = !variable && typeof object.src === 'string' ? object.src.match(/\/posters\/(\d+)\.(?:jpg|png|jpeg)/i)?.[1] : undefined;
+    const asset = !variable && typeof object.src === 'string' ? (object.src.match(/\{\{poster(\d+)\}\}/)?.[1] || object.src.match(/\/posters\/(\d+)\.(?:jpg|png|jpeg)/i)?.[1]) : undefined;
     return Math.max(count, Number(variable || asset || (object.isPoster || object.src === '{{poster}}' ? 1 : 0)));
   }, 0));
 }

@@ -286,6 +286,8 @@ test('reference defaults are editable variable layouts, seed once, and enforce t
   await defaults.seedDefaultTemplates();
   assert.equal(sqlite.prepare('SELECT name FROM templates WHERE id = ?').get(templateId).name, 'Customized default');
   assert.equal((await request('admin', `/${templateId}/lock`, 'POST', { isLocked: false })).status, 200);
+  assert.equal((await request('admin', `/${templateId}`, 'DELETE')).status, 409, 'task references block deletion after unlocking');
+  sqlite.prepare('DELETE FROM tasks WHERE id = ?').run('migration-task');
   assert.equal((await request('admin', `/${templateId}`, 'DELETE')).status, 200);
   await defaults.seedDefaultTemplates();
   assert.equal(sqlite.prepare('SELECT count(*) AS count FROM templates WHERE id = ?').get(templateId).count, 0);

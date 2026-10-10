@@ -10,6 +10,7 @@ import { fetchLibraryPosters, requiredPosterCount } from '../services/libraryCov
 import { renderLibraryCover } from '../services/renderer.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { createError } from '../middleware/index.js';
+import { getRenderSettings } from '../services/runtimeSettings.service.js';
 
 export function previewSchedule(req: Request, res: Response) {
   const timezone = getSchedulerTimezone();
@@ -47,11 +48,12 @@ export async function previewCover(req: Request, res: Response, next: NextFuncti
       : { posters: [], uniqueCount: 0 };
     if (requiredCount && !posters.length) throw createError('媒体库中没有可用海报，无法生成样张', 400, 'NO_POSTERS');
     const json = JSON.parse(template.canvasJson);
+    const settings = getRenderSettings();
     const buffer = await renderLibraryCover(JSON.stringify(json), {
       title: library.name, primaryTitle: input.primaryTitle || library.name, secondaryTitle: input.secondaryTitle
-    }, posters, { width: template.width || 1920, height: template.height || 1080 });
+    }, posters, { width: template.width || 1920, height: template.height || 1080, ...settings });
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ image: `data:image/png;base64,${buffer.toString('base64')}`, posterCount: uniqueCount,
+    res.json({ image: `data:image/${settings.format};base64,${buffer.toString('base64')}`, posterCount: uniqueCount,
       note: !requiredCount ? '纯文字模板，无需海报素材' : uniqueCount < requiredCount ? `使用 ${uniqueCount} 张可用海报，重复填充其余位置` : '使用媒体库中的真实海报' });
   } catch (error) { next(error); }
 }

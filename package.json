@@ -10,18 +10,18 @@
   ],
   "scripts": {
     "dev": "pnpm -r --parallel --filter ./web --filter ./backend dev",
-    "dev:web": "pnpm --filter web dev",
-    "dev:backend": "pnpm --filter backend dev",
+    "dev:web": "pnpm --filter ./web dev",
+    "dev:backend": "pnpm --filter ./backend dev",
     "build": "pnpm -r build",
-    "build:web": "pnpm --filter web build",
-    "build:backend": "pnpm --filter backend build",
-    "start": "pnpm --filter backend start",
+    "build:web": "pnpm --filter ./web build",
+    "build:backend": "pnpm --filter ./backend build",
+    "start": "pnpm --filter ./backend start",
     "clean": "pnpm -r clean && rm -rf node_modules",
     "lint": "pnpm -r lint",
     "format": "pnpm -r format",
-    "db:migrate": "pnpm --filter backend db:migrate",
-    "db:seed": "pnpm --filter backend db:seed",
-    "test": "pnpm --filter ./backend exec tsx --test ../tests/*.test.ts"
+    "db:migrate": "pnpm --filter ./backend db:migrate",
+    "db:seed": "pnpm --filter ./backend db:seed",
+    "test": "pnpm --filter ./backend exec node ../scripts/test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -112,6 +112,8 @@ test('scheduled tasks trigger without manual runs, pause, recover registrations,
   holdUploads = true;
   await request(`/${task.id}`, 'PUT', { isEnabled: true });
   await until(() => releaseUpload, 'slow upload reaches the media server');
+  assert.equal((await fetch(`${base}/${task.id}/run`, { method: 'POST', headers })).status, 409);
+  assert.equal((await fetch(`${base}/${task.id}`, { method: 'DELETE', headers })).status, 409);
   const runningCount = logs(task.id).length;
   const nextBeforeOverlap = row(task.id).next_run_at;
   await delay(2200);
@@ -145,7 +147,8 @@ test('scheduled tasks trigger without manual runs, pause, recover registrations,
   assert.equal(failedHistory[0].covers[0].status, 'failed');
   assert.ok(failedHistory[0].covers[0].imageUrl);
   uploadFails = false;
-  await request(`/${failed.id}`, 'PUT', { isEnabled: true });
+  await request(`/${failed.id}`, 'PUT', { isEnabled: true, cronExpression: '0 0 1 1 *' });
+  await until(() => !runner.isTaskRunning(failed.id), 'previous failure finishes before deleting the idle scheduled task');
   await request(`/${failed.id}`, 'DELETE');
   assert.deepEqual(scheduler.getActiveJobs(), []);
   const countAfterDelete = uploaded.length;

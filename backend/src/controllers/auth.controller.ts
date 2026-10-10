@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
 import { users } from '../config/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { generateToken, generateRefreshToken, verifyRefreshToken, createError } from '../middleware/index.js';
 import { issueStreamTicket } from '../utils/streamTicket.js';
 
@@ -30,23 +30,22 @@ export async function register(req: Request, res: Response, next: NextFunction) 
       return next(createError('Username already exists', 400, 'USER_EXISTS'));
     }
 
-    // 检查是否为第一个用户
-    const userCount = db.select().from(users).all().length;
-    const role = userCount === 0 ? 'admin' : 'user';
-
     // 创建用户
     const passwordHash = await bcrypt.hash(password, 12);
     const now = new Date().toISOString();
     const id = uuidv4();
 
-    db.insert(users).values({
-      id,
-      username,
-      passwordHash,
-      role,
-      createdAt: now,
-      updatedAt: now
-    }).run();
+    // No asynchronous work between the first-user check and insert. An immediate
+    // transaction also serializes registrations across SQLite connections.
+    const role = db.transaction(tx => {
+      if (tx.select().from(users).where(eq(users.username, username)).get()) {
+        throw createError('Username already exists', 400, 'USER_EXISTS');
+      }
+      const count = tx.select({ count: sql<number>`count(*)` }).from(users).get()!.count;
+      const role = count === 0 ? 'admin' : 'user';
+      tx.insert(users).values({ id, username, passwordHash, role, createdAt: now, updatedAt: now }).run();
+      return role;
+    }, { behavior: 'immediate' });
 
     // 生成 Token
     const token = generateToken({ userId: id, username, role });

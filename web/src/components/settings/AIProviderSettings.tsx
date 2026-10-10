@@ -1,3 +1,4 @@
+import { useAuthStore } from '@/stores/authStore';
 import { useState, useEffect } from 'react';
 import { Plus, Trash2, Check, ChevronDown, ChevronUp, FileText, Save, RotateCcw, Edit2, Zap, Star, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ function getProviderLabel(apiUrl: string, type: string): string {
 }
 
 export function AIProviderSettings() {
+  const isAdmin = useAuthStore(s => s.user?.role === 'admin');
   const { toast } = useToast();
   const { data: providers = [], isLoading } = useAIProviders();
   const createMutation = useCreateAIProvider();
@@ -482,7 +484,7 @@ export function AIProviderSettings() {
         {promptExpanded && (
           <div className="p-5 border-t border-(--border-color) space-y-4 bg-(--bg-secondary)/30">
             <p className="text-xs text-(--text-secondary) leading-relaxed">
-              这是发送给 AI 画布助手的系统指令约束。当你留空时，AI 生成将自动使用系统的内置最佳实践长文本模板；如果你想微调生成风格（例如指定某种语言、指定避免的主题等），可以在下方进行补充或覆写。
+              全局系统指令仅管理员可修改。这是发送给 AI 画布助手的系统指令约束。当你留空时，AI 生成将自动使用系统的内置最佳实践长文本模板；如果你想微调生成风格（例如指定某种语言、指定避免的主题等），可以在下方进行补充或覆写。
             </p>
             {promptLoading ? (
               <div className="text-xs text-(--text-tertiary) py-6 flex justify-center items-center gap-2">
@@ -491,6 +493,7 @@ export function AIProviderSettings() {
             ) : (
               <div className="relative group">
                 <textarea
+                  readOnly={!isAdmin}
                   value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
                   placeholder={builtInPrompt || '加载默认提示文案中...'}
@@ -501,7 +504,7 @@ export function AIProviderSettings() {
             <div className="flex flex-wrap gap-2 pt-1 border-t border-(--border-color) mt-2 pt-4">
               <Button
                 onClick={saveSystemPrompt}
-                disabled={promptSaving}
+                disabled={!isAdmin || promptSaving}
                 className="h-9 px-4 bg-(--primary) hover:opacity-90 text-white font-medium shadow-sm"
               >
                 <Save className="w-4 h-4 mr-2" />
@@ -509,6 +512,7 @@ export function AIProviderSettings() {
               </Button>
               <Button
                 variant="outline"
+                disabled={!isAdmin || promptSaving}
                 onClick={copyBuiltInToEdit}
                 className="h-9 px-4 border-(--border-color) text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-secondary)"
                 title="将系统目前后台自带的版本完整的带入编辑框，方便在其基础上做小修改"
@@ -518,6 +522,7 @@ export function AIProviderSettings() {
               </Button>
               <Button
                 variant="outline"
+                disabled={!isAdmin || promptSaving}
                 onClick={resetSystemPrompt}
                 className="h-9 px-4 border-red-200 text-red-500 hover:text-red-600 hover:bg-red-50 ml-auto"
                 title="清除输入框内容并恢复由系统控制指令"
