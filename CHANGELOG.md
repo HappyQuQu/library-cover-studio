@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.4.0...v1.5.0) (2026-10-10)
+
+
+### ✨ 新功能
+
+* 新增影片背景模板及默认模板一键还原 ([ee7df56](https://github.com/HappyQuQu/library-cover-studio/commit/ee7df56763914aae8b28d7cafd704ada75ac9524))
+
+
+### 🐛 修复
+
+* 修复本机地址切换及反向代理来源校验 ([c1e1278](https://github.com/HappyQuQu/library-cover-studio/commit/c1e127869080cf8ed42d0c9ce1e19e5e207794a9))
+
 ## [1.4.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.3.1...v1.4.0) (2026-10-10)
 
 
