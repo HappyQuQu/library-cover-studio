@@ -68,7 +68,7 @@ docker compose -f docker-compose.release.yml up -d --wait
 docker compose -f docker-compose.release.yml ps
 ```
 
-在 Docker 宿主机打开 **http://localhost:8080**，点击「立即注册」。第一个注册的账号成为管理员。浏览器通过 web 访问 API，无需单独访问后端端口。
+在 Docker 宿主机打开 **[http://localhost:8080](http://localhost:8080)**，点击「立即注册」。第一个注册的账号成为管理员。浏览器通过 web 访问 API，无需单独访问后端端口。
 
 默认端口只绑定宿主机 `127.0.0.1`，其他设备访问 NAS 部署时，请使用下面的局域网配置。
 

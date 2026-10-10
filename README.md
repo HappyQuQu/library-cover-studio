@@ -6,7 +6,7 @@
 [![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/evanqu/library-cover-studio-web)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-[Docker 部署](#-docker-部署) · [自动化教程](#-自动化任务教程) · [界面预览](#-界面预览) · [完整部署指南](doc/Docker_Deployment.md) · [发布流程](doc/Publishing.md)
+[Docker 部署](#-docker-部署) · [自动化教程](#-自动化任务教程) · [界面预览](#界面预览) · [完整部署指南](doc/Docker_Deployment.md) · [发布流程](doc/Publishing.md)
 
 ![可视化设计器：左侧添加元素，中间编辑封面，右侧管理图层](doc/images/screenshots/editor.jpg)
 
@@ -23,7 +23,7 @@
 | AI 设计助手 | 配置自己的 AI 服务，通过文字或参考图生成可编辑设计；基础功能无需 AI。 |
 | 数据维护 | 配置 PNG / JPEG / WebP 输出、历史保留上限、自定义字体、配置导出和缓存清理。 |
 
-## 🖼️ 界面预览
+## 界面预览
 
 ### 模板库：选择风格，复制后开始设计
 
@@ -88,7 +88,7 @@ docker compose -f docker-compose.release.yml up -d --wait
 docker compose -f docker-compose.release.yml ps
 ```
 
-打开 **http://localhost:8080**，点击「立即注册」。第一个注册的账号成为管理员，随后添加媒体服务器。
+打开 **[http://localhost:8080](http://localhost:8080)**，点击「立即注册」。第一个注册的账号成为管理员，随后添加媒体服务器。
 
 默认端口只绑定宿主机 `127.0.0.1`。在 NAS / Linux 服务器上供其他设备访问时，按照 [局域网访问配置](doc/Docker_Deployment.md#nas--局域网访问) 配置前端端口和访问地址。浏览器访问 web 即可，无需直接访问 backend。
 
