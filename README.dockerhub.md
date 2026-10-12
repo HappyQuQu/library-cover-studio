@@ -15,7 +15,15 @@
 - **真实样张与执行历史**：上传前预览，执行后查看当次封面、逐库结果并下载原图。
 - **可选 AI 助手**：接入自己的 AI 服务生成可编辑设计，基础功能无需 AI。
 
-![模板库内置样式预览](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/templates.jpg)
+![模板库中的七套默认锁定模板，包含横幅背景海报列](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/templates.jpg)
+
+「背景设置 → 影片背景」支持首张海报或首个影片的横向背景图，可调整模糊和压暗。横向背景图缺失时回退首张海报。
+
+![影片背景来源、模糊程度与压暗设置](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/editor-background.jpg)
+
+管理员可在「设置 → 数据管理」一键还原七套默认模板，保留自建、复制模板及还原前的设计历史。
+
+![设置中的一键还原默认模板](https://raw.githubusercontent.com/HappyQuQu/library-cover-studio/main/doc/images/screenshots/default-template-reset.jpg)
 
 ## 镜像说明
 
