@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.6.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.5.0...v1.6.0) (2026-10-13)
+
+
+### ✨ 新功能
+
+* add experimental cover templates and relative poster masks ([f3353fc](https://github.com/HappyQuQu/library-cover-studio/commit/f3353fc087bd596435032f49802b2067a54f7d35))
+* add GitHub template store with download and import ([6568793](https://github.com/HappyQuQu/library-cover-studio/commit/6568793b481b3064c3216bee76c32f7399b83af4))
+* preserve template metadata and safely update store designs ([36a8e1e](https://github.com/HappyQuQu/library-cover-studio/commit/36a8e1e3fa3ea3b8ed5c4eca237049435b43267c))
+
 ## [1.5.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.4.0...v1.5.0) (2026-10-10)
 
 
