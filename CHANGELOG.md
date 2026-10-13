@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.7.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.6.0...v1.7.0) (2026-10-13)
+
+
+### ✨ 新功能
+
+* guide AI-assisted template contributions ([a021197](https://github.com/HappyQuQu/library-cover-studio/commit/a021197e2a50a00055df958ad69ee80326c76029))
+
+
+### 🐛 修复
+
+* avoid counting concurrent download refreshes twice ([af3a23f](https://github.com/HappyQuQu/library-cover-studio/commit/af3a23fd887d2e7eab5424e06194a38183c5440f))
+* confirm template updates, reuse local designs and refresh download counts ([6a46cef](https://github.com/HappyQuQu/library-cover-studio/commit/6a46cef80ca5f23e6699fcc77fd42d80b97f94a3))
+* improve template import feedback and dialog action spacing ([d9d72ea](https://github.com/HappyQuQu/library-cover-studio/commit/d9d72eac9e44590a5529b65bf620d1d524becf06))
+
 ## [1.6.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.5.0...v1.6.0) (2026-10-13)
 
 

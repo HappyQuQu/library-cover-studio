@@ -1,6 +1,6 @@
 {
   "name": "library-cover-studio",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "媒体库封面设计与自动化系统 - Jellyfin/Emby 海报美化专家",
   "private": true,
   "type": "module",
