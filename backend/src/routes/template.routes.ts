@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authenticate, validate } from '../middleware/index.js';
+import { authenticate, validate, createError } from '../middleware/index.js';
 import * as template from '../controllers/template.controller.js';
 import multer from 'multer';
 import fs from 'fs';
@@ -43,7 +43,12 @@ router.get('/:id/history/:revisionId/thumbnail', template.historyThumbnail);
 router.post('/:id/history/:revisionId/restore', template.restoreRevision);
 
 // 导入模板 (ZIP) - 放在 :id 路由之前以防火墙冲突
-router.post('/import', upload.single('file'), template.importTemplate);
+router.post('/import', (req, res, next) => upload.single('file')(req, res, error => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError) return next(createError(error.code === 'LIMIT_FILE_SIZE'
+        ? '模板包超过 5 MB，请压缩预览图后重新打包。' : '请一次选择一个 ZIP 模板包上传。', 400, 'INVALID_TEMPLATE'));
+    return next(error);
+}), template.importTemplate);
 
 // 创建模板
 router.post('/', validate(template.createTemplateSchema), template.create);

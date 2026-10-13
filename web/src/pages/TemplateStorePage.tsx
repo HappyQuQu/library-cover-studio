@@ -113,7 +113,7 @@ export function TemplateStorePage() {
           ? '原模板已锁定或为共享默认模板。设计相同时会复用原模板；设计不同会添加新版副本。'
           : '模板库已有此模板。更新会覆盖原模板的设计和说明，如果你改动过它，建议先复制一个版本保留自己的设计。'}</DialogDescription></DialogHeader>
         {!confirmTemplate?.localLocked && <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--text-secondary)' }}>选择「先复制备份再更新」会保留一份原设计，并在当前模板上更新，已有自动化继续使用当前模板。相同设计会同步版本和作者信息，不会重复添加。</p>}
-        <DialogFooter style={{ flexWrap: 'wrap' }}>
+        <DialogFooter style={{ flexWrap: 'wrap', alignItems: 'center' }}>
           <Button className="btn btn-secondary" disabled={!!busyId} onClick={() => setConfirmTemplate(null)}>取消</Button>
           {confirmTemplate?.localLocked ? <Button className="btn btn-primary" disabled={!!busyId} onClick={() => void install(confirmTemplate, 'copy')}>{busyId ? '下载处理中…' : '确认下载'}</Button>
             : <><Button className="btn btn-secondary" disabled={!!busyId} onClick={() => confirmTemplate && void install(confirmTemplate, 'replace')}>直接覆盖更新</Button>

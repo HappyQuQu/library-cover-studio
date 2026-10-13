@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -150,6 +150,29 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   const manual = await fetch(`${base}/templates/import`, { method: 'POST', headers: headers(), body: form });
   assert.equal(manual.status, 201);
   assert.match((await manual.json()).name, /Imported/);
+
+  // Manual import errors explain the rejected file and always remove temporary uploads.
+  const invalidJSON = new AdmZip(); invalidJSON.addFile('template.json', Buffer.from('{broken'));
+  const nested = new AdmZip(); nested.addFile('example/template.json', Buffer.from('{}'));
+  const invalidCanvas = new AdmZip(); invalidCanvas.addFile('template.json', Buffer.from(JSON.stringify({ name: 'Wrong canvas', canvasJson: { objects: [] } })));
+  const malformedCases = [
+    [Buffer.from('not a zip'), /不是有效的 ZIP/],
+    [nested.toBuffer(), /根目录缺少 template.json/],
+    [invalidJSON.toBuffer(), /不是有效的 JSON/],
+    [invalidCanvas.toBuffer(), /canvasJson 字段不正确/]
+  ] as const;
+  const beforeBadImports = (sqlite.prepare('SELECT COUNT(*) n FROM templates').get() as any).n;
+  for (const [buffer, message] of malformedCases) {
+    const upload = new FormData(); upload.append('file', new Blob([buffer], { type: 'application/zip' }), 'invalid.zip');
+    const rejected = await fetch(`${base}/templates/import`, { method: 'POST', headers: headers(), body: upload });
+    assert.equal(rejected.status, 400); assert.match((await rejected.json()).error.message, message);
+  }
+  const tooLarge = new FormData(); tooLarge.append('file', new Blob([Buffer.alloc(5 * 1024 * 1024 + 1)], { type: 'application/zip' }), 'oversized.zip');
+  const sizeRejected = await fetch(`${base}/templates/import`, { method: 'POST', headers: headers(), body: tooLarge });
+  assert.equal(sizeRejected.status, 400); assert.match((await sizeRejected.json()).error.message, /超过 5 MB/);
+  assert.equal((sqlite.prepare('SELECT COUNT(*) n FROM templates').get() as any).n, beforeBadImports);
+  const { TEMP_DIR } = await import('../backend/src/config/paths.ts');
+  assert.deepEqual(readdirSync(join(TEMP_DIR, 'imports')), []);
 
   failCatalog = false;
   // Untouched designs update in place, preserving direct and per-library task references.

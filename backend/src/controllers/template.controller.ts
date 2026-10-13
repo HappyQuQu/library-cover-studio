@@ -12,6 +12,7 @@ import path from 'path';
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import AdmZip from 'adm-zip';
 import { templateMetadataSchema, readTemplateMetadata } from '../services/templateMetadata.service.js';
+import { readTemplatePackage } from '../services/templatePackage.service.js';
 
 const d: any = db;
 
@@ -167,25 +168,17 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
 export async function importTemplate(req: Request, res: Response, next: NextFunction) {
   try {
     if (!req.file) {
-      return next(createError('No file uploaded', 400, 'NO_FILE'));
+      throw createError('请选择一个 ZIP 模板包后重试。', 400, 'NO_FILE');
     }
 
-    const zip = new AdmZip(req.file.path);
-    const jsonEntry = zip.getEntry('template.json');
-    if (!jsonEntry) {
-      return next(createError('Invalid template: missing template.json', 400, 'INVALID_TEMPLATE'));
-    }
-
-    const templateData = JSON.parse(jsonEntry.getData().toString('utf8'));
+    // Legacy manual ZIP imports may omit previews; the renderer supplies one.
+    const { data: templateData, thumbnail } = readTemplatePackage(fs.readFileSync(req.file.path), false);
     const { name, description, width, height, canvasJson, isPublic } = templateData;
     const userId = req.user?.userId;
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png|webp)$/i));
-    const extension = previewEntry?.entryName.split('.').pop()?.toLowerCase();
-    const thumbnail = previewEntry ? `data:image/${extension === 'jpg' ? 'jpeg' : extension};base64,${previewEntry.getData().toString('base64')}` : undefined;
-    const data = createTemplateSchema.parse({ ...templateMetadataSchema.parse(templateData), name: `${name} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
+    const data = createTemplateSchema.parse({ ...templateMetadataSchema.parse(templateData), name: `${name.slice(0, 89)} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
     const saved = await saveTemplateVersion(undefined, {
       id, name: data.name, description: data.description ?? null, canvasJson: data.canvasJson,
       metadataJson: JSON.stringify(templateMetadataSchema.parse(data)),
@@ -194,20 +187,15 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
     }, userId, 'save', thumbnail);
     const thumbnailPath = saved.thumbnailPath;
 
-    // Clean up uploaded file
-    try {
-      fs.unlinkSync(req.file.path);
-    } catch (e) {
-      console.error('Failed to cleanup imported zip:', e);
-    }
-
     res.status(201).json({
       id,
-      name: `${name} (Imported)`,
+      name: data.name,
       thumbnailPath
     });
   } catch (error) {
     next(error);
+  } finally {
+    if (req.file) try { fs.unlinkSync(req.file.path); } catch { /* Already cleaned up. */ }
   }
 }
 

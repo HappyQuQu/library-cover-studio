@@ -1285,3 +1285,9 @@
 .template-store-ai-guide { font-size: 14px; line-height: 1.8; color: var(--text-secondary); }
 .template-store-ai-guide pre { padding: 12px; border-radius: 10px; background: var(--bg-tertiary); overflow-x: auto; font-size: 12px; line-height: 1.7; }
 .template-store-ai-guide ol { padding-left: 22px; margin: 14px 0; }
+.template-import-guide { font-size: 14px; line-height: 1.8; color: var(--text-secondary); }
+.template-import-guide pre { padding: 12px 16px; margin: 14px 0; border-radius: 10px; background: var(--bg-tertiary); font-size: 13px; }
+.template-import-file { margin-top: 16px; font-size: 13px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.template-import-error { margin-top: 16px; padding: 12px 16px; border: 1px solid rgba(239,68,68,.3); border-radius: 10px; background: rgba(239,68,68,.06); color: var(--text-primary); font-size: 13px; line-height: 1.7; }
+.template-import-error strong { color: var(--danger); }
+.template-import-progress { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--text-secondary); }

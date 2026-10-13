@@ -95,6 +95,7 @@ DialogHeader.displayName = 'DialogHeader';
 
 const DialogFooter = ({
   className,
+  style,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
@@ -104,7 +105,8 @@ const DialogFooter = ({
       gap: 12,
       marginTop: 24,
       paddingTop: 20,
-      borderTop: '1px solid var(--border-color)'
+      borderTop: '1px solid var(--border-color)',
+      ...style
     }}
     className={className}
     {...props}

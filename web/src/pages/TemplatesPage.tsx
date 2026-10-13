@@ -6,12 +6,16 @@ import { toast } from '@/components/ui/use-toast';
 import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 export function TemplatesPage() {
   const { data: templates = [], isLoading } = useTemplates();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importFileName, setImportFileName] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -55,22 +59,32 @@ export function TemplatesPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
-      alert('导出失败');
+      toast({ title: '模板导出失败', description: '请检查网络连接，然后重新导出。', variant: 'destructive' });
     }
   };
 
   const handleImportClick = () => {
-    fileInputRef.current?.click();
+    setImportError(null);
+    setImportFileName('');
+    setImportOpen(true);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    e.target.value = '';
+    if (!file || isImporting) return;
+    setImportFileName(file.name);
+    setImportError(null);
 
-    if (!file.name.endsWith('.zip')) {
-      alert('请上传 ZIP 格式的模板包');
+    if (!/\.zip$/i.test(file.name)) {
+      setImportError('请选择 ZIP 格式的模板包。可以在模板库导出，或从模板商店下载单套模板 ZIP。');
+      return;
+    }
+    if (!file.size || file.size > 5 * 1024 * 1024) {
+      setImportError(file.size ? '模板包超过 5 MB，请压缩预览图后重新打包。' : '这个文件为空，请重新导出或下载模板包。');
       return;
     }
 
@@ -79,19 +93,22 @@ export function TemplatesPage() {
     formData.append('file', file);
 
     try {
-      await apiClient.post('/templates/import', formData, {
+      const { data: imported } = await apiClient.post<{ id: string; name: string }>('/templates/import', formData, {
+        timeout: 90000,
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
-      alert('导入成功');
-      queryClient.invalidateQueries({ queryKey: ['templates'] });
-    } catch (error) {
-      console.error('Import failed:', error);
-      alert('导入失败，请检查文件格式');
+      setImportOpen(false);
+      toast({ title: `「${imported.name}」导入成功`, description: '已添加为可编辑的新模板，现在可以在设计器和自动化中选择。', variant: 'success' });
+      await queryClient.invalidateQueries({ queryKey: ['templates'] });
+    } catch (error: unknown) {
+      const response = error as { code?: string; response?: { status?: number; data?: { error?: { message?: string } } } };
+      setImportError(response.response?.status === 413 ? '模板包超过上传大小限制，请将文件压缩到 5 MB 以内后重试。'
+        : response.code === 'ECONNABORTED' ? '导入超时，请稍后刷新模板库确认是否已导入，再决定是否重试。'
+        : response.response?.data?.error?.message || (response.response ? '服务器暂时无法处理这个模板包，请重新导出后重试。' : '无法连接服务器，请检查网络连接后重试。'));
     } finally {
       setIsImporting(false);
-      if (e.target) e.target.value = '';
     }
   };
 
@@ -111,7 +128,7 @@ export function TemplatesPage() {
             type="file"
             ref={fileInputRef}
             style={{ display: 'none' }}
-            accept=".zip"
+            accept=".zip,application/zip,application/x-zip-compressed"
             onChange={handleFileChange}
           />
           <Button
@@ -124,7 +141,7 @@ export function TemplatesPage() {
             ) : (
               <Upload className="w-4 h-4" />
             )}
-            导入模板
+            {isImporting ? '正在导入…' : '导入模板'}
           </Button>
           <Link to="/editor">
             <Button className="btn btn-primary">
@@ -216,6 +233,23 @@ export function TemplatesPage() {
           })}
         </div>
       )}
+      <Dialog open={importOpen} onOpenChange={open => { if (!isImporting) setImportOpen(open); }}>
+        <DialogContent style={{ maxWidth: 520 }}>
+          <DialogHeader><DialogTitle>导入模板</DialogTitle><DialogDescription>选择单套模板 ZIP，导入后会添加到模板库，原有模板会保留。</DialogDescription></DialogHeader>
+          <div className="template-import-guide">
+            <p>支持从应用导出的模板包，或模板商店 Releases 中的单套 ZIP，文件大小不超过 <strong>5 MB</strong>。</p>
+            <pre><code>模板.zip{'\n'}├── template.json{'\n'}└── preview.jpg / png / webp</code></pre>
+            <p><code>template.json</code> 要直接放在 ZIP 根目录。GitHub 的整个仓库 Source code ZIP 需要先解压，再把单套模板的文件重新打包。</p>
+          </div>
+          {importFileName && <p className="template-import-file">已选择：{importFileName}</p>}
+          {importError && <div className="template-import-error" role="alert"><strong>导入未完成</strong><p>{importError}</p><p>请修正后重新选择文件。</p></div>}
+          {isImporting && <div className="template-import-progress" role="status"><Loader2 size={18} className="animate-spin" />正在上传并校验模板，请稍候…</div>}
+          <DialogFooter style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+            <Button className="btn btn-secondary" disabled={isImporting} onClick={() => setImportOpen(false)}>取消</Button>
+            <Button className="btn btn-primary" disabled={isImporting} onClick={() => fileInputRef.current?.click()}><Upload size={16} />{isImporting ? '正在导入…' : importError ? '重新选择 ZIP' : '选择 ZIP 文件'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
