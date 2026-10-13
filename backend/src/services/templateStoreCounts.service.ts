@@ -60,8 +60,11 @@ export async function storeDownloadCounts(entries: StoreEntry[]) {
 }
 
 /** A verified successful ZIP fetch is a lower bound, not a second counter added to GitHub. */
-export function recordStoreDownload(entry: StoreEntry) {
-  const value = Math.max(floor(entry.id), lastCounts.get(entry.id) || 0, entry.downloadCount) + 1;
+export function storeDownloadBaseline(entry: StoreEntry) {
+  return Math.max(floor(entry.id), lastCounts.get(entry.id) || 0, entry.downloadCount);
+}
+export function recordStoreDownload(entry: StoreEntry, baseline = storeDownloadBaseline(entry)) {
+  const value = Math.max(floor(entry.id), baseline) + 1;
   db.insert(systemSettings).values({ key: prefix + entry.id, value: String(value), updatedAt: new Date().toISOString() })
     .onConflictDoUpdate({ target: systemSettings.key, set: { value: String(value), updatedAt: new Date().toISOString() } }).run();
   for (const source of entry.downloadSources || []) releases.delete(source.releaseId);

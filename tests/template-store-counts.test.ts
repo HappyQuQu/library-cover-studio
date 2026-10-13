@@ -29,7 +29,7 @@ test('live store counts include every revision and page, fall back on rate limit
       : [{ name: `${id}--${'d'.repeat(64)}.zip`, download_count: 1, state: 'uploaded' }] };
   };
   const entry = { id, downloadCount: 10, downloadSources: [{ releaseId: 42, downloadCount: 10 }] } as any;
-  const { storeDownloadCounts, recordStoreDownload } = await import('../backend/src/services/templateStoreCounts.service.ts');
+  const { storeDownloadCounts, recordStoreDownload, storeDownloadBaseline } = await import('../backend/src/services/templateStoreCounts.service.ts');
   let result = (await storeDownloadCounts([entry])).get(id)!;
   assert.equal(result.downloadCount, 13); assert.equal(result.countLive, true); assert.equal(reads, 2);
   await storeDownloadCounts([entry]); assert.equal(reads, 2);
@@ -48,4 +48,10 @@ test('live store counts include every revision and page, fall back on rate limit
   await storeDownloadCounts([entry]); assert.equal(reads, failedReads, 'Rate-limited API is not repeatedly retried');
   fail = false; clock += 121000;
   assert.equal((await storeDownloadCounts([entry])).get(id)!.downloadCount, 17);
+  const baseline = storeDownloadBaseline(entry);
+  count = 17; clock += 121000;
+  assert.equal((await storeDownloadCounts([entry])).get(id)!.downloadCount, 18);
+  recordStoreDownload(entry, baseline);
+  result = (await storeDownloadCounts([entry])).get(id)!;
+  assert.equal(result.downloadCount, 18); assert.equal(result.countPending, false, 'A refresh during the ZIP fetch cannot count that download twice');
 });

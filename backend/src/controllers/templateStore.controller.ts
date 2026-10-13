@@ -9,7 +9,7 @@ import { createError } from '../middleware/errorHandler.js';
 import { getStoreCatalog, downloadStorePackage, STORE_URL, type StoreEntry } from '../services/templateStore.service.js';
 import { readTemplateMetadata, templateMetadataSchema, templateContentHash, supportsTemplateVersion } from '../services/templateMetadata.service.js';
 import { saveTemplateVersion } from '../services/templateHistory.service.js';
-import { recordStoreDownload, storeDownloadCounts } from '../services/templateStoreCounts.service.js';
+import { recordStoreDownload, storeDownloadBaseline, storeDownloadCounts } from '../services/templateStoreCounts.service.js';
 
 export const storeUpdateSchema = z.object({ templateId: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), strategy: z.enum(['replace', 'backup', 'copy']).optional() });
 type Strategy = 'replace' | 'backup' | 'copy';
@@ -79,8 +79,9 @@ async function synchronize(entry: StoreEntry, userId: string, targetId?: string,
   if (exact && (!strategy || (exact.install.contentHash && templateContentHash(exact.template) === exact.install.contentHash)))
     return { id: exact.template.id, name: exact.template.name, version: readTemplateMetadata(exact.template.metadataJson).version, alreadyInstalled: true, action: 'existing' };
   if (!supportsTemplateVersion(APP_VERSION, entry.minAppVersion)) throw createError(`此模板需要应用 ${entry.minAppVersion} 或更高版本，请先升级应用`, 409, 'STORE_APP_UPGRADE_REQUIRED');
+  const countBaseline = storeDownloadBaseline(entry);
   const { data, thumbnail } = await downloadStorePackage(entry);
-  recordStoreDownload(entry);
+  recordStoreDownload(entry, countBaseline);
   const metadata = templateMetadataSchema.parse(data);
   const sameDesign = existing && templateContentHash({ ...existing, description: '', metadataJson: null }) === templateContentHash({ ...data, description: '', metadataJson: null });
   const sameContent = existing && templateContentHash(existing) === templateContentHash({ ...data, description: data.description || '', metadataJson: JSON.stringify(metadata) });
