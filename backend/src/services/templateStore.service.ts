@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { z } from 'zod';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createError } from '../middleware/errorHandler.js';
 import { MAX_TEMPLATE_PACKAGE_BYTES, readTemplatePackage } from './templatePackage.service.js';
 import { templateMetadataSchema } from './templateMetadata.service.js';
@@ -17,7 +17,8 @@ const storeEntrySchema = z.object({
   previewUrl: z.string().url().refine(value => new URL(value).href.startsWith(rawPrefix) && !/[?#]/.test(value)),
   packageUrl: z.string().url().refine(value => new URL(value).href.startsWith(downloadPrefix) && !/[?#]/.test(value)),
   packageSha256: hex, downloadCount: z.number().int().nonnegative(),
-  folder: z.string().min(1).max(200)
+  folder: z.string().min(1).max(200),
+  downloadSources: z.array(z.object({ releaseId: z.number().int().positive(), downloadCount: z.number().int().nonnegative() })).optional()
 }).merge(templateMetadataSchema);
 const catalogSchema = z.object({
   version: z.literal(1), repository: z.literal(STORE_REPOSITORY), generatedAt: z.string().datetime(),
@@ -60,7 +61,7 @@ export async function downloadStorePackage(entry: StoreEntry) {
   try {
     // Every import fetches the Release attachment so GitHub records a global download.
     // Do not cache ZIPs or send application credentials to GitHub.
-    const response = await axios.get<ArrayBuffer>(entry.packageUrl, {
+    const response = await axios.get<ArrayBuffer>(`${entry.packageUrl}?download=${randomUUID()}`, {
       timeout: 60000, responseType: 'arraybuffer', maxContentLength: MAX_TEMPLATE_PACKAGE_BYTES,
       maxRedirects: 5
     });

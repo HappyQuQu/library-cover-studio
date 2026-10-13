@@ -54,11 +54,13 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
       if (setup || failCatalog) throw new axios.AxiosError('Fixture network error', 'ERR_BAD_RESPONSE', config, {}, { status: setup ? 404 : 502, data: {}, headers: {}, config });
       return { status: 200, data: fixture, config, headers: {}, statusText: 'OK' };
     }
-    assert.ok(packages.has(config.url));
+    const packageUrl = config.url.split('?')[0];
+    assert.match(config.url, /\?download=/, 'Each actual ZIP download bypasses cached redirects');
+    assert.ok(packages.has(packageUrl));
     downloads++;
     duringDownload?.();
     await new Promise(resolve => setTimeout(resolve, 40));
-    return { status: 200, data: packages.get(config.url), config, headers: {}, statusText: 'OK' };
+    return { status: 200, data: packages.get(packageUrl), config, headers: {}, statusText: 'OK' };
   };
   let clock = Date.now();
   t.mock.method(Date, 'now', () => clock);
@@ -103,6 +105,8 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   assert.deepEqual(results.map(response => response.status), [201, 200]);
   const [added, duplicate] = await Promise.all(results.map(response => response.json()));
   assert.equal(added.id, duplicate.id); assert.equal(downloads, 1);
+  const pendingCount = (await get('/template-store?sort=popular')).templates[0];
+  assert.equal(pendingCount.downloadCount, 101); assert.equal(pendingCount.countPending, true);
   const saved = sqlite.prepare('SELECT * FROM templates WHERE id = ?').get(added.id) as any;
   assert.equal(saved.name, entries[0].name); assert.equal(saved.user_id, 'owner');
   assert.equal(saved.is_public, 0); assert.equal(saved.is_locked, 0); assert.equal(saved.is_default, 0);
@@ -205,6 +209,36 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   const details = await get(`/templates/${editable.id}`); assert.equal(details.version, '2.0.0'); assert.equal(details.author.name, 'Local creator');
   const clearAuthor = await fetch(`${base}/templates/${editable.id}`, { method: 'PUT', headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ author: null, minAppVersion: null }) });
   assert.equal(clearAuthor.status, 200); assert.equal((await get(`/templates/${editable.id}`)).author, undefined);
+
+  // Pre-store local templates retain their IDs and task references; only explicitly chosen backups add a copy.
+  const localId = 'de8a5d75-95dc-4e5a-9f05-189576d239ea';
+  sqlite.prepare('INSERT INTO templates (id,name,description,canvas_json,width,height,user_id,is_locked,is_default) VALUES (?,?,?,?,?,?,?,0,0)')
+    .run(localId, entries[9].name, '', '{"objects":[]}', 900, 600, 'owner');
+  const localCount = (sqlite.prepare('SELECT COUNT(*) n FROM templates').get() as any).n;
+  const localState = (await get('/template-store?q=' + encodeURIComponent(entries[9].name))).templates.find((item: any) => item.id === entries[9].id);
+  assert.equal(localState.localMatch, true); assert.equal(localState.previousTemplateId, localId);
+  const linked = await (await install(entries[9].id)).json();
+  assert.equal(linked.id, localId); assert.equal(linked.action, 'updated');
+  assert.equal((sqlite.prepare('SELECT COUNT(*) n FROM templates').get() as any).n, localCount);
+  sqlite.prepare('UPDATE templates SET canvas_json=? WHERE id=?').run('{"objects":[],"background":"#abcdef"}', localId);
+  revise(9, '1.1.0');
+  const withBackup = await fetch(`${base}/template-store/${entries[9].id}/update`, { method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ templateId: localId, revision: entries[9].revision, strategy: 'backup' }) });
+  assert.equal(withBackup.status, 200);
+  const backedUp = await withBackup.json(); assert.equal(backedUp.id, localId); assert.ok(backedUp.backupId);
+  assert.equal((sqlite.prepare('SELECT canvas_json FROM templates WHERE id=?').get(backedUp.backupId) as any).canvas_json, '{"objects":[],"background":"#abcdef"}');
+  sqlite.prepare('UPDATE templates SET description=? WHERE id=?').run('Local changes to overwrite', localId);
+  const overwrite = await fetch(`${base}/template-store/${entries[9].id}/update`, { method: 'POST',
+    headers: { ...headers(), 'Content-Type': 'application/json' }, body: JSON.stringify({ templateId: localId, revision: entries[9].revision, strategy: 'replace' }) });
+  assert.equal(overwrite.status, 200); assert.equal((await overwrite.json()).id, localId);
+  assert.equal((sqlite.prepare('SELECT description FROM templates WHERE id=?').get(localId) as any).description, '');
+
+  // A same-name template belonging to another user is never adopted or overwritten.
+  const foreignId = '13782d63-844c-42ee-8c20-0b9e09e07c14';
+  sqlite.prepare('INSERT INTO templates (id,name,canvas_json,width,height,user_id) VALUES (?,?,?,?,?,?)').run(foreignId, entries[10].name, '{"objects":[]}', 900, 600, 'other');
+  assert.equal((await get('/template-store?q=' + encodeURIComponent(entries[10].name))).templates[0].previousTemplateId, null);
+  assert.equal((await update(10, foreignId)).status, 404);
+  assert.notEqual((await (await install(entries[10].id)).json()).id, foreignId);
 });
 
 test('store packages require canonical JSON and preview files and reject decompression bombs', async () => {
