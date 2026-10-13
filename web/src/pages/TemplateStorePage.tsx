@@ -20,6 +20,15 @@ interface CatalogPage {
   pendingCount: number; total: number; page: number; totalPages: number; templates: StoreTemplate[];
 }
 
+const aiTemplatePrompt = `请先阅读 README.md 和现有模板，为 Library Cover Studio 制作一套新的封面模板。
+设计需求：[填写风格、配色、海报数量和标题布局]
+模板名称：[填写名称]；作者：[填写名称和主页]；初始版本：1.0.0。
+在仓库根目录创建独立模板文件夹，提供 template.json 和一张 preview.jpg/png/webp。参考现有模板的 Fabric 画布结构，canvasJson 必须是 JSON 字符串，保留标题变量和海报变量，让设计可以在应用中编辑并用于自动化。
+填写 version、author、description 和 changelog；JSON 与预览图合计不超过 5 MB。预览图必须来自实际模板渲染，与设计一致。
+同步更新 GALLERY.md；模板数量变化时更新 README.md 中的数量和列表。更新已有模板时保留文件夹名称，并提高版本号。
+运行 python3 scripts/publish.py check 和 python3 scripts/publish.py build，再将生成的单套 ZIP 导入 Library Cover Studio，检查编辑、预览和自动化渲染。若无法完成渲染验证，请说明尚待验证的项目。
+完成后说明改动文件和验证结果，并准备 Pull Request 描述。`;
+
 function Preview({ template }: { template: StoreTemplate }) {
   const [failed, setFailed] = useState(false);
   return <div className="template-store-preview" style={{ aspectRatio: `${template.width}/${template.height}` }}>
@@ -35,6 +44,7 @@ export function TemplateStorePage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmTemplate, setConfirmTemplate] = useState<StoreTemplate | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [submitMethod, setSubmitMethod] = useState<'export' | 'ai'>('export');
   const client = useQueryClient();
   const catalog = useQuery({ queryKey: ['template-store', query, sort, page],
     queryFn: ({ signal }) => apiClient.get<CatalogPage>('/template-store', { params: { q: query, sort, page }, signal }).then(response => response.data),
@@ -114,12 +124,29 @@ export function TemplateStorePage() {
     <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
       <DialogContent style={{ maxWidth: 560 }}>
         <DialogHeader><DialogTitle>分享你的模板</DialogTitle><DialogDescription>将设计提交到公开模板仓库，审核合并后会自动发布到商店。</DialogDescription></DialogHeader>
-        <ol style={{ paddingLeft: 22, fontSize: 14, lineHeight: 1.9, color: 'var(--text-secondary)' }}>
+        <div className="template-store-submit-methods" aria-label="模板制作方式">
+          <Button className={`btn ${submitMethod === 'export' ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={submitMethod === 'export'} onClick={() => setSubmitMethod('export')}>从设计器导出</Button>
+          <Button className={`btn ${submitMethod === 'ai' ? 'btn-primary' : 'btn-secondary'}`} aria-pressed={submitMethod === 'ai'} onClick={() => setSubmitMethod('ai')}>用 AI 制作</Button>
+        </div>
+        {submitMethod === 'export' ? <ol style={{ paddingLeft: 22, fontSize: 14, lineHeight: 1.9, color: 'var(--text-secondary)' }}>
           <li>在设计器的「模板信息」中填写名称、作者、版本、说明和更新记录，然后保存。</li>
           <li>在模板库导出 ZIP，解压得到 <code>template.json</code> 和预览图。</li>
           <li>打开下方 GitHub 仓库，Fork 后创建「模板名」文件夹，放入 JSON 和唯一的 <code>preview.jpg/png/webp</code> 预览图。</li>
-          <li>提交 Pull Request，简单介绍设计。修改已有模板时请保留原文件夹名称，并提高版本号。</li>
-        </ol>
+          <li>同步更新 <code>GALLERY.md</code>，提交 Pull Request，简单介绍设计。修改已有模板时请保留原文件夹名称，并提高版本号。</li>
+        </ol> : <div className="template-store-ai-guide">
+          <p>把仓库克隆到本机，用 Codex、Claude Code 等 AI 工具打开项目，参考现有模板制作自己的设计。</p>
+          <pre><code>git clone https://github.com/HappyQuQu/library-cover-store.git{'\n'}cd library-cover-store</code></pre>
+          <ol>
+            <li>让 AI 先阅读 <code>README.md</code> 和现有模板，再描述你想要的风格、配色、海报数量和标题布局。</li>
+            <li>生成独立模板文件夹，包含 <code>template.json</code> 和真实渲染的预览图，填写作者、版本与说明，并更新 <code>GALLERY.md</code>。</li>
+            <li>运行仓库校验、打包，将单套 ZIP 导入应用，确认可以编辑且预览与自动化渲染正常。</li>
+            <li>Fork 仓库，把改动推送到自己的 Fork，再提交 Pull Request。也可以先 Fork，再克隆自己的仓库。</li>
+          </ol>
+          <Button className="btn btn-secondary" onClick={async () => {
+            try { await navigator.clipboard.writeText(aiTemplatePrompt); toast({ title: 'AI 提示词已复制', description: '补充设计需求、模板名称和作者，再发送给 AI 工具。' }); }
+            catch { toast({ title: '复制失败', description: '可以打开仓库 README，手动复制「用 AI 制作」中的示例提示词。', variant: 'destructive' }); }
+          }}>复制 AI 提示词</Button>
+        </div>}
         <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--text-secondary)' }}>请确认图片和设计可公开分享。JSON 与预览图合计不超过 5 MB，完整格式要求见仓库 README。</p>
         <DialogFooter><Button className="btn btn-secondary" onClick={() => setSubmitOpen(false)}>稍后再说</Button><a href="https://github.com/HappyQuQu/library-cover-store#提交模板" target="_blank" rel="noreferrer" className="btn btn-primary">前往 GitHub 提交<ExternalLink size={16} /></a></DialogFooter>
       </DialogContent>

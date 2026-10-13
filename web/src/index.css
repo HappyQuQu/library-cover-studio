@@ -1280,3 +1280,8 @@
   .editor-document-name { flex-basis: 100%; }
   .editor-document-actions { margin-left: auto; max-width: 100%; flex-wrap: wrap; justify-content: flex-end; }
 }
+/* Template contribution methods */
+.template-store-submit-methods { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.template-store-ai-guide { font-size: 14px; line-height: 1.8; color: var(--text-secondary); }
+.template-store-ai-guide pre { padding: 12px; border-radius: 10px; background: var(--bg-tertiary); overflow-x: auto; font-size: 12px; line-height: 1.7; }
+.template-store-ai-guide ol { padding-left: 22px; margin: 14px 0; }
