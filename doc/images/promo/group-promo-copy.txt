@@ -1,0 +1,8 @@
+分享一个适合 NAS / 媒体库玩家的开源工具：LibraryCoverStudio 🎬
+
+给 Jellyfin / Emby 的电影、剧集、动漫分类做统一封面，内置 7 套模板，支持可视化编辑、定时自动更新，还能接入自己的 AI 服务辅助设计。
+
+Docker 部署，生成前可预览，修改后有历史回退，默认模板改乱了也能一键恢复。
+
+欢迎试用、提建议，觉得好用可以点个 Star ⭐
+项目地址：https://github.com/HappyQuQu/library-cover-studio

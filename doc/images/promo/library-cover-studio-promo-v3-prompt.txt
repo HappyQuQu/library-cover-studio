@@ -1,0 +1,16 @@
+生成方式：内置 imagegen 工具
+目标：修正推广海报中直列海报墙预览的错误排列。
+
+Use case: precise-object-edit. Correct a factual template thumbnail error in this Chinese promotional poster. Image 1 is the edit target. Image 2 is the ACTUAL original upright-wall template preview from the project, and must be treated as the exact visual content to insert, not an inspiration for creative redraw.
+
+ONLY replace the SECOND thumbnail from the left in the TOP row of the seven-template gallery (under the "自己做模板，也能分享、导入" headline). That is the brown/gold preview labeled "电影 / MOVIES". In Image 1 it has a wrongly generated poster collage. It must instead contain Image 2 faithfully:
+- plain muted brown/gold left THIRD, "电影" above a lime green accent and "MOVIES";
+- the right TWO THIRDS form a perfectly STRAIGHT, tightly abutting 3-column by 3-row poster grid, no tilt, no blank seams, and naturally clipped at the canvas edges;
+- top row has the black-and-white drama artwork and cyan artwork in the exact positions shown in Image 2;
+- middle row has the brown drama, colorful turquoise/pink period drama, and pale anime artwork, exactly as Image 2;
+- bottom row matches Image 2, with the dark poster, THE LAST OF US, and black-and-white drama;
+- do not substitute other movie posters, merge faces, add more rows, duplicate extra poster strips, or create a new layout.
+
+Place Image 2 as faithful source-image content in this tile. Show the WHOLE original 16:9 source preview, rather than cropping it to a square. To make this work, adjust the top row's FOUR preview rectangles to the correct 16:9 aspect ratio, keeping their widths and relative positions; preserve the other three top-row thumbnails' recognizable original content. Leave the lower row of three previews and its original styles alone. This is a small gallery correction, not a new promotional design. Do not redraw or otherwise modify the editor screenshot.
+
+Maintain EVERYTHING ELSE: clean white background, precise layout, brand logo, all headline typography, remaining six templates, bottom AI and automation panels, workflow, separators, and footer URL. No red annotation border from the user's screenshot. Keep all Chinese and English text exactly as in the target: "7 套内置模板", "自己做模板，也能分享、导入", "制作模板 → 导出分享 → 导入使用", "AI 设计", "自动化更新" and "github.com/HappyQuQu/library-cover-studio". Do not add slogans, glow, neon, decorative artwork or extra features. Fidelity to the supplied real template image matters more than aesthetic reinterpretation.

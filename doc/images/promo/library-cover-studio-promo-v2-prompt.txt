@@ -1,0 +1,52 @@
+生成方式：内置 imagegen 工具
+设计目标：白底、简洁排版，突出 7 套内置模板、自制模板、导出分享与导入、AI 设计及自动化。
+
+初次改版提示词：
+Use case: ads-marketing / precise-object-edit.
+Redesign the existing LibraryCoverStudio promotional poster (Image 1) into a restrained, matter-of-fact Chinese product introduction poster for sharing in NAS / Jellyfin / Emby enthusiast groups. The user's specific correction: the first poster looks too AI-generated. Prioritize these five real capabilities in this order: SEVEN built-in templates, making your own templates, exporting/sharing and importing templates, optional AI design, automation.
+
+Input roles:
+Image 1 is the EDIT TARGET: completely redesign its layout and look; retain only the correct brand identity, product facts and repository address, not the old styling.
+Image 2 templates.jpg is supporting source imagery: the actual seven built-in cover template previews. Show all seven clearly and faithfully, exactly seven, in a useful 4+3 grid of flat thumbnail previews. Crop to the cover artwork where appropriate, without app action bars.
+Image 3 editor.jpg is supporting source imagery: actual app editor screenshot showing making one's own editable templates. Include this real screenshot as a secondary demonstration, flat and legible; preserve its content instead of inventing a different UI.
+Image 4 logo-d.png is official brand reference: use once as a SMALL flat logo next to brand name, not a second huge floating logo.
+
+Output: finished portrait 3:4 poster, about 1536x2048 or similar, phone-readable typography. Plain warm off-white paper background, charcoal text, one restrained muted purple accent borrowed from the application. Broad consistent margins, precise alignment, ordinary well-set modern Chinese sans serif, light gray separators. No fake texture, neon, glow, metallic gradients, 3D lettering, holographic frames, particles, lens flares, futuristic shapes, robots, giant illustrated icons, decorative English, handwriting, brush strokes, sales slogans, or invented product features. This should look like a clean poster carefully laid out by the product author using screenshots and type, NOT a cinematic AI launch advertisement.
+
+Composition:
+Top small product brand and short product description.
+Largest and most visually prominent headline is "7 套内置模板", with only the numeral 7 in muted purple. Directly below, a strongly readable second line: "自己做模板，也能分享、导入".
+Then a clear gallery of exactly seven real template artwork thumbnails in a 4+3 grid, modest rounded corners, no perspective or overlap.
+Under this gallery, a simple line describing the core user workflow, shown as plain text with arrows: "制作模板 → 导出分享 → 导入使用".
+Then the actual editor screenshot as secondary proof that users can create templates, framed only by a thin gray rule.
+At the bottom, two equally clear text columns or bands about "AI 设计" and "自动化更新" with their explanatory lines. These are real features, not tiny badges buried in fine print.
+Finish with a quiet, readable open-source/Docker line and the correct GitHub URL. All copy is limited to the exact strings listed below; screenshot-internal original tiny UI labels can remain.
+
+Text (verbatim, exact Chinese, no extra copy):
+"LibraryCoverStudio"
+"Jellyfin / Emby 媒体库封面工具"
+"7 套内置模板"
+"自己做模板，也能分享、导入"
+"制作模板 → 导出分享 → 导入使用"
+"AI 设计"
+"接入自己的 AI 服务，辅助设计模板"
+"自动化更新"
+"按计划生成并更新媒体库封面"
+"开源 · Docker 部署"
+"github.com/HappyQuQu/library-cover-studio"
+
+Factual boundaries: sharing means exporting a template package to share, then importing it; do not invent an online template community or marketplace. AI service is configured by the user, not free bundled AI. Keep the five requested benefits obvious and use the real product images accurately.
+
+最终校准提示词：
+Make a precise edit to Image 1, the clean white LibraryCoverStudio promotional poster. Keep all typography, five advertised features, workflow line, actual editor screenshot, footer, branding and white/purple editorial style unchanged. Correct ONLY four of the seven thumbnail images in its 4+3 template gallery. Use the four supplied original source thumbnails as faithful pasted image content, preserving their complete 16:9 compositions (slightly reduce thumbnail row heights if needed to fit these proportions, retaining the 4+3 gallery order).
+
+Reference mapping:
+Image 1 = edit target, clean white poster.
+Image 2 = source for upper row tile 4: diagonal hero template, purple text area and ONE large anime artwork on the right. NO bottom strip of extra posters.
+Image 3 = source for lower row tile 1: centered-title template, teal background with ONLY "动画电影" and "Animated Films". ABSOLUTELY NO POSTERS, faces or pictures in this tile.
+Image 4 = source for lower row tile 2: stacked-card template, purple background, title on left and overlapping cards on right. NO extra bottom poster strip.
+Image 5 = source for upper row tile 3: tilted-wall template, blurred dark background, title on left and 3x3 tilted rounded poster wall on right. Preserve the supplied arrangement.
+
+Keep the gallery's first two tiles and last tile as they are, and maintain EXACTLY seven tiles. Copy the supplied thumbnail imagery faithfully without creatively redesigning any source artwork. In particular remove the invented extra poster strips from the pure-text, diagonal-hero and stacked-card thumbnails.
+
+Keep these existing promotional strings verbatim: "LibraryCoverStudio", "Jellyfin / Emby 媒体库封面工具", "7 套内置模板", "自己做模板，也能分享、导入", "制作模板 → 导出分享 → 导入使用", "AI 设计", "接入自己的 AI 服务，辅助设计模板", "自动化更新", "按计划生成并更新媒体库封面", "开源 · Docker 部署", "github.com/HappyQuQu/library-cover-studio". No new text or effects. Do not change the current plain, clear design into a stylized advertisement.

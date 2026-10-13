@@ -1,0 +1,25 @@
+生成方式：内置 imagegen 工具
+用途：LibraryCoverStudio 群推广海报
+
+Use case: ads-marketing.
+Create ONE finished Chinese promotional poster for LibraryCoverStudio, a real open-source Jellyfin / Emby media-library cover designer and automation app, for sharing in Chinese NAS / home media enthusiast chat groups. Portrait 3:4 composition, high resolution, polished launch-campaign artwork, clear readable Chinese typography and strong visual hierarchy.
+
+Input images are references and supporting compositing inputs, not edit targets:
+Image 1 templates.jpg: actual application UI with seven built-in cover template previews. Use these real cover layout previews as a supporting visual strip / tasteful small gallery, preserving recognizable layouts, no invented app features.
+Image 2 editor.jpg: actual visual designer. Use the real editor screenshot as the central hero, in a thin framed window, visibly showing the editable backdrop and the row of five covers. Preserve the screenshot's product content faithfully.
+Image 3 logo-d.png: official brand icon; use this icon as a small mark next to the product name, preserving its layered blue-purple-teal card identity.
+
+Art direction: premium dark software launch poster, charcoal and deep indigo background, restrained purple-to-cyan ambient illumination inspired by the official icon and app UI. Crisp editorial typesetting, broad margins, subtle refined texture, very minimal accent geometry. Make the product screenshot the proof of the product, not a generic fantasy device scene. No people outside the referenced media artwork, no extra decorative objects, no excessive glow, no fake QR code. Flat, front-facing poster; avoid perspective that makes the app unreadable.
+
+Layout: top brand line; huge two-line Chinese headline in white with a purple/cyan accent on the key phrase; one supporting line; middle central framed actual editor screenshot with several actual template examples from Image 1 underneath or beside it in a carefully balanced compact arrangement; bottom four clear concise feature blocks / pills, then a restrained open-source call to action and the correct GitHub address. The seven-template claim must say 7, never 6. Main headline and feature labels need to remain readable on a phone. Product screenshot can use its existing tiny UI text, but promotional copy must be sharp and accurate.
+
+Exact promotional text, render verbatim, no extra marketing claims:
+Brand: "LibraryCoverStudio"
+Main headline line 1: "让媒体库封面"
+Main headline line 2: "自动焕新"
+Supporting line: "Jellyfin / Emby 封面设计与自动化工具"
+Four feature labels: "7 套内置模板" / "定时自动更新" / "可视化编辑" / "AI 设计助手"
+Footer call to action: "开源 · Docker 部署"
+Footer address: "github.com/HappyQuQu/library-cover-studio"
+
+Do not advertise free AI access, video download, streaming playback, or automatic media file creation. This app designs and updates library cover images. Deliver a finished clean shareable promotional poster with accurate Chinese text and faithful referenced app imagery.
