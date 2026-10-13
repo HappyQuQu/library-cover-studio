@@ -473,8 +473,34 @@ async function renderPoster(
     let processed = sharp(posterBuffer)
       .resize(width, height, { fit: 'cover' });
 
-    // Step 2: Apply border radius using SVG mask if needed
-    if (borderRadius > 0) {
+    // Relative Fabric masks move, resize and rotate together with their poster.
+    const maskType = clipPath?.type?.toLowerCase();
+    if (clipPath && !clipPath.absolutePositioned && ['circle', 'ellipse', 'polygon'].includes(maskType)) {
+      const sx = (obj.scaleX || 1) * (clipPath.scaleX ?? 1);
+      const sy = (obj.scaleY || 1) * (clipPath.scaleY ?? 1);
+      const clipWidth = clipPath.width ?? (maskType === 'circle' ? clipPath.radius * 2 : clipPath.rx * 2);
+      const clipHeight = clipPath.height ?? (maskType === 'circle' ? clipPath.radius * 2 : clipPath.ry * 2);
+      const offsetX = clipPath.originX === 'center' ? 0 : clipPath.originX === 'right' ? -clipWidth / 2 : clipWidth / 2;
+      const offsetY = clipPath.originY === 'center' ? 0 : clipPath.originY === 'bottom' ? -clipHeight / 2 : clipHeight / 2;
+      const cx = width / 2 + (clipPath.left || 0) * (obj.scaleX || 1) + offsetX * sx;
+      const cy = height / 2 + (clipPath.top || 0) * (obj.scaleY || 1) + offsetY * sy;
+      let shape: string;
+      if (maskType === 'polygon') {
+        if (!Array.isArray(clipPath.points) || !clipPath.points.length) throw new Error('海报裁切多边形缺少顶点');
+        const offset = clipPath.pathOffset || {
+          x: (Math.min(...clipPath.points.map((p: any) => p.x)) + Math.max(...clipPath.points.map((p: any) => p.x))) / 2,
+          y: (Math.min(...clipPath.points.map((p: any) => p.y)) + Math.max(...clipPath.points.map((p: any) => p.y))) / 2,
+        };
+        const points = clipPath.points.map((p: any) => `${cx + (p.x - offset.x) * sx},${cy + (p.y - offset.y) * sy}`).join(' ');
+        shape = `<polygon points="${points}" fill="white"/>`;
+      } else {
+        const rx = (maskType === 'circle' ? clipPath.radius : clipPath.rx) * sx;
+        const ry = (maskType === 'circle' ? clipPath.radius : clipPath.ry) * sy;
+        shape = `<ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="white"/>`;
+      }
+      const mask = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><g transform="rotate(${Number(clipPath.angle) || 0},${cx},${cy})">${shape}</g></svg>`);
+      processed = processed.composite([{ input: mask, blend: 'dest-in' }]);
+    } else if (borderRadius > 0) {
       const scaledRadius = Math.round(borderRadius * (obj.scaleX || 1));
       const mask = Buffer.from(`
         <svg width="${width}" height="${height}">

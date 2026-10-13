@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "initialize": false,
+  "templates": [
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000001",
+      "slug": "ticket-stub",
+      "name": "票根收藏",
+      "description": "大幅票根纸面、左侧单张海报、右侧主副标题，带齿孔与编号装饰。",
+      "posterCount": 1
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000002",
+      "slug": "filmstrip",
+      "name": "胶片放映",
+      "description": "横贯画面的四格胶片与上下齿孔，底部大标题；四张图片按横向画幅裁切。",
+      "posterCount": 4
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000003",
+      "slug": "vinyl-sleeve",
+      "name": "黑胶唱片",
+      "description": "左侧唱片刻纹与圆形海报唱片标签，右侧标题和两枚独立圆形封面。",
+      "posterCount": 3
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000004",
+      "slug": "editorial-spread",
+      "name": "影像画册",
+      "description": "上方刊物式大标题、左下横向主视觉、右侧双图与图注的杂志编排。",
+      "posterCount": 3
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000005",
+      "slug": "orbital-gallery",
+      "name": "轨道星图",
+      "description": "五枚圆形海报沿椭圆轨道分布，标题位于中央留白，带细线与星图节点。",
+      "posterCount": 5
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000006",
+      "slug": "four-frame-montage",
+      "name": "四幕蒙太奇",
+      "description": "四幅横向裁切画面铺满四角，中央横贯标题带，适合强调多部影片的分类封面。",
+      "posterCount": 4
+    },
+    {
+      "id": "d13c7000-6ea1-4c89-a5ba-000000000007",
+      "slug": "honeycomb",
+      "name": "蜂巢拼图",
+      "description": "七张六边形海报组成蜂巢，底部主副标题与浅色画册背景。",
+      "posterCount": 7
+    }
+  ]
+}
