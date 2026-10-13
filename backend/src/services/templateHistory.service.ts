@@ -13,6 +13,7 @@ import { renderLibraryCover } from './renderer.service.js';
 export const TEMPLATE_HISTORY_LIMIT = 50;
 type Template = typeof templates.$inferSelect;
 type Revision = typeof templateRevisions.$inferInsert;
+type TemplateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Kind = 'save' | 'restore' | 'baseline' | 'default-reset' | 'before-default-reset';
 const postersDirectory = fileURLToPath(new URL('../../src/template/poster/', import.meta.url));
 
@@ -58,6 +59,7 @@ async function prepareRevision(template: Template, savedBy: string | null, kind:
   const filename = `revision-${id}.jpg`;
   await fs.writeFile(path.join(THUMBNAILS_DIR, filename), buffer);
   return { id, templateId: template.id, name: template.name, description: template.description, canvasJson: template.canvasJson,
+    metadataJson: template.metadataJson ?? null,
     width: template.width || 1920, height: template.height || 1080, isPublic: template.isPublic,
     thumbnailPath: `/thumbnails/${filename}`, savedBy, kind, restoredFrom,
     createdAt: kind === 'baseline' ? template.updatedAt || template.createdAt || new Date().toISOString() : new Date().toISOString() };
@@ -73,7 +75,8 @@ export async function cleanupTemplateImages(paths: (string | null | undefined)[]
 }
 
 /** Commit the design and its immutable snapshot together, then trim the oldest versions. */
-export async function saveTemplateVersion(existing: Template | undefined, next: Template, savedBy: string, kind: 'save' | 'restore' = 'save', thumbnail?: string, restoredFrom?: string) {
+export async function saveTemplateVersion(existing: Template | undefined, next: Template, savedBy: string, kind: 'save' | 'restore' = 'save', thumbnail?: string, restoredFrom?: string,
+  onSaved?: (tx: TemplateTransaction, saved: Template) => void) {
   const prepared: Revision[] = [];
   try {
     if (existing && !getTemplateRevisions(existing.id).length) prepared.push(await prepareRevision(existing, existing.userId, 'baseline'));
@@ -89,12 +92,14 @@ export async function saveTemplateVersion(existing: Template | undefined, next: 
         if (current.isLocked) throw createError('模板已锁定，请先解锁再编辑或回退', 409, 'TEMPLATE_LOCKED');
         if (JSON.stringify(current) !== JSON.stringify(existing)) throw createError('模板已发生变化，请刷新后重试', 409, 'TEMPLATE_CHANGED');
         tx.update(templates).set({ name: next.name, description: next.description, canvasJson: next.canvasJson,
+          metadataJson: next.metadataJson ?? null,
           width: next.width, height: next.height, isPublic: next.isPublic, thumbnailPath: snapshot.thumbnailPath,
           updatedAt: snapshot.createdAt }).where(eq(templates.id, existing.id)).run();
       } else {
         tx.insert(templates).values({ ...next, thumbnailPath: snapshot.thumbnailPath }).run();
       }
       for (const revision of prepared) tx.insert(templateRevisions).values(revision).run();
+      onSaved?.(tx, { ...next, thumbnailPath: snapshot.thumbnailPath, updatedAt: snapshot.createdAt });
       const stale = tx.select().from(templateRevisions).where(eq(templateRevisions.templateId, next.id))
         .orderBy(desc(templateRevisions.sequence)).all().slice(TEMPLATE_HISTORY_LIMIT);
       for (const revision of stale) tx.delete(templateRevisions).where(eq(templateRevisions.id, revision.id)).run();

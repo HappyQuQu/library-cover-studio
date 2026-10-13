@@ -52,6 +52,7 @@ test('seven experimental templates stay separate from initialization and retain 
     const Zip = require('adm-zip');
     const zip = new Zip(await readFile(new URL('packages/' + item.slug + '.zip', directory)));
     const portable = JSON.parse(zip.getEntry('template.json').getData().toString('utf8'));
+    assert.equal(portable.version, '1.0.0'); assert.equal(portable.author.name, 'HappyQuQu');
     assert.deepEqual(JSON.parse(portable.canvasJson), definition.canvas);
     assert.ok(zip.getEntry('preview.jpg'));
   }

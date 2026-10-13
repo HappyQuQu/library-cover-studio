@@ -98,5 +98,11 @@
     7,
     8,
     9
-  ]
+  ],
+  "version": "1.0.0",
+  "author": {
+    "name": "HappyQuQu",
+    "url": "https://github.com/HappyQuQu"
+  },
+  "changelog": "首次发布；提供版本、作者与模板说明。"
 }

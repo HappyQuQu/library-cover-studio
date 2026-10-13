@@ -111,6 +111,10 @@ export interface Template {
   id: string;
   name: string;
   description?: string;
+  version?: string;
+  author?: { name: string; url?: string } | null;
+  changelog?: string;
+  minAppVersion?: string | null;
   canvasJson?: string;
   thumbnailPath?: string;
   thumbnail?: string; // Base64 data URL for thumbnail upload
@@ -184,6 +188,7 @@ export function useSetTemplateLock() {
 export interface TemplateRevision {
   id: string;
   name: string;
+  version?: string;
   width: number;
   height: number;
   createdAt: string;

@@ -7,6 +7,7 @@ import { templates, systemSettings, tasks, aiConversations } from '../config/sch
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import { renderLibraryCover } from './renderer.service.js';
 
+import { templateMetadataSchema } from './templateMetadata.service.js';
 import { buildDefaultTemplates } from './bundledTemplates.service.js';
 export { buildDefaultTemplates } from './bundledTemplates.service.js';
 
@@ -30,6 +31,7 @@ export async function seedDefaultTemplates() {
     await installCinematicDefaults();
     await widenDefaultFan();
     await installBackdropStrip();
+    await initializeDefaultMetadata();
     return;
   }
   const freshInstallation = db.select({ id: templates.id }).from(templates).limit(1).all().length === 0;
@@ -96,6 +98,7 @@ export async function seedDefaultTemplates() {
   await installCinematicDefaults();
   await widenDefaultFan();
   await installBackdropStrip();
+  await initializeDefaultMetadata();
 }
 
 /** Add the new default once to existing installations; respect later edits and deletions. */
@@ -328,5 +331,17 @@ async function installCinematicDefaults() {
       canvasJson: JSON.stringify(definition.canvas), width, height, thumbnailPath: `/thumbnails/${definition.id}.jpg`,
       isPublic: 1, isLocked: 1, isDefault: 1, createdAt: now, updatedAt: now }).run();
     tx.insert(systemSettings).values({ key, value: 'installed', updatedAt: now }).run();
+  });
+}
+
+/** Fill missing provenance only, preserving edited designs, locks and deleted defaults. */
+async function initializeDefaultMetadata() {
+  const definitions = await buildDefaultTemplates();
+  db.transaction(tx => {
+    for (const definition of definitions) {
+      const current = tx.select().from(templates).where(eq(templates.id, definition.id)).get();
+      if (current?.isDefault && !current.metadataJson) tx.update(templates)
+        .set({ metadataJson: JSON.stringify(templateMetadataSchema.parse(definition)) }).where(eq(templates.id, current.id)).run();
+    }
   });
 }

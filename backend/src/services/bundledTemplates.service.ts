@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { templateMetadataSchema } from './templateMetadata.service.js';
 
 const directory = new URL('../../src/template/defaults/', import.meta.url);
 const posterDirectory = new URL('../../src/template/poster/', import.meta.url);
@@ -23,7 +24,7 @@ const definitionSchema = z.object({
       source: z.enum(['poster', 'backdrop']).optional() }).optional(),
     randomBackgroundStyle: z.enum(['soft-mesh', 'muted-wall', 'cinema-mesh']),
   }).passthrough(),
-});
+}).merge(templateMetadataSchema);
 
 /** Portable project assets, shared by first-run initialization and legacy migrations. */
 export async function buildDefaultTemplates() {

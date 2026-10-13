@@ -33,6 +33,12 @@ test('reference defaults are editable variable layouts, seed once, and enforce t
   for (const [id, role] of [['owner', 'user'], ['other', 'user'], ['admin', 'admin']]) sqlite.prepare('INSERT INTO users (id,username,password_hash,role) VALUES (?,?,?,?)').run(id, id, 'fixture', role);
   sqlite.prepare('INSERT INTO templates (id,name,canvas_json,user_id,is_locked) VALUES (?,?,?,?,?)').run('locked-private', 'Locked private', '{"objects":[]}', 'owner', 1);
   await defaults.seedDefaultTemplates();
+  const seededMetadata = sqlite.prepare('SELECT metadata_json FROM templates WHERE is_default = 1').all();
+  assert.equal(seededMetadata.length, 7);
+  for (const row of seededMetadata) {
+    const metadata = JSON.parse(row.metadata_json);
+    assert.equal(metadata.version, '1.0.0'); assert.equal(metadata.author.name, 'HappyQuQu');
+  }
   // Existing installations gain exactly three templates, without modifying the saved older layouts.
   const cinematicIds = ['1106', '1107', '1108'].map(suffix => '7de80a91-0d2c-4d9a-8e3a-902c8d24' + suffix);
   const oldDefaults = sqlite.prepare('SELECT * FROM templates WHERE is_default = 1').all().filter((row: any) => !cinematicIds.includes(row.id));

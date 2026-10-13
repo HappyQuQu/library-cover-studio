@@ -181,7 +181,8 @@ for (const [index, [slug, name, description, make]] of concepts.entries()) {
   const id = `d13c7000-6ea1-4c89-a5ba-${String(index + 1).padStart(12, '0')}`;
   const canvas = { version: '6.0.0', width: 1920, height: 1080,
     randomOnGeneration: false, randomBackgroundStyle: 'cinema-mesh', ...make() };
-  const definition = { id, name, description, primaryTitle: '电影', secondaryTitle: 'MOVIES',
+  const metadata = { version: '1.0.0', author: { name: 'HappyQuQu', url: 'https://github.com/HappyQuQu' }, changelog: '首次发布；提供版本、作者与模板说明。' };
+  const definition = { ...metadata, id, name, description, primaryTitle: '电影', secondaryTitle: 'MOVIES',
     previewFile: `${slug}.jpg`, samplePosters: [1, 2, 3, 4, 5, 6, 7, 8, 9], canvas };
   const objects = canvas.objects;
   assert.equal(new Set(objects.map(o => o.id)).size, objects.length, 'Layer IDs are unique');
@@ -195,7 +196,7 @@ for (const [index, [slug, name, description, make]] of concepts.entries()) {
   await fs.writeFile(path.join(directory, `${slug}.json`), JSON.stringify(definition, null, 2) + '\n');
   await fs.writeFile(path.join(directory, `${slug}.jpg`), rendered);
   const zip = new AdmZip();
-  zip.addFile('template.json', Buffer.from(JSON.stringify({ name: `试作 · ${name}`, description, width: 1920, height: 1080,
+  zip.addFile('template.json', Buffer.from(JSON.stringify({ ...metadata, name: `试作 · ${name}`, description, width: 1920, height: 1080,
     isPublic: false, canvasJson: JSON.stringify(canvas) }, null, 2)));
   zip.addFile('preview.jpg', await sharp(rendered).resize(480, 270).jpeg({ quality: 90 }).toBuffer());
   await fs.writeFile(path.join(directory, 'packages', `${slug}.zip`), zip.toBuffer());

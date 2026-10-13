@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { createError } from '../middleware/errorHandler.js';
 import { MAX_TEMPLATE_PACKAGE_BYTES, readTemplatePackage } from './templatePackage.service.js';
+import { templateMetadataSchema } from './templateMetadata.service.js';
 
 export const STORE_REPOSITORY = 'HappyQuQu/library-cover-store';
 export const STORE_URL = `https://github.com/${STORE_REPOSITORY}`;
@@ -17,7 +18,7 @@ const storeEntrySchema = z.object({
   packageUrl: z.string().url().refine(value => new URL(value).href.startsWith(downloadPrefix) && !/[?#]/.test(value)),
   packageSha256: hex, downloadCount: z.number().int().nonnegative(),
   folder: z.string().min(1).max(200)
-});
+}).merge(templateMetadataSchema);
 const catalogSchema = z.object({
   version: z.literal(1), repository: z.literal(STORE_REPOSITORY), generatedAt: z.string().datetime(),
   pendingCount: z.number().int().nonnegative().default(0), templates: z.array(storeEntrySchema).max(50000)
@@ -69,7 +70,8 @@ export async function downloadStorePackage(entry: StoreEntry) {
     throw createError('模板包校验失败，请等待商店更新后重试', 502, 'STORE_PACKAGE_INVALID');
   }
   const result = readTemplatePackage(buffer);
-  if (result.data.name !== entry.name || result.data.width !== entry.width || result.data.height !== entry.height) {
+  if (result.data.name !== entry.name || result.data.width !== entry.width || result.data.height !== entry.height
+    || JSON.stringify(templateMetadataSchema.parse(result.data)) !== JSON.stringify(templateMetadataSchema.parse(entry))) {
     throw createError('模板包与商店目录不一致', 502, 'STORE_PACKAGE_INVALID');
   }
   return result;

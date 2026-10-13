@@ -56,7 +56,7 @@ export function TemplateHistory({ id, open, onOpenChange, locked, saving }: {
             <div className="template-history-preview" style={{ aspectRatio: `${selected.width}/${selected.height}` }}>
               <AuthenticatedImage key={selected.id} src={selected.previewUrl} alt={`历史预览：${selected.name}`} fallback={fallback} />
             </div>
-            <div className="template-history-meta"><strong>{selected.name}</strong><span>{selected.width} × {selected.height}</span></div>
+            <div className="template-history-meta"><strong>{selected.name}</strong><span>v{selected.version || '1.0.0'} · {selected.width} × {selected.height}</span></div>
             <p className="text-sm text-(--text-secondary)">{labels[selected.kind]} · {date(selected.createdAt)}</p>
             {locked && <p className="template-history-lock"><Lock size={15} />模板已锁定，可查看历史；解锁后才能回退。</p>}
             {confirming ? <div className="template-history-confirm">

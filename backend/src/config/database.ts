@@ -246,6 +246,16 @@ export async function initDatabase() {
     }
   }
 
+  // 兼容旧模板与商店安装记录，保留已有设计和下载来源。
+  for (const table of ['templates', 'template_revisions']) {
+    const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!columns.some(column => column.name === 'metadata_json')) sqlite.exec(`ALTER TABLE ${table} ADD COLUMN metadata_json TEXT;`);
+  }
+  const installColumns = sqlite.prepare('PRAGMA table_info(template_store_installs)').all() as { name: string }[];
+  for (const column of ['version', 'content_hash', 'installed_at']) {
+    if (!installColumns.some(existing => existing.name === column)) sqlite.exec(`ALTER TABLE template_store_installs ADD COLUMN ${column} TEXT;`);
+  }
+
   // 初始化系统设置
   const defaultSettings = [
     { key: 'history.maxRuns', value: '50' },

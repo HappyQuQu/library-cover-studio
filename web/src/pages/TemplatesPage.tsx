@@ -197,6 +197,7 @@ export function TemplatesPage() {
                       <h3 className="font-medium text-sm text-(--text-primary) truncate">
                         {template.name}
                       </h3>
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>v{template.version || '1.0.0'} · {template.author?.name || '未标注作者'}</p>
                       <p className="template-library-description">
                         {template.description || '自定义封面设计'}
                       </p>

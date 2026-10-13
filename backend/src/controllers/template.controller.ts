@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import AdmZip from 'adm-zip';
+import { templateMetadataSchema, readTemplateMetadata } from '../services/templateMetadata.service.js';
 
 const d: any = db;
 
@@ -27,7 +28,7 @@ export const createTemplateSchema = z.object({
   height: z.number().int().min(100).max(6000).default(600),
   isPublic: z.boolean().default(false),
   isLocked: z.boolean().default(false)
-});
+}).merge(templateMetadataSchema);
 
 export const updateTemplateSchema = createTemplateSchema.omit({ isLocked: true }).partial();
 export const lockTemplateSchema = z.object({ isLocked: z.boolean() });
@@ -39,7 +40,7 @@ function assertReadable(req: Request, template: any) {
   if (!canManage(req, template) && !template.isPublic) throw createError('无权查看此模板', 403, 'TEMPLATE_FORBIDDEN');
 }
 function serializeTemplate(req: Request, template: any) {
-  return { ...template, isPublic: !!template.isPublic, isLocked: !!template.isLocked, isDefault: !!template.isDefault, canManage: canManage(req, template) };
+  return { ...template, ...readTemplateMetadata(template.metadataJson), isPublic: !!template.isPublic, isLocked: !!template.isLocked, isDefault: !!template.isDefault, canManage: canManage(req, template) };
 }
 
 // 获取模板列表
@@ -51,6 +52,7 @@ export async function list(req: Request, res: Response, next: NextFunction) {
     let query = d.select({
       id: templates.id,
       name: templates.name,
+      metadataJson: templates.metadataJson,
       description: templates.description,
       thumbnailPath: templates.thumbnailPath,
       width: templates.width,
@@ -127,6 +129,7 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
 
     // Add template JSON
     const templateData = {
+      ...readTemplateMetadata(template.metadataJson),
       name: template.name,
       description: template.description,
       width: template.width,
@@ -182,9 +185,10 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
     const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png|webp)$/i));
     const extension = previewEntry?.entryName.split('.').pop()?.toLowerCase();
     const thumbnail = previewEntry ? `data:image/${extension === 'jpg' ? 'jpeg' : extension};base64,${previewEntry.getData().toString('base64')}` : undefined;
-    const data = createTemplateSchema.parse({ name: `${name} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
+    const data = createTemplateSchema.parse({ ...templateMetadataSchema.parse(templateData), name: `${name} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
     const saved = await saveTemplateVersion(undefined, {
       id, name: data.name, description: data.description ?? null, canvasJson: data.canvasJson,
+      metadataJson: JSON.stringify(templateMetadataSchema.parse(data)),
       width: data.width, height: data.height, userId, isPublic: data.isPublic ? 1 : 0,
       isLocked: 0, isDefault: 0, thumbnailPath: null, createdAt: now, updatedAt: now
     }, userId, 'save', thumbnail);
@@ -218,12 +222,14 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 
     const saved = await saveTemplateVersion(undefined, {
       id, name, description: description ?? null, canvasJson, thumbnailPath: null,
+      metadataJson: JSON.stringify(templateMetadataSchema.parse(req.body)),
       width, height, userId, isPublic: isPublic ? 1 : 0, isLocked: isLocked ? 1 : 0,
       isDefault: 0, createdAt: now, updatedAt: now
     }, userId, 'save', thumbnail);
     const thumbnailPath = saved.thumbnailPath;
 
     res.status(201).json({
+      ...readTemplateMetadata(saved.metadataJson),
       id,
       name,
       description,
@@ -263,6 +269,11 @@ export async function update(req: Request, res: Response, next: NextFunction) {
     for (const key of ['name', 'description', 'canvasJson', 'width', 'height']) {
       if (updates[key] !== undefined) updateData[key] = updates[key];
     }
+    const metadata = { ...readTemplateMetadata(existing.metadataJson) };
+    for (const key of ['version', 'author', 'changelog', 'minAppVersion']) {
+      if (Object.prototype.hasOwnProperty.call(updates, key)) metadata[key] = updates[key];
+    }
+    updateData.metadataJson = JSON.stringify(templateMetadataSchema.parse(metadata));
     if (updates.isPublic !== undefined) updateData.isPublic = updates.isPublic ? 1 : 0;
     await saveTemplateVersion(existing, updateData, req.user!.userId, 'save', updates.thumbnail);
 
@@ -365,7 +376,7 @@ export async function history(req: Request, res: Response, next: NextFunction) {
     const existing = managedTemplate(req);
     const rows = getTemplateRevisions(existing.id);
     res.json({ limit: TEMPLATE_HISTORY_LIMIT, revisions: rows.map(({ canvasJson, thumbnailPath, savedBy, ...revision }) => ({
-      ...revision, previewUrl: `/templates/${existing.id}/history/${revision.id}/thumbnail`
+      ...revision, ...readTemplateMetadata(revision.metadataJson), previewUrl: `/templates/${existing.id}/history/${revision.id}/thumbnail`
     })) });
   } catch (error) { next(error); }
 }
@@ -389,7 +400,7 @@ export async function restoreRevision(req: Request, res: Response, next: NextFun
     const revision = getTemplateRevision(existing.id, req.params.revisionId);
     if (!revision) throw createError('历史版本不存在或已超过最近 50 条', 404, 'REVISION_NOT_FOUND');
     const saved = await saveTemplateVersion(existing, { ...existing, name: revision.name, description: revision.description,
-      canvasJson: revision.canvasJson, width: revision.width, height: revision.height, isPublic: revision.isPublic,
+      canvasJson: revision.canvasJson, metadataJson: revision.metadataJson, width: revision.width, height: revision.height, isPublic: revision.isPublic,
       thumbnailPath: revision.thumbnailPath }, req.user!.userId, 'restore', undefined, revision.id);
     res.json(serializeTemplate(req, saved));
   } catch (error) { next(error); }

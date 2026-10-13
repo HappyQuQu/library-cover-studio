@@ -30,6 +30,7 @@ export const templates = sqliteTable('templates', {
   name: text('name').notNull(),
   description: text('description'),
   canvasJson: text('canvas_json').notNull(),
+  metadataJson: text('metadata_json'),
   thumbnailPath: text('thumbnail_path'),
   width: integer('width').default(1920),
   height: integer('height').default(1080),
@@ -46,6 +47,9 @@ export const templateStoreInstalls = sqliteTable('template_store_installs', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   storeId: text('store_id').notNull(),
   revision: text('revision').notNull(),
+  version: text('version'),
+  contentHash: text('content_hash'),
+  installedAt: text('installed_at'),
   templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' })
 }, table => [primaryKey({ columns: [table.userId, table.storeId, table.revision] })]);
 
@@ -57,6 +61,7 @@ export const templateRevisions = sqliteTable('template_revisions', {
   name: text('name').notNull(),
   description: text('description'),
   canvasJson: text('canvas_json').notNull(),
+  metadataJson: text('metadata_json'),
   thumbnailPath: text('thumbnail_path').notNull(),
   width: integer('width').notNull(),
   height: integer('height').notNull(),

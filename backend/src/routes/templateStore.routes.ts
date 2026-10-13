@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
-import { listStore, installStoreTemplate } from '../controllers/templateStore.controller.js';
+import { listStore, installStoreTemplate, updateStoreTemplate, storeUpdateSchema } from '../controllers/templateStore.controller.js';
+import { validate } from '../middleware/validation.js';
 
 const router = Router();
 router.use(authenticate);
 router.get('/', listStore);
 router.post('/:id/install', installStoreTemplate);
+router.post('/:id/update', validate(storeUpdateSchema), updateStoreTemplate);
 export { router as templateStoreRouter };

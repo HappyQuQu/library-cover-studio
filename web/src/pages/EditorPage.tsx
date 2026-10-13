@@ -16,6 +16,7 @@ import { ToolboxPanel } from '@/components/editor/ToolboxPanel';
 import { AIChatPanel } from '@/components/ai/AIChatPanel';
 import { apiClient } from '@/api/client';
 import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
+import { TemplateMetadata, type TemplateDetails } from '@/components/editor/TemplateMetadata';
 import { TemplateHistory } from '@/components/editor/TemplateHistory';
 import { calculateFitZoom } from '@/lib/editorLayout';
 import { useEditorDraft } from '@/hooks/useEditorDraft';
@@ -136,6 +137,16 @@ export function EditorPage() {
   const [leftWidth, setLeftWidth] = useState(340);
   const [rightWidth, setRightWidth] = useState(360);
   const [templateName, setTemplateName] = useState('');
+  const [details, setDetails] = useState<TemplateDetails>({ version: '1.0.0', description: '', changelog: '' });
+  const [detailsSaved, setDetailsSaved] = useState(JSON.stringify(details));
+  const [metadataOpen, setMetadataOpen] = useState(false);
+  const metadataDirty = JSON.stringify(details) !== detailsSaved;
+  useEffect(() => {
+    if (!metadataDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [metadataDirty]);
   const [activeTool, setActiveTool] = useState('select');
   const [activePanel, setActivePanel] = useState<'properties' | 'layers' | 'ai'>('properties');
   const [layers, setLayers] = useState<any[]>([]);
@@ -225,7 +236,7 @@ export function EditorPage() {
   const loadedTemplate = useRef('');
   const loadedCanvas = useRef(canvas);
   const dirtyRef = useRef(false); dirtyRef.current = drafts.dirty;
-  const hasChangesRef = useRef(drafts.hasChanges); hasChangesRef.current = drafts.hasChanges;
+  const hasChangesRef = useRef(drafts.hasChanges); hasChangesRef.current = () => drafts.hasChanges() || metadataDirty;
   const markLoadedRef = useRef(drafts.markLoaded); markLoadedRef.current = drafts.markLoaded;
   const restoreDraft = async () => {
     const draft = drafts.pendingDraft;
@@ -540,6 +551,8 @@ export function EditorPage() {
     if (loadedTemplate.current === version || (loadedTemplate.current.startsWith(`${id || 'new'}:`) && hasChangesRef.current())) return;
     // Basic initialization
     if (canvas && !id) {
+      const initial = { version: '1.0.0', description: '', changelog: '' };
+      setDetails(initial); setDetailsSaved(JSON.stringify(initial));
       setCanvasWidth(defaultW);
       setCanvasHeight(defaultH);
       const initialZoom = fitToView(defaultW, defaultH);
@@ -561,6 +574,8 @@ export function EditorPage() {
     const loadTemplate = async () => {
       setCanvasReady(false);
       setTemplateName(templateData.name || '');
+      const loadedDetails = { version: templateData.version || '1.0.0', description: templateData.description || '', changelog: templateData.changelog || '', author: templateData.author, minAppVersion: templateData.minAppVersion };
+      setDetails(loadedDetails); setDetailsSaved(JSON.stringify(loadedDetails));
       const width = templateData.width || defaultW;
       const height = templateData.height || defaultH;
       setCanvasWidth(width);
@@ -965,16 +980,17 @@ export function EditorPage() {
       const canvasJson = JSON.stringify(canvas.toObject(CANVAS_PROPERTIES));
       const savedSnapshot = { name: templateName, width: canvasWidth, height: canvasHeight, canvasJson };
       if (id && templateData?.canManage !== false) {
-        await updateMutation.mutateAsync({ id, name: templateName, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
+        await updateMutation.mutateAsync({ id, name: templateName, ...details, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
       } else {
         const result = await createMutation.mutateAsync({
-          name: id ? `${templateName} · 副本` : templateName || t('designer.newTemplate'), canvasJson,
+          name: id ? `${templateName} · 副本` : templateName || t('designer.newTemplate'), ...details, canvasJson,
           width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
         });
         drafts.markSaved(savedSnapshot);
         navigate(`/editor/${result.id}`, { replace: true });
       }
       drafts.markSaved(savedSnapshot);
+      setDetailsSaved(JSON.stringify(details));
       toast({ title: t('common.success'), description: '设计已保存，并记录到保存历史。' });
     } catch (error: any) {
       toast({ title: '保存失败', description: error.response?.data?.error?.message || '请检查图片素材后重试', variant: 'destructive' });
@@ -1284,11 +1300,12 @@ export function EditorPage() {
               />
               <Edit className="w-4 h-4 text-(--text-tertiary)" />
               {drafts.draftUnavailable && <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>草稿无法保存，请先保存模板</span>}
-              {drafts.dirty && <span style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-secondary)' }}>未保存</span>}
+              {(drafts.dirty || metadataDirty) && <span style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-secondary)' }}>未保存</span>}
               {templateData?.isLocked && <span className="template-lock-badge" title="已锁定：不可编辑、保存、回退或删除"><Lock size={12} />已锁定 · 只读</span>}
             </div>
           </div>
           <div className="editor-document-actions flex items-center gap-2">
+            <Button variant="ghost" className="h-9 gap-2" onClick={() => setMetadataOpen(true)}>模板信息</Button>
             {id && templateData?.canManage && <Button variant="ghost" className="h-9 gap-2" onClick={() => setSaveHistoryOpen(true)}><History size={16} />历史</Button>}
             {templateData?.isLocked && <>
               <Button variant="ghost" className="h-9 gap-2" onClick={copyTemplate}><Copy size={16} />复制编辑</Button>
@@ -1742,6 +1759,7 @@ export function EditorPage() {
         <p>发现本浏览器未保存的草稿（{new Date(drafts.pendingDraft.savedAt).toLocaleString()}）。恢复会替换当前画布。</p>
         <Button onClick={restoreDraft}>恢复草稿</Button><Button variant="ghost" onClick={drafts.discardDraft}>丢弃草稿</Button>
       </div>}
+      <TemplateMetadata open={metadataOpen} onOpenChange={setMetadataOpen} value={details} onApply={setDetails} readOnly={readOnly} />
       {id && templateData?.canManage && <TemplateHistory id={id} open={saveHistoryOpen} onOpenChange={setSaveHistoryOpen} locked={templateData.isLocked} saving={saving} />}
 
       {/* Preview Modal */}

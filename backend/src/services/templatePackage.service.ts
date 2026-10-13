@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { createRequire } from 'node:module';
 import { createError } from '../middleware/errorHandler.js';
+import { templateMetadataSchema } from './templateMetadata.service.js';
 
 export const MAX_TEMPLATE_PACKAGE_BYTES = 5 * 1024 * 1024;
 export const createTemplateSchema = z.object({
@@ -15,7 +16,7 @@ export const createTemplateSchema = z.object({
   height: z.number().int().min(100).max(6000).default(600),
   isPublic: z.boolean().default(false),
   isLocked: z.boolean().default(false)
-});
+}).merge(templateMetadataSchema);
 
 interface ZipEntry { entryName: string; header: { size: number }; getData(): Buffer }
 const require = createRequire(import.meta.url);
