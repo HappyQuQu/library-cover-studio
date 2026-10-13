@@ -5,6 +5,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ServersPage } from '@/pages/ServersPage';
 import { TemplatesPage } from '@/pages/TemplatesPage';
+import { TemplateStorePage } from '@/pages/TemplateStorePage';
 import { EditorPage } from '@/pages/EditorPage';
 import { TasksPage } from '@/pages/TasksPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -35,6 +36,7 @@ export default function App() {
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/servers" element={<ServersPage />} />
                   <Route path="/templates" element={<TemplatesPage />} />
+                  <Route path="/template-store" element={<TemplateStorePage />} />
                   <Route path="/editor" element={<EditorPage />} />
                   <Route path="/editor/:id" element={<EditorPage />} />
                   <Route path="/tasks" element={<TasksPage />} />

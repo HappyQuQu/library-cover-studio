@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
 
 // 用户表
 export const users = sqliteTable('users', {
@@ -41,7 +41,15 @@ export const templates = sqliteTable('templates', {
   updatedAt: text('updated_at')
 });
 
-// 任务表
+// 商店模板的已安装版本（按用户隔离）
+export const templateStoreInstalls = sqliteTable('template_store_installs', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  storeId: text('store_id').notNull(),
+  revision: text('revision').notNull(),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' })
+}, table => [primaryKey({ columns: [table.userId, table.storeId, table.revision] })]);
+
+// 模板保存历史
 export const templateRevisions = sqliteTable('template_revisions', {
   sequence: integer('sequence').primaryKey({ autoIncrement: true }),
   id: text('id').unique().notNull(),

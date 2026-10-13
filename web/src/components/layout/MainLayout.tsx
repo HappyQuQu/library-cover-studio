@@ -8,7 +8,8 @@ import {
   LogOut,
   PenTool,
   ChevronDown,
-  Users
+  Users,
+  Store
 } from 'lucide-react';
 import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores';
@@ -31,6 +32,7 @@ export function MainLayout({ children }: MainLayoutProps) {
     { to: '/', icon: LayoutDashboard, label: '仪表盘' },
     { to: '/servers', icon: Server, label: '媒体源' },
     { to: '/templates', icon: Palette, label: '模板库' },
+    { to: '/template-store', icon: Store, label: '模板商店' },
     { to: '/editor', icon: PenTool, label: '设计器' },
     { to: '/tasks', icon: Clock, label: '自动化' },
     ...(user?.role === 'admin' ? [{ to: '/settings?tab=users', icon: Users, label: '用户管理' }] : []),

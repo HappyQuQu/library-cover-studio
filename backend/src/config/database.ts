@@ -63,6 +63,16 @@ export async function initDatabase() {
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
     );
 
+    CREATE TABLE IF NOT EXISTS template_store_installs (
+      user_id TEXT NOT NULL,
+      store_id TEXT NOT NULL,
+      revision TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      PRIMARY KEY (user_id, store_id, revision),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    );
+
     CREATE TABLE IF NOT EXISTS template_revisions (
       sequence INTEGER PRIMARY KEY AUTOINCREMENT,
       id TEXT UNIQUE NOT NULL,

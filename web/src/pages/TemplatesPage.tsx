@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Plus, Palette, Loader2, Download, Upload, Lock, Unlock, Copy, Trash2 } from 'lucide-react';
+import { Plus, Palette, Loader2, Download, Upload, Lock, Unlock, Copy, Trash2, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTemplates, apiClient, type Template } from '@/api';
 import { toast } from '@/components/ui/use-toast';
@@ -106,6 +106,7 @@ export function TemplatesPage() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
+          <Link to="/template-store"><Button className="btn btn-secondary"><Store size={16} />模板商店</Button></Link>
           <input
             type="file"
             ref={fileInputRef}

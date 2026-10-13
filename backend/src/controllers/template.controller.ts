@@ -179,9 +179,10 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png)$/i));
-    const thumbnail = previewEntry ? `data:image/jpeg;base64,${previewEntry.getData().toString('base64')}` : undefined;
-    const data = createTemplateSchema.parse({ name: `${name} (Imported)`, description, width, height, canvasJson, isPublic });
+    const previewEntry = zip.getEntry('preview.jpg') || zip.getEntries().find(e => e.entryName.match(/\.(jpg|jpeg|png|webp)$/i));
+    const extension = previewEntry?.entryName.split('.').pop()?.toLowerCase();
+    const thumbnail = previewEntry ? `data:image/${extension === 'jpg' ? 'jpeg' : extension};base64,${previewEntry.getData().toString('base64')}` : undefined;
+    const data = createTemplateSchema.parse({ name: `${name} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
     const saved = await saveTemplateVersion(undefined, {
       id, name: data.name, description: data.description ?? null, canvasJson: data.canvasJson,
       width: data.width, height: data.height, userId, isPublic: data.isPublic ? 1 : 0,
