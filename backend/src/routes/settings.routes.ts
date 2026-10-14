@@ -2,6 +2,7 @@ import { exportConfiguration, previewCache, clearCache } from '../controllers/ma
 import { Router } from 'express';
 import { getSettings, updateSettings, getDefaultPrompt, defaultTemplateStatus, resetDefaultTemplates } from '../controllers/settings.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
+import { getGithubNetwork, updateGithubNetwork, testGithubNetwork } from '../controllers/githubNetwork.controller.js';
 
 const router = Router();
 
@@ -9,6 +10,9 @@ const router = Router();
 router.get('/', authenticate, getSettings);
 router.post('/', authenticate, requireRole('admin'), updateSettings);
 router.get('/default-prompt', authenticate, getDefaultPrompt);
+router.get('/network', authenticate, requireRole('admin'), getGithubNetwork);
+router.post('/network', authenticate, requireRole('admin'), updateGithubNetwork);
+router.post('/network/test', authenticate, requireRole('admin'), testGithubNetwork);
 
 export { router as settingsRouter };
 

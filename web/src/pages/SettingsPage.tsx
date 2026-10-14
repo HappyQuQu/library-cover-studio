@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
-import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key, Info, History } from 'lucide-react';
+import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key, Info, History, Globe } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { resolveApiUrl } from '@/lib/apiUrl';
@@ -14,6 +14,7 @@ import { AboutPage } from './AboutPage';
 import { ReleasesPage } from './ReleasesPage';
 import { useAppReleases } from '@/api/system';
 import { UpdateDot } from '@/components/VersionStatus';
+import { GithubNetworkSettings } from '@/components/settings/GithubNetworkSettings';
 
 interface Font {
   filename: string;
@@ -40,7 +41,7 @@ export function SettingsPage() {
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users' | 'ai' | 'about' | 'releases') || 'appearance';
+  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users' | 'ai' | 'about' | 'releases' | 'network') || 'appearance';
   const setActiveSection = (tab: string) => setSearchParams({ tab });
   const { data: releases } = useAppReleases();
 
@@ -322,6 +323,7 @@ export function SettingsPage() {
     { id: 'storage', label: '存储设置', icon: Server },
     { id: 'fonts', label: '字体管理', icon: Type },
     { id: 'ai', label: 'AI 配置', icon: Sparkles },
+    ...(isAdmin ? [{ id: 'network', label: '网络设置', icon: Globe }] : []),
     { id: 'data', label: '数据管理', icon: Database },
     { id: 'logs', label: '系统日志', icon: Terminal },
     ...(user?.role === 'admin' ? [{ id: 'users', label: '用户管理', icon: Users }] : []),
@@ -407,6 +409,7 @@ export function SettingsPage() {
       <div className="settings-content">
         {activeSection === 'about' && <AboutPage />}
         {activeSection === 'releases' && <ReleasesPage />}
+        {activeSection === 'network' && (isAdmin ? <GithubNetworkSettings /> : <div className="card card-body">网络设置由管理员管理。</div>)}
         {/* Appearance */}
         {activeSection === 'appearance' && (
           <div className="card" style={{ height: 'fit-content' }}>
