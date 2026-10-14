@@ -258,6 +258,10 @@ jobs:
   images:
     name: Build and verify final images
     needs: prepare-images
+    # A release may be unnecessary; its skipped verification must not skip final images.
+    if: >-
+      !cancelled() &&
+      needs.prepare-images.result == 'success'
     uses: ./.github/workflows/native-images.yml
     with:
       ref: ${{ needs.prepare-images.outputs.source }}
@@ -270,6 +274,10 @@ jobs:
   publish:
     name: Publish verified multi-platform image
     needs: [prepare-images, images]
+    if: >-
+      !cancelled() &&
+      needs.prepare-images.result == 'success' &&
+      needs.images.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
