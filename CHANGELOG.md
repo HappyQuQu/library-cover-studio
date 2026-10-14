@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.8.1...v1.9.0) (2026-10-14)
+
+
+### ✨ 新功能
+
+* 支持中文优先的中英文界面 ([aff3697](https://github.com/HappyQuQu/library-cover-studio/commit/aff3697abf14fc483f63723b0fd49f132963d5b5))
+
 ## [1.8.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.8.0...v1.8.1) (2026-10-14)
 
 
