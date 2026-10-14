@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.7.0...v1.8.0) (2026-10-14)
+
+
+### ✨ 新功能
+
+* 增加版本检查、字体随模板分发及商店分页 ([bb371a4](https://github.com/HappyQuQu/library-cover-studio/commit/bb371a4c66a3fdbaf8b6635fd75c3e4b1b2c4e21))
+* 收录36套封面模板及生成脚本 ([9073e50](https://github.com/HappyQuQu/library-cover-studio/commit/9073e50939eeec819bd0b120dec05a06455a5fb9))
+
 ## [1.7.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.6.0...v1.7.0) (2026-10-13)
 
 
