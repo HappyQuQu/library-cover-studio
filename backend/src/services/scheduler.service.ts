@@ -61,8 +61,12 @@ export function scheduleTask(taskId: string, cronExpression: string): boolean {
   try {
     const timezone = getSchedulerTimezone();
     const nextRunAt = getUpcomingExecutions(expression, timezone, 1)[0];
+    const firstExecutionAt = Date.parse(nextRunAt);
     removeScheduledTask(taskId);
     const job = cron.schedule(expression, async () => {
+      // node-cron 3 can emit during start() within the current matching second.
+      // Registration must wait for the next execution shown in the preview.
+      if (Date.now() < firstExecutionAt) return;
       await executeScheduledTask(taskId);
     }, { timezone, scheduled: false });
     scheduledJobs.set(taskId, job);

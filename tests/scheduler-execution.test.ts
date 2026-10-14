@@ -10,7 +10,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 // Real wall-clock cron triggers against a disposable database and media server.
 test('scheduled tasks trigger without manual runs, pause, recover registrations, retain previews and skip overlapping ticks', async t => {
   const require = createRequire(new URL('../backend/package.json', import.meta.url));
-  const express = require('express'), sharp = require('sharp');
+  const express = require('express'), sharp = require('sharp'), cron = require('node-cron');
   const directory = mkdtempSync(join(tmpdir(), 'lcs-scheduler-test-'));
   const original = process.cwd();
   process.env.JWT_SECRET = 'scheduler-fixture-jwt-secret';
@@ -126,13 +126,24 @@ test('scheduled tasks trigger without manual runs, pause, recover registrations,
   await until(() => !runner.isTaskRunning(task.id), 'slow execution completes');
 
   // Registration is reconstructed from enabled scheduled rows, without executing immediately.
-  await request(`/${task.id}`, 'PUT', { cronExpression: '*/2 * * * * *', isEnabled: true });
+  await request(`/${task.id}`, 'PUT', { cronExpression: '0 0 1 1 *', isEnabled: true });
   scheduler.removeScheduledTask(task.id);
   assert.deepEqual(scheduler.getActiveJobs(), []);
   const beforeReload = logs(task.id).length;
-  scheduler.initScheduler(); scheduler.initScheduler();
+  // Reproduce node-cron 3's immediate start callback deterministically, with a
+  // future schedule so a legitimate tick cannot race the registration assertion.
+  const schedule = cron.schedule;
+  const startupCallback = t.mock.method(cron, 'schedule', (expression: string, callback: () => Promise<void>, options: any) => {
+    const job = schedule(expression, callback, options);
+    const start = job.start.bind(job);
+    job.start = () => { void callback(); start(); };
+    return job;
+  });
+  try { scheduler.initScheduler(); scheduler.initScheduler(); }
+  finally { startupCallback.mock.restore(); }
   assert.deepEqual(scheduler.getActiveJobs(), [task.id]);
   assert.equal(logs(task.id).length, beforeReload);
+  await request(`/${task.id}`, 'PUT', { cronExpression: '*/2 * * * * *' });
   await until(() => logs(task.id).length > beforeReload && !runner.isTaskRunning(task.id), 'restored schedule triggers');
   await request(`/${task.id}`, 'PUT', { type: 'manual' });
   assert.equal(row(task.id).next_run_at, null);
