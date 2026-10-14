@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, ExternalLink, Loader2, Palette, RefreshCw, Search, Store, Check, ArrowRight } from 'lucide-react';
@@ -6,6 +6,8 @@ import { apiClient } from '@/api';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AuthenticatedImage } from '@/components/AuthenticatedImage';
+import { useAuthStore } from '@/stores/authStore';
 
 interface StoreTemplate {
   id: string; revision: string; name: string; description: string; width: number; height: number;
@@ -32,14 +34,24 @@ const aiTemplatePrompt = `请先阅读 README.md 和现有模板，为 Library C
 完成后说明改动文件和验证结果，并准备 Pull Request 描述。`;
 
 function Preview({ template }: { template: StoreTemplate }) {
-  const [failed, setFailed] = useState(false);
-  return <div className="template-store-preview" style={{ aspectRatio: `${template.width}/${template.height}` }}>
-    {failed ? <Palette size={36} aria-label="预览图暂时无法加载" /> : <img src={template.previewUrl} alt={`${template.name} 预览`} loading="lazy" onError={() => setFailed(true)} />}
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { setVisible(true); observer.disconnect(); }
+    }, { rootMargin: '400px' });
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+  const fallback = <Palette size={36} aria-label="预览图正在加载或暂时无法获取" />;
+  return <div ref={ref} className="template-store-preview" style={{ aspectRatio: `${template.width}/${template.height}` }}>
+    {visible ? <AuthenticatedImage src={`/api/template-store/${template.id}/preview?revision=${template.revision}`} alt={`${template.name} 预览`} fallback={fallback} /> : fallback}
     <span className="template-store-dimensions">{template.width} × {template.height}</span>
   </div>;
 }
 
 export function TemplateStorePage() {
+  const isAdmin = useAuthStore(state => state.user?.role === 'admin');
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState('popular');
   const [page, setPage] = useState(1);
@@ -104,7 +116,7 @@ export function TemplateStorePage() {
     {data && data.pendingCount > 0 && <p className="template-store-notice">还有 {data.pendingCount} 套模板正在排队发布，发布后会自动出现在商店。</p>}
 
     {catalog.isPending ? <div className="template-store-loading" role="status"><Loader2 size={28} className="animate-spin" /><span>正在加载模板商店…</span></div>
-      : catalog.isError ? <div className="card empty-state" role="alert"><Store size={32} /><div className="empty-state-title">暂时无法连接模板商店</div><p>请检查服务器到 GitHub 的网络连接后重试。</p><Button className="btn btn-primary" onClick={() => catalog.refetch()}>重新加载</Button></div>
+      : catalog.isError ? <div className="card empty-state" role="alert"><Store size={32} /><div className="empty-state-title">暂时无法连接模板商店</div><p>{isAdmin ? '请在网络设置中配置后端代理并测试 GitHub 连接。' : '请联系管理员检查服务器网络和 GitHub 代理设置。'}</p><div className="template-store-header-actions">{isAdmin && <Link to="/settings?tab=network" className="btn btn-secondary">网络设置</Link>}<Button className="btn btn-primary" onClick={() => catalog.refetch()}>重新加载</Button></div></div>
       : !data?.templates.length ? <div className="card empty-state"><Store size={36} /><div className="empty-state-title">{data?.setupRequired ? '商店即将开张' : query ? '没有找到匹配的模板' : '还没有上架模板'}</div><p className="empty-state-description">{data?.setupRequired ? '仓库首次运行发布工作流后，模板目录会自动加载。' : query ? '换个关键词，或清空搜索看看。' : '将导出的模板 JSON 和预览图提交到公开仓库，即可分享给大家。'}</p><a href="https://github.com/HappyQuQu/library-cover-store" target="_blank" rel="noreferrer" className="template-store-source">查看模板仓库<ExternalLink size={14} /></a></div>
       : <div className="template-library-grid">{data.templates.map(template => <article className="template-library-card" key={`${template.id}:${template.revision}`}>
         <Preview template={template} />

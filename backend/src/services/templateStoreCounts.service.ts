@@ -1,4 +1,4 @@
-import axios from 'axios';
+import { githubGet, githubNetworkRevision } from './githubNetwork.service.js';
 import { eq } from 'drizzle-orm';
 import { db } from '../config/database.js';
 import { systemSettings } from '../config/schema.js';
@@ -10,6 +10,7 @@ const loading = new Map<number, Promise<Map<string, number>>>();
 const failures = new Map<number, number>();
 const lastCounts = new Map<string, number>();
 const prefix = 'templates.store.download-floor.';
+let networkRevision = githubNetworkRevision();
 function floor(id: string) {
   return Number(db.select().from(systemSettings).where(eq(systemSettings.key, prefix + id)).get()?.value) || 0;
 }
@@ -18,10 +19,12 @@ async function releaseCounts(id: number) {
   if (Date.now() - (failures.get(id) || 0) < CACHE_MS) throw new Error('GitHub counts temporarily unavailable');
   const cached = releases.get(id);
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.counts;
-  if (!loading.has(id)) loading.set(id, (async () => {
+  if (!loading.has(id)) {
+    const requestRevision = networkRevision;
+    const request = (async () => {
     const counts = new Map<string, number>();
     for (let page = 1; ; page++) {
-      const { data } = await axios.get(`https://api.github.com/repos/${STORE_REPOSITORY}/releases/${id}/assets`, {
+      const { data } = await githubGet(`https://api.github.com/repos/${STORE_REPOSITORY}/releases/${id}/assets`, {
         params: { per_page: 100, page }, timeout: 8000, maxContentLength: 4 * 1024 * 1024,
         headers: { Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }
       });
@@ -34,19 +37,25 @@ async function releaseCounts(id: number) {
       if (data.length < 100) break;
       if (page >= 20) throw new Error('Release asset limit exceeded');
     }
-    releases.set(id, { at: Date.now(), counts });
+    if (requestRevision === githubNetworkRevision()) releases.set(id, { at: Date.now(), counts });
     return counts;
-  })().finally(() => loading.delete(id)));
+    })().finally(() => { if (loading.get(id) === request) loading.delete(id); });
+    loading.set(id, request);
+  }
   return loading.get(id)!;
 }
 
 /** Batch public API reads by release; outages/rate limits fall back to the hourly catalog. */
 export async function storeDownloadCounts(entries: StoreEntry[]) {
+  if (networkRevision !== githubNetworkRevision()) {
+    networkRevision = githubNetworkRevision(); releases.clear(); loading.clear(); failures.clear();
+  }
   const ids = [...new Set(entries.flatMap(entry => entry.downloadSources?.map(source => source.releaseId) || []))];
   const observed = new Map<number, Map<string, number>>();
+  const requestRevision = networkRevision;
   await Promise.all(ids.map(async id => { try { observed.set(id, await releaseCounts(id)); } catch {
     // Briefly cache failures too, so an outage cannot create a request storm.
-    failures.set(id, Date.now());
+    if (requestRevision === githubNetworkRevision()) failures.set(id, Date.now());
   } }));
   return new Map(entries.map(entry => {
     const sources = entry.downloadSources || [];

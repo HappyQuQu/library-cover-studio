@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import axios from 'axios';
 import { APP_VERSION } from '../config/version.js';
+import { githubGet as networkGet, githubNetworkRevision } from './githubNetwork.service.js';
 
 export const PROJECT_URL = 'https://github.com/HappyQuQu/library-cover-studio';
 export const AUTHOR_URL = 'https://github.com/HappyQuQu';
@@ -65,7 +66,7 @@ export function parseGitHubRelease(value: unknown): AppRelease | null {
 
 async function githubGet(url: string): Promise<unknown> {
   try {
-    const response = await axios.get(url, { timeout: 8000, maxContentLength: 5 * 1024 * 1024,
+    const response = await networkGet(url, { timeout: 8000, maxContentLength: 5 * 1024 * 1024,
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LibraryCoverStudio', 'X-GitHub-Api-Version': '2022-11-28' } });
     return url === RELEASES_PAGE ? { releaseUrl: response.request?.res?.responseUrl } : response.data;
   } catch (error) {
@@ -100,6 +101,7 @@ export function createAppReleaseService(get = githubGet, local = bundledReleases
   let checkSource: 'github-api' | 'github-web' | null = null;
   let checkError: string | null = null;
   let pending: Promise<void> | null = null;
+  let networkRevision = githubNetworkRevision();
 
   async function refresh() {
     attemptedAt = Date.now();
@@ -157,6 +159,10 @@ export function createAppReleaseService(get = githubGet, local = bundledReleases
   }
 
   return async (force = false) => {
+    if (networkRevision !== githubNetworkRevision()) {
+      if (pending) await pending;
+      networkRevision = githubNetworkRevision(); attemptedAt = null;
+    }
     const age = attemptedAt === null ? Infinity : Date.now() - attemptedAt;
     if (age >= (force ? REFRESH_MIN_MS : (stale ? RETRY_MS : CACHE_MS))) {
       // Share one check across tabs/users and keep failures from hammering GitHub.

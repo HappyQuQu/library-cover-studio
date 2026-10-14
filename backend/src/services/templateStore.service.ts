@@ -4,6 +4,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createError } from '../middleware/errorHandler.js';
 import { MAX_TEMPLATE_PACKAGE_BYTES, readTemplatePackage } from './templatePackage.service.js';
 import { templateMetadataSchema } from './templateMetadata.service.js';
+import { githubGet, githubNetworkRevision } from './githubNetwork.service.js';
 
 export const STORE_REPOSITORY = 'HappyQuQu/library-cover-store';
 export const STORE_URL = `https://github.com/${STORE_REPOSITORY}`;
@@ -29,25 +30,31 @@ type Catalog = z.infer<typeof catalogSchema>;
 const CACHE_MS = 5 * 60 * 1000;
 let cached: { data: Catalog; at: number; setupRequired: boolean } | undefined;
 let loading: Promise<typeof cached> | undefined;
+let networkRevision = githubNetworkRevision();
 
 export async function getStoreCatalog() {
+  if (networkRevision !== githubNetworkRevision()) { networkRevision = githubNetworkRevision(); cached = undefined; loading = undefined; }
   if (cached && Date.now() - cached.at < CACHE_MS) return { ...cached, stale: false };
   if (!loading) {
-    loading = (async () => {
+    const requestRevision = networkRevision;
+    const request = (async () => {
+      let result: NonNullable<typeof cached>;
       try {
-        const response = await axios.get(STORE_CATALOG_URL, {
+        const response = await githubGet(STORE_CATALOG_URL, {
           timeout: 20000, maxContentLength: 16 * 1024 * 1024, responseType: 'json'
         });
         const data = catalogSchema.parse(response.data);
         if (new Set(data.templates.map(entry => entry.id)).size !== data.templates.length) throw new Error('Duplicate store IDs');
-        cached = { data, at: Date.now(), setupRequired: false };
+        result = { data, at: Date.now(), setupRequired: false };
       } catch (error) {
         if (axios.isAxiosError(error) && error.response?.status === 404 && !cached) {
-          cached = { data: { version: 1, repository: STORE_REPOSITORY, generatedAt: new Date().toISOString(), pendingCount: 0, templates: [] }, at: Date.now(), setupRequired: true };
+          result = { data: { version: 1, repository: STORE_REPOSITORY, generatedAt: new Date().toISOString(), pendingCount: 0, templates: [] }, at: Date.now(), setupRequired: true };
         } else throw error;
       }
-      return cached;
-    })().finally(() => { loading = undefined; });
+      if (requestRevision === githubNetworkRevision()) cached = result;
+      return result;
+    })().finally(() => { if (loading === request) loading = undefined; });
+    loading = request;
   }
   try { return { ...(await loading)!, stale: false }; }
   catch {
@@ -61,7 +68,7 @@ export async function downloadStorePackage(entry: StoreEntry) {
   try {
     // Every import fetches the Release attachment so GitHub records a global download.
     // Do not cache ZIPs or send application credentials to GitHub.
-    const response = await axios.get<ArrayBuffer>(`${entry.packageUrl}?download=${randomUUID()}`, {
+    const response = await githubGet<ArrayBuffer>(`${entry.packageUrl}?download=${randomUUID()}`, {
       timeout: 60000, responseType: 'arraybuffer', maxContentLength: MAX_TEMPLATE_PACKAGE_BYTES,
       maxRedirects: 5
     });

@@ -132,6 +132,7 @@ docker compose logs --tail=100 library-cover-studio
 | NAS 其他设备无法访问 | 使用 NAS 的局域网地址访问，检查端口映射和 NAS 防火墙。 |
 | 连接服务器失败 | 检查容器网络可达性、API 密钥权限和地址，避免误用 `localhost`。 |
 | CORS 错误 | 直接访问无需配置；HTTPS 反向代理时设置 `FRONTEND_URL` 为浏览器实际来源。 |
+| 模板商店或版本检查无法连接 GitHub | 管理员在「设置 → 网络」配置 HTTP / HTTPS / SOCKS5 代理，测试后保存。使用容器可访问的局域网地址，Docker Desktop 可用 `host.docker.internal`；容器内的 `127.0.0.1` 指向容器自身。 |
 | 定时任务不执行 | 检查后端是否健康、任务是否启用、调度时区和下次运行时间。 |
 | 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和 `data` 中的加密盐是否保留。 |
 

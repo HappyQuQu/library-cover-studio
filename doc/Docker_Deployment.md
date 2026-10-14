@@ -171,6 +171,23 @@ docker compose -f docker-compose.yml up -d --build
 
 源码构建使用根目录 `Dockerfile`，输出相同的单容器应用，数据沿用 `backend_data` 命名卷。默认网页端口 `8080`，NAS 可直接访问。
 
+## GitHub 网络设置
+
+模板商店和版本检查由后端连接 GitHub。浏览器可以访问 GitHub，并不代表 Docker 容器也可以访问。
+
+管理员打开「设置 → 网络」，选择「使用指定代理」，填写容器可访问的地址，例如 `http://192.168.1.10:7890` 或 `socks5h://192.168.1.10:1080`。支持 HTTP、HTTPS、SOCKS5 和 SOCKS5H；SOCKS5H 将域名交给代理解析。认证代理可填写 `http://username:password@192.168.1.10:7890`，凭据加密保存，读取设置时不会回显。
+
+先点击「测试连接」检查商店目录、发布页和 GitHub API，再保存。测试使用当前填写的配置，不修改已保存设置；保存后立即生效，无需重启。目录、预览图、模板 ZIP、下载统计和版本检查共用此配置。API 限流时仍可从目录读取统计，并使用发布页检查版本。
+
+容器里的 `localhost` / `127.0.0.1` 指向容器自身。代理在 NAS 或局域网设备上时使用它的局域网 IP，并允许容器访问代理端口。Docker Desktop 可填写 `http://host.docker.internal:7890`；Linux Docker 若要使用这个名字，需在 Compose 的应用服务中增加：
+
+```yaml
+extra_hosts:
+  - "host.docker.internal:host-gateway"
+```
+
+默认「跟随服务器环境变量」读取后端进程的 `HTTPS_PROXY`、`HTTP_PROXY` 和 `NO_PROXY`；宿主机变量需显式传入容器才会生效。全局环境变量也可能影响其他后端请求，需要仅调整 GitHub 时使用界面的指定代理。「直接连接」会忽略 GitHub 请求的环境代理。
+
 ## 常见问题
 
 | 现象 | 检查与处理 |
@@ -180,6 +197,7 @@ docker compose -f docker-compose.yml up -d --build
 | NAS 本机可打开，其他设备打不开 | 使用 NAS 局域网地址，检查端口映射与防火墙。 |
 | 页面出现 CORS 错误 | 单容器直接访问自动识别来源；本机回环地址可互换，端口和协议需一致。旧版双容器公网访问或 HTTPS 反向代理时设置 `LCS_PUBLIC_URL` / `FRONTEND_URL` 为浏览器实际来源，并重建容器。拒绝来源返回 403 和 `CORS_ORIGIN_DENIED`。 |
 | 媒体服务器连接失败 | 检查容器网络、密钥权限和代理路径，避免误用 `localhost`。 |
+| 模板商店无法连接或版本检查失败 | 在「设置 → 网络」测试 GitHub 连接，并按上方说明配置容器可访问的代理地址。 |
 | 网页正常，任务没有执行 | 检查后端状态、任务启用状态、时区和下次执行时间。 |
 | API 密钥升级后无法解密 | 核对原 `ENCRYPTION_KEY`、数据目录和加密盐是否保留。 |
 

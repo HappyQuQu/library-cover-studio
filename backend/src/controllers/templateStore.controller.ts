@@ -11,6 +11,7 @@ import { readTemplateMetadata, templateMetadataSchema, templateContentHash, supp
 import { saveTemplateVersion } from '../services/templateHistory.service.js';
 import { recordStoreDownload, storeDownloadBaseline, storeDownloadCounts } from '../services/templateStoreCounts.service.js';
 import { withTemplateFonts, type ImportedFont } from '../services/templateFonts.service.js';
+import { storePreview } from '../services/templateStorePreview.service.js';
 
 export const storeUpdateSchema = z.object({ templateId: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), strategy: z.enum(['replace', 'backup', 'copy']).optional() });
 type Strategy = 'replace' | 'backup' | 'copy';
@@ -67,6 +68,17 @@ export async function listStore(req: Request, res: Response, next: NextFunction)
           updateAvailable: !exact && !!local, updateMode: state?.mode || null, updateReason: state?.reason || '',
           compatible: supportsTemplateVersion(APP_VERSION, entry.minAppVersion) };
       }) });
+  } catch (error) { next(error); }
+}
+
+export async function previewStoreTemplate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const catalog = await getStoreCatalog();
+    const entry = catalog.data.templates.find(item => item.id === req.params.id);
+    if (!entry || (req.query.revision && req.query.revision !== entry.revision)) throw createError('预览不存在或模板版本已更新，请刷新商店', 404, 'STORE_PREVIEW_NOT_FOUND');
+    const image = await storePreview(entry);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.type('image/jpeg').send(image);
   } catch (error) { next(error); }
 }
 
