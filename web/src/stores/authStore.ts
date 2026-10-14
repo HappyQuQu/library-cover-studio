@@ -58,3 +58,10 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 );
+
+// Keep an already-open login page in sync with sign-in/sign-out in another tab.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === 'auth-storage') void useAuthStore.persist.rehydrate();
+  });
+}

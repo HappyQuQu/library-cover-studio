@@ -96,6 +96,13 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   const firstPage = await get('/template-store?sort=popular');
   assert.equal(firstPage.templates.length, 24); assert.equal(firstPage.total, 50); assert.equal(firstPage.totalPages, 3);
   assert.equal(firstPage.templates[0].id, entries[0].id);
+  assert.equal(firstPage.pageSize, 24);
+  const smallPage = await get('/template-store?pageSize=12&page=2');
+  assert.equal(smallPage.templates.length, 12); assert.equal(smallPage.pageSize, 12); assert.equal(smallPage.page, 2); assert.equal(smallPage.totalPages, 5);
+  const largePage = await get('/template-store?pageSize=48&page=999');
+  assert.equal(largePage.templates.length, 2); assert.equal(largePage.page, 2); assert.equal(largePage.totalPages, 2);
+  assert.equal((await get('/template-store?pageSize=96')).templates.length, 50);
+  for (const pageSize of ['0', '-1', '50000', 'foo', '12.5']) assert.equal((await get(`/template-store?pageSize=${pageSize}`)).pageSize, 24);
   assert.equal(firstPage.templates[0].packageUrl, undefined);
   assert.equal((await get('/template-store?page=999')).page, 3);
   assert.equal((await get('/template-store?page=999')).templates.length, 2);
@@ -167,9 +174,9 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
     const rejected = await fetch(`${base}/templates/import`, { method: 'POST', headers: headers(), body: upload });
     assert.equal(rejected.status, 400); assert.match((await rejected.json()).error.message, message);
   }
-  const tooLarge = new FormData(); tooLarge.append('file', new Blob([Buffer.alloc(5 * 1024 * 1024 + 1)], { type: 'application/zip' }), 'oversized.zip');
+  const tooLarge = new FormData(); tooLarge.append('file', new Blob([Buffer.alloc(64 * 1024 * 1024 + 1)], { type: 'application/zip' }), 'oversized.zip');
   const sizeRejected = await fetch(`${base}/templates/import`, { method: 'POST', headers: headers(), body: tooLarge });
-  assert.equal(sizeRejected.status, 400); assert.match((await sizeRejected.json()).error.message, /超过 5 MB/);
+  assert.equal(sizeRejected.status, 400); assert.match((await sizeRejected.json()).error.message, /超过 64 MB/);
   assert.equal((sqlite.prepare('SELECT COUNT(*) n FROM templates').get() as any).n, beforeBadImports);
   const { TEMP_DIR } = await import('../backend/src/config/paths.ts');
   assert.deepEqual(readdirSync(join(TEMP_DIR, 'imports')), []);

@@ -7,7 +7,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && node scripts/copy-changelog.mjs",
     "start": "node dist/server.js",
     "clean": "rimraf dist node_modules",
     "lint": "eslint src --ext .ts --fix",

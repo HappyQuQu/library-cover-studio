@@ -15,6 +15,8 @@ import { useThemeStore } from '@/stores/themeStore';
 import { useAuthStore } from '@/stores';
 import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
+import { useAppReleases } from '@/api/system';
+import { UpdateDot } from '@/components/VersionStatus';
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -27,6 +29,7 @@ export function MainLayout({ children }: MainLayoutProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { data: releases } = useAppReleases();
 
   const navItems = [
     { to: '/', icon: LayoutDashboard, label: '仪表盘' },
@@ -112,6 +115,7 @@ export function MainLayout({ children }: MainLayoutProps) {
               >
                 <item.icon className="w-4 h-4 shrink-0" />
                 <span>{item.label}</span>
+                {item.to === '/settings' && releases?.updateAvailable && <UpdateDot />}
               </NavLink>
             );
           })}

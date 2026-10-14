@@ -5,3 +5,5 @@ export { TemplatesPage } from './TemplatesPage';
 export { EditorPage } from './EditorPage';
 export { TasksPage } from './TasksPage';
 export { SettingsPage } from './SettingsPage';
+export { AboutPage } from './AboutPage';
+export { ReleasesPage } from './ReleasesPage';

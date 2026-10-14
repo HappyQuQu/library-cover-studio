@@ -12,7 +12,8 @@ import path from 'path';
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import AdmZip from 'adm-zip';
 import { templateMetadataSchema, readTemplateMetadata } from '../services/templateMetadata.service.js';
-import { readTemplatePackage } from '../services/templatePackage.service.js';
+import { readTemplatePackage, MAX_TEMPLATE_PACKAGE_BYTES, MAX_TEMPLATE_CONTENT_BYTES } from '../services/templatePackage.service.js';
+import { exportTemplateFonts, fontManifestSchema, withTemplateFonts } from '../services/templateFonts.service.js';
 
 const d: any = db;
 
@@ -127,6 +128,9 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
 
     assertReadable(req, template);
     const zip = new AdmZip();
+    const fonts = exportTemplateFonts(template.canvasJson);
+    const manifest = fontManifestSchema.safeParse(fonts.map(({ buffer: _buffer, ...font }) => font));
+    if (!manifest.success) throw createError('模板字体数量超过 16 项或字体名称无效，请检查字体管理后重试', 400, 'INVALID_TEMPLATE_FONT');
 
     // Add template JSON
     const templateData = {
@@ -136,7 +140,8 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
       width: template.width,
       height: template.height,
       canvasJson: template.canvasJson,
-      isPublic: template.isPublic === 1
+      isPublic: template.isPublic === 1,
+      ...(fonts.length ? { fonts: manifest.data } : {})
     };
     zip.addFile('template.json', Buffer.from(JSON.stringify(templateData, null, 2), 'utf8'));
 
@@ -150,7 +155,16 @@ export async function exportTemplate(req: Request, res: Response, next: NextFunc
       }
     }
 
+    if (zip.getEntries().reduce((size, entry) => size + entry.header.size, 0) > MAX_TEMPLATE_CONTENT_BYTES) {
+      throw createError('模板 JSON 和预览图合计超过 5 MB，请压缩预览图后重试', 400, 'INVALID_TEMPLATE');
+    }
+    for (const font of fonts) zip.addFile(font.file, font.buffer);
+    if (zip.getEntries().reduce((size, entry) => size + entry.header.size, 0) > MAX_TEMPLATE_PACKAGE_BYTES) {
+      throw createError('模板与字体文件合计超过 64 MB', 400, 'INVALID_TEMPLATE');
+    }
+
     const zipBuffer = zip.toBuffer();
+    if (zipBuffer.length > MAX_TEMPLATE_PACKAGE_BYTES) throw createError('模板包超过 64 MB', 400, 'INVALID_TEMPLATE');
     // Prettier ZIP name: Only strip characters that are forbidden in filenames
     const safeName = template.name.replace(/[\\/:*?"<>|]/g, '_').trim();
     // Use a timestamp in zip name to avoid conflict? No, browser handles downloads.
@@ -172,25 +186,27 @@ export async function importTemplate(req: Request, res: Response, next: NextFunc
     }
 
     // Legacy manual ZIP imports may omit previews; the renderer supplies one.
-    const { data: templateData, thumbnail } = readTemplatePackage(fs.readFileSync(req.file.path), false);
+    const { data: templateData, thumbnail, fonts } = readTemplatePackage(fs.readFileSync(req.file.path), false);
     const { name, description, width, height, canvasJson, isPublic } = templateData;
     const userId = req.user?.userId;
     const id = uuidv4();
     const now = new Date().toISOString();
 
     const data = createTemplateSchema.parse({ ...templateMetadataSchema.parse(templateData), name: `${name.slice(0, 89)} (Imported)`, description: description ?? undefined, width, height, canvasJson, isPublic });
-    const saved = await saveTemplateVersion(undefined, {
-      id, name: data.name, description: data.description ?? null, canvasJson: data.canvasJson,
+    const result = await withTemplateFonts(fonts, data.canvasJson, async (canvasJson, importedFonts) => {
+      const saved = await saveTemplateVersion(undefined, {
+      id, name: data.name, description: data.description ?? null, canvasJson,
       metadataJson: JSON.stringify(templateMetadataSchema.parse(data)),
       width: data.width, height: data.height, userId, isPublic: data.isPublic ? 1 : 0,
       isLocked: 0, isDefault: 0, thumbnailPath: null, createdAt: now, updatedAt: now
-    }, userId, 'save', thumbnail);
-    const thumbnailPath = saved.thumbnailPath;
+      }, userId, 'save', thumbnail);
+      return { thumbnailPath: saved.thumbnailPath, fonts: importedFonts };
+    });
 
     res.status(201).json({
       id,
       name: data.name,
-      thumbnailPath
+      ...result
     });
   } catch (error) {
     next(error);

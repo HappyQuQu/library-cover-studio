@@ -6,6 +6,7 @@ import fs from 'fs';
 
 import { TEMP_DIR } from '../config/paths.js';
 import path from 'path';
+import { MAX_TEMPLATE_PACKAGE_BYTES } from '../services/templatePackage.service.js';
 
 const router = Router();
 
@@ -26,7 +27,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 } // 5MB max ZIP
+    limits: { fileSize: MAX_TEMPLATE_PACKAGE_BYTES }
 });
 
 // 所有路由需要认证
@@ -46,7 +47,7 @@ router.post('/:id/history/:revisionId/restore', template.restoreRevision);
 router.post('/import', (req, res, next) => upload.single('file')(req, res, error => {
     if (!error) return next();
     if (error instanceof multer.MulterError) return next(createError(error.code === 'LIMIT_FILE_SIZE'
-        ? '模板包超过 5 MB，请压缩预览图后重新打包。' : '请一次选择一个 ZIP 模板包上传。', 400, 'INVALID_TEMPLATE'));
+        ? '模板包超过 64 MB，请减少字体文件或压缩预览图后重新打包。' : '请一次选择一个 ZIP 模板包上传。', 400, 'INVALID_TEMPLATE'));
     return next(error);
 }), template.importTemplate);
 

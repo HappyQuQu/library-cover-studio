@@ -7,6 +7,7 @@ import pLimit from 'p-limit';
 import fs from 'fs';
 import path from 'path';
 import { GlobalFonts, createCanvas } from '@napi-rs/canvas';
+import { customFonts } from './templateFonts.service.js';
 import { FONTS_DIR } from '../config/paths.js';
 
 interface RenderOptions {
@@ -74,23 +75,14 @@ const registeredFonts = new Set<string>();
  * 确保自定义字体已注册到 GlobalFonts
  */
 function ensureFontRegistered(fontFamily: string): boolean {
-  if (registeredFonts.has(fontFamily) || GlobalFonts.has(fontFamily)) return true;
+  if (registeredFonts.has(fontFamily)) return true;
 
   if (!fs.existsSync(FONTS_DIR)) return false;
 
-  const files = fs.readdirSync(FONTS_DIR);
-  const fontFile = files.find(file => {
-    const ext = path.extname(file).toLowerCase();
-    if (!['.ttf', '.otf', '.woff', '.woff2'].includes(ext)) return false;
+  const fontFile = customFonts().find(font => font.name.toLowerCase() === fontFamily.toLowerCase()
+    || font.filename.toLowerCase() === fontFamily.toLowerCase())?.filename;
 
-    const nameParts = file.split('-');
-    const originalNameWithExt = nameParts.length > 1 ? nameParts.slice(1).join('-') : file;
-    const fontName = path.basename(originalNameWithExt, ext);
-
-    return fontName.toLowerCase() === fontFamily.toLowerCase() || file.toLowerCase() === fontFamily.toLowerCase();
-  });
-
-  if (!fontFile) return false;
+  if (!fontFile) return GlobalFonts.has(fontFamily);
 
   try {
     const filePath = path.join(FONTS_DIR, fontFile);

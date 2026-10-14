@@ -9,6 +9,7 @@ COPY backend/package.json ./backend/package.json
 COPY web/package.json ./web/package.json
 RUN pnpm install --frozen-lockfile --filter ./backend...
 COPY backend ./backend
+COPY CHANGELOG.md ./CHANGELOG.md
 RUN pnpm --filter ./backend build
 
 FROM node:22.22.0-bookworm-slim

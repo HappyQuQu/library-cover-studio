@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { FONTS_DIR } from '../config/paths.js';
 import { createError } from '../middleware/errorHandler.js';
+import { customFonts } from '../services/templateFonts.service.js';
 
 const fontsDir = FONTS_DIR;
 
@@ -13,36 +14,7 @@ export async function getFonts(_req: Request, res: Response, next: NextFunction)
             return res.json({ fonts: [] });
         }
 
-        const files = fs.readdirSync(fontsDir);
-        const fonts = files
-            .filter(file => ['.ttf', '.otf', '.woff', '.woff2'].includes(path.extname(file).toLowerCase()))
-            .map(file => {
-                const stats = fs.statSync(path.join(fontsDir, file));
-                // Extract font name from filename (remove timestamp prefix and extension)
-                const nameParts = file.split('-');
-                let originalName = nameParts.length > 1 ? nameParts.slice(1).join('-') : file;
-
-                // Try to fix encoding if it looks like garbled Latin1
-                if (/[\u0080-\u00ff]/.test(originalName)) {
-                    try {
-                        originalName = Buffer.from(originalName, 'latin1').toString('utf8');
-                    } catch (e) {
-                        // Ignore if conversion fails
-                    }
-                }
-
-                const fontName = path.basename(originalName, path.extname(originalName));
-
-                return {
-                    filename: file,
-                    name: fontName,
-                    size: stats.size,
-                    uploadedAt: stats.mtime,
-                    url: `/api/uploads/fonts/${encodeURIComponent(file)}`
-                };
-            });
-
-        res.json({ fonts });
+        res.json({ fonts: customFonts() });
     } catch (error) {
         next(error);
     }

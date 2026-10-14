@@ -10,6 +10,7 @@ COPY web/package.json ./web/package.json
 RUN pnpm install --frozen-lockfile
 COPY backend ./backend
 COPY web ./web
+COPY CHANGELOG.md ./CHANGELOG.md
 ENV VITE_API_URL=/api
 RUN pnpm build
 RUN pnpm --filter ./backend deploy --prod --legacy /runtime

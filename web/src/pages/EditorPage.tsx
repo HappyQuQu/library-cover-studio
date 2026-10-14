@@ -206,10 +206,10 @@ export function EditorPage() {
 
         // Wait for fonts to load
         if (fonts.length > 0) {
-          // @ts-ignore
-          document.fonts.ready.then(() => {
+          Promise.all(fonts.map(font => document.fonts.load(`16px ${JSON.stringify(font.name)}`))).then(() => {
+            fonts.forEach(font => fabric.cache.clearFontCache(font.name));
             if (canvas) canvas.renderAll();
-          });
+          }).catch(err => console.error('Failed to load custom font files:', err));
         }
       } catch (err) {
         console.error('Failed to load custom fonts:', err);

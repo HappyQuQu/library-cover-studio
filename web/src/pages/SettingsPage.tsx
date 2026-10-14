@@ -3,13 +3,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuthStore, useThemeStore } from '@/stores';
 import { useLogs, useUsers, useCreateUser, useUpdateUser, useDeleteUser, User } from '@/api/hooks';
-import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key } from 'lucide-react';
+import { Palette, Database, Download, Trash2, Moon, Sun, Monitor, Sparkles, Server, Upload, Type, Terminal, ChevronRight, Play, Pause, Users, UserPlus, Key, Info, History } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
 import { useState, useEffect, useRef } from 'react';
 import { resolveApiUrl } from '@/lib/apiUrl';
 import { apiClient } from '@/api/client';
 import { DefaultTemplateSettings } from '@/components/settings/DefaultTemplateSettings';
 import { AIProviderSettings } from '@/components/settings/AIProviderSettings';
+import { AboutPage } from './AboutPage';
+import { ReleasesPage } from './ReleasesPage';
+import { useAppReleases } from '@/api/system';
+import { UpdateDot } from '@/components/VersionStatus';
 
 interface Font {
   filename: string;
@@ -36,8 +40,9 @@ export function SettingsPage() {
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users' | 'ai') || 'appearance';
+  const activeSection = (searchParams.get('tab') as 'appearance' | 'rendering' | 'storage' | 'fonts' | 'data' | 'logs' | 'users' | 'ai' | 'about' | 'releases') || 'appearance';
   const setActiveSection = (tab: string) => setSearchParams({ tab });
+  const { data: releases } = useAppReleases();
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [storageSettings, setStorageSettings] = useState({ savePosters: false, saveCovers: false });
@@ -320,6 +325,8 @@ export function SettingsPage() {
     { id: 'data', label: '数据管理', icon: Database },
     { id: 'logs', label: '系统日志', icon: Terminal },
     ...(user?.role === 'admin' ? [{ id: 'users', label: '用户管理', icon: Users }] : []),
+    { id: 'releases', label: '版本记录', icon: History },
+    { id: 'about', label: '关于', icon: Info },
   ];
 
   const getLogColor = (level: string) => {
@@ -332,9 +339,9 @@ export function SettingsPage() {
   };
 
   return (
-    <div style={{ display: 'flex', gap: 24, height: 'calc(100vh - 120px)' }}>
+    <div className="settings-layout">
       {/* Left Sidebar */}
-      <div style={{ width: 240, flexShrink: 0 }}>
+      <div className="settings-sidebar">
         {/* User Card */}
         <div className="glass-panel" style={{ padding: 16, marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -359,10 +366,11 @@ export function SettingsPage() {
         </div>
 
         {/* Menu */}
-        <div className="glass-panel" style={{ padding: 8 }}>
+        <div className="glass-panel settings-menu" style={{ padding: 8 }}>
           {menuItems.map((item) => (
             <button
               key={item.id}
+              aria-current={activeSection === item.id ? 'page' : undefined}
               onClick={() => setActiveSection(item.id as any)}
               style={{
                 width: '100%',
@@ -383,6 +391,7 @@ export function SettingsPage() {
             >
               <item.icon style={{ width: 18, height: 18 }} />
               {item.label}
+              {item.id === 'releases' && releases?.updateAvailable && <UpdateDot />}
               {activeSection === item.id && <ChevronRight style={{ width: 16, height: 16, marginLeft: 'auto' }} />}
             </button>
           ))}
@@ -395,7 +404,9 @@ export function SettingsPage() {
       </div>
 
       {/* Right Content */}
-      <div style={{ flex: 1, overflow: 'auto' }}>
+      <div className="settings-content">
+        {activeSection === 'about' && <AboutPage />}
+        {activeSection === 'releases' && <ReleasesPage />}
         {/* Appearance */}
         {activeSection === 'appearance' && (
           <div className="card" style={{ height: 'fit-content' }}>

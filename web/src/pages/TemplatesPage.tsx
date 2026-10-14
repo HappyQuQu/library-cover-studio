@@ -83,8 +83,8 @@ export function TemplatesPage() {
       setImportError('请选择 ZIP 格式的模板包。可以在模板库导出，或从模板商店下载单套模板 ZIP。');
       return;
     }
-    if (!file.size || file.size > 5 * 1024 * 1024) {
-      setImportError(file.size ? '模板包超过 5 MB，请压缩预览图后重新打包。' : '这个文件为空，请重新导出或下载模板包。');
+    if (!file.size || file.size > 64 * 1024 * 1024) {
+      setImportError(file.size ? '模板包超过 64 MB，请减少字体文件或压缩预览图后重新打包。' : '这个文件为空，请重新导出或下载模板包。');
       return;
     }
 
@@ -93,18 +93,21 @@ export function TemplatesPage() {
     formData.append('file', file);
 
     try {
-      const { data: imported } = await apiClient.post<{ id: string; name: string }>('/templates/import', formData, {
+      const { data: imported } = await apiClient.post<{ id: string; name: string; fonts?: { name: string; action: 'installed' | 'reused' }[] }>('/templates/import', formData, {
         timeout: 90000,
         headers: {
           'Content-Type': 'multipart/form-data'
         }
       });
       setImportOpen(false);
-      toast({ title: `「${imported.name}」导入成功`, description: '已添加为可编辑的新模板，现在可以在设计器和自动化中选择。', variant: 'success' });
+      const installed = imported.fonts?.filter(font => font.action === 'installed').length || 0;
+      toast({ title: `「${imported.name}」导入成功`, description: installed
+        ? `已自动添加 ${installed} 个字体到字体管理，模板可直接在设计器和自动化中使用。`
+        : '已添加为可编辑的新模板，现在可以在设计器和自动化中选择。', variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
     } catch (error: unknown) {
       const response = error as { code?: string; response?: { status?: number; data?: { error?: { message?: string } } } };
-      setImportError(response.response?.status === 413 ? '模板包超过上传大小限制，请将文件压缩到 5 MB 以内后重试。'
+      setImportError(response.response?.status === 413 ? '模板包超过上传大小限制，请将文件压缩到 64 MB 以内后重试。'
         : response.code === 'ECONNABORTED' ? '导入超时，请稍后刷新模板库确认是否已导入，再决定是否重试。'
         : response.response?.data?.error?.message || (response.response ? '服务器暂时无法处理这个模板包，请重新导出后重试。' : '无法连接服务器，请检查网络连接后重试。'));
     } finally {
@@ -237,8 +240,9 @@ export function TemplatesPage() {
         <DialogContent style={{ maxWidth: 520 }}>
           <DialogHeader><DialogTitle>导入模板</DialogTitle><DialogDescription>选择单套模板 ZIP，导入后会添加到模板库，原有模板会保留。</DialogDescription></DialogHeader>
           <div className="template-import-guide">
-            <p>支持从应用导出的模板包，或模板商店 Releases 中的单套 ZIP，文件大小不超过 <strong>5 MB</strong>。</p>
-            <pre><code>模板.zip{'\n'}├── template.json{'\n'}└── preview.jpg / png / webp</code></pre>
+            <p>支持从应用导出的模板包，或模板商店 Releases 中的单套 ZIP，含字体时最大 <strong>64 MB</strong>，JSON 与预览图合计不超过 5 MB。</p>
+            <pre><code>模板.zip{'\n'}├── template.json{'\n'}├── preview.jpg / png / webp{'\n'}└── fonts/（使用的自定义字体）</code></pre>
+            <p>随包字体会自动加入字体管理。相同字体复用，同名不同字体保留两份，已有模板不会受影响。</p>
             <p><code>template.json</code> 要直接放在 ZIP 根目录。GitHub 的整个仓库 Source code ZIP 需要先解压，再把单套模板的文件重新打包。</p>
           </div>
           {importFileName && <p className="template-import-file">已选择：{importFileName}</p>}

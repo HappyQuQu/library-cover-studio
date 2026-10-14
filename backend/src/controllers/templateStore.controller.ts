@@ -10,6 +10,7 @@ import { getStoreCatalog, downloadStorePackage, STORE_URL, type StoreEntry } fro
 import { readTemplateMetadata, templateMetadataSchema, templateContentHash, supportsTemplateVersion } from '../services/templateMetadata.service.js';
 import { saveTemplateVersion } from '../services/templateHistory.service.js';
 import { recordStoreDownload, storeDownloadBaseline, storeDownloadCounts } from '../services/templateStoreCounts.service.js';
+import { withTemplateFonts, type ImportedFont } from '../services/templateFonts.service.js';
 
 export const storeUpdateSchema = z.object({ templateId: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), strategy: z.enum(['replace', 'backup', 'copy']).optional() });
 type Strategy = 'replace' | 'backup' | 'copy';
@@ -40,16 +41,19 @@ export async function listStore(req: Request, res: Response, next: NextFunction)
     const sort = req.query.sort === 'popular' ? 'popular' : 'name';
     const matches = catalog.data.templates.filter(entry => `${entry.name} ${entry.description} ${entry.folder} ${entry.author?.name || ''}`.toLocaleLowerCase().includes(query))
       .sort((a, b) => sort === 'popular' ? b.downloadCount - a.downloadCount || a.name.localeCompare(b.name, 'zh-CN') : a.name.localeCompare(b.name, 'zh-CN'));
-    const totalPages = Math.max(1, Math.ceil(matches.length / 24));
+    const requestedSize = Number(req.query.pageSize);
+    const pageSize = [12, 24, 48, 96].includes(requestedSize) ? requestedSize : 24;
+    const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
     const requestedPage = Number(req.query.page);
     const page = Math.min(totalPages, Math.max(1, Number.isSafeInteger(requestedPage) ? requestedPage : 1));
     const installs = getInstalls(req.user!.userId);
     const locals = localTemplates(req.user!.userId);
-    const counts = await storeDownloadCounts(matches.slice((page - 1) * 24, page * 24));
+    const visible = matches.slice((page - 1) * pageSize, page * pageSize);
+    const counts = await storeDownloadCounts(visible);
     res.json({ repositoryUrl: STORE_URL, generatedAt: catalog.setupRequired ? null : catalog.data.generatedAt,
       appVersion: APP_VERSION, stale: catalog.stale, setupRequired: catalog.setupRequired, pendingCount: catalog.data.pendingCount,
-      total: matches.length, page, totalPages,
-      templates: matches.slice((page - 1) * 24, page * 24).map(({ packageUrl: _url, packageSha256: _hash, downloadSources: _sources, ...entry }) => {
+      total: matches.length, page, pageSize, totalPages,
+      templates: visible.map(({ packageUrl: _url, packageSha256: _hash, downloadSources: _sources, ...entry }) => {
         const records = installs.filter(item => item.install.storeId === entry.id);
         const exact = records.find(item => item.install.revision === entry.revision);
         const previous = exact || records[0];
@@ -66,7 +70,7 @@ export async function listStore(req: Request, res: Response, next: NextFunction)
   } catch (error) { next(error); }
 }
 
-type InstallResult = { id: string; name: string; version: string; alreadyInstalled: boolean; action: 'installed' | 'updated' | 'copied' | 'existing'; backupId?: string };
+type InstallResult = { id: string; name: string; version: string; alreadyInstalled: boolean; action: 'installed' | 'updated' | 'copied' | 'existing'; backupId?: string; fonts?: ImportedFont[] };
 // Serialize operations for the same user/template, then re-read saved content.
 const operations = new Map<string, Promise<InstallResult>>();
 async function synchronize(entry: StoreEntry, userId: string, targetId?: string, strategy?: Strategy): Promise<InstallResult> {
@@ -80,8 +84,10 @@ async function synchronize(entry: StoreEntry, userId: string, targetId?: string,
     return { id: exact.template.id, name: exact.template.name, version: readTemplateMetadata(exact.template.metadataJson).version, alreadyInstalled: true, action: 'existing' };
   if (!supportsTemplateVersion(APP_VERSION, entry.minAppVersion)) throw createError(`此模板需要应用 ${entry.minAppVersion} 或更高版本，请先升级应用`, 409, 'STORE_APP_UPGRADE_REQUIRED');
   const countBaseline = storeDownloadBaseline(entry);
-  const { data, thumbnail } = await downloadStorePackage(entry);
+  const { data: packageData, thumbnail, fonts } = await downloadStorePackage(entry);
   recordStoreDownload(entry, countBaseline);
+  return withTemplateFonts(fonts, packageData.canvasJson, async (canvasJson, importedFonts): Promise<InstallResult> => {
+  const data = { ...packageData, canvasJson };
   const metadata = templateMetadataSchema.parse(data);
   const sameDesign = existing && templateContentHash({ ...existing, description: '', metadataJson: null }) === templateContentHash({ ...data, description: '', metadataJson: null });
   const sameContent = existing && templateContentHash(existing) === templateContentHash({ ...data, description: data.description || '', metadataJson: JSON.stringify(metadata) });
@@ -90,7 +96,7 @@ async function synchronize(entry: StoreEntry, userId: string, targetId?: string,
     db.insert(templateStoreInstalls).values({ userId, storeId: entry.id, revision: entry.revision, templateId: existing.id,
       version: metadata.version, contentHash: templateContentHash(existing), installedAt: new Date().toISOString() })
       .onConflictDoNothing().run();
-    return { id: existing.id, name: existing.name, version: metadata.version, alreadyInstalled: true, action: 'existing' };
+    return { id: existing.id, name: existing.name, version: metadata.version, alreadyInstalled: true, action: 'existing', fonts: importedFonts };
   }
   if (existing && (existing.isLocked || existing.userId !== userId) && (strategy === 'replace' || strategy === 'backup')) throw createError('模板已锁定或为共享默认模板，请添加新版副本', 409, 'TEMPLATE_LOCKED');
   const replace = existing && existing.userId === userId && !existing.isLocked && strategy !== 'copy' && (strategy || (!target && sameDesign) || (target && updateMode(target).mode === 'replace')) ? existing : undefined;
@@ -114,7 +120,8 @@ async function synchronize(entry: StoreEntry, userId: string, targetId?: string,
         set: { templateId: id, version: metadata.version, contentHash: templateContentHash(saved), installedAt: now }
       }).run();
   });
-  return { id, name: data.name, version: metadata.version, alreadyInstalled: false, action: replace ? 'updated' : existing ? 'copied' : 'installed', backupId };
+  return { id, name: data.name, version: metadata.version, alreadyInstalled: false, action: replace ? 'updated' : existing ? 'copied' : 'installed', backupId, fonts: importedFonts };
+  });
 }
 
 async function handleInstall(req: Request, res: Response, next: NextFunction, update: boolean) {

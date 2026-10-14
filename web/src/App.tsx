@@ -12,7 +12,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { Toaster } from '@/components/ui/toaster';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthenticated = useAuthStore(state => Boolean(state.isAuthenticated && state.token && state.user));
   
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -41,6 +41,8 @@ export default function App() {
                   <Route path="/editor/:id" element={<EditorPage />} />
                   <Route path="/tasks" element={<TasksPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
+                  <Route path="/about" element={<Navigate to="/settings?tab=about" replace />} />
+                  <Route path="/releases" element={<Navigate to="/settings?tab=releases" replace />} />
                 </Routes>
               </MainLayout>
             </ProtectedRoute>

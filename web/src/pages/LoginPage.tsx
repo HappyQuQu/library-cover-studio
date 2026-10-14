@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { Sparkles, Loader2, ArrowRight, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ export function LoginPage() {
   
   const navigate = useNavigate();
   const login = useAuthStore((state) => state.login);
+  const isAuthenticated = useAuthStore(state => Boolean(state.isAuthenticated && state.token && state.user));
   const { setMode, resolvedMode } = useThemeStore();
   
   const loginMutation = useLogin();
@@ -52,6 +53,8 @@ export function LoginPage() {
   };
 
   const isLoading = loginMutation.isPending || registerMutation.isPending;
+
+  if (isAuthenticated) return <Navigate to="/" replace />;
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'var(--bg-primary)' }}>
