@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "initialize": false,
+  "templates": [
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000001",
+      "slug": "black-gold-plinths",
+      "name": "黑金展台",
+      "description": "炭黑与香槟金，三张海报陈列在高低展台上，左侧大标题。",
+      "posterCount": 3
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000002",
+      "slug": "midnight-staircase",
+      "name": "午夜阶梯",
+      "description": "五张直立海报沿阶梯逐级上升，午夜蓝底色与独立图号。",
+      "posterCount": 5
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000003",
+      "slug": "ember-shutters",
+      "name": "赤焰快门",
+      "description": "三幅长条海报裁成斜向快门，暗红背景、珊瑚色细边。",
+      "posterCount": 3
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000004",
+      "slug": "night-cinemascope",
+      "name": "全景夜航",
+      "description": "首部影片背景作为宽银幕画面，上下黑边、左侧大标题与暗幕。",
+      "posterCount": 1
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000005",
+      "slug": "neon-window",
+      "name": "霓虹橱窗",
+      "description": "一幅大图与三幅横向小图组成橱窗，细青色边框与错位光框。",
+      "posterCount": 4
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000006",
+      "slug": "folded-screen",
+      "name": "银幕折页",
+      "description": "两幅画面组成向中央收拢的折页银幕，带书脊阴影。",
+      "posterCount": 2
+    },
+    {
+      "id": "d13c7001-6ea1-4c89-a5ba-000000000007",
+      "slug": "prismatic-fragments",
+      "name": "碎片棱镜",
+      "description": "九张海报裁成菱形碎片，错落排列在右侧，左侧大标题。",
+      "posterCount": 9
+    }
+  ]
+}

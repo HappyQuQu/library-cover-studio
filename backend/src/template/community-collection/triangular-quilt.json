@@ -1,0 +1,473 @@
+{
+  "version": "1.0.0",
+  "author": {
+    "name": "HappyQuQu",
+    "url": "https://github.com/HappyQuQu"
+  },
+  "minAppVersion": "1.5.0",
+  "changelog": "首次发布；可编辑的画布图层、媒体库标题变量与海报变量。",
+  "id": "d13c7002-6ea1-4c89-a5ba-000000000013",
+  "name": "三角拼版",
+  "group": "几何与空间",
+  "description": "六张三角海报拼成三组上下呼应的图形，底部居中标题，浅杏色背景。",
+  "primaryTitle": "电影",
+  "secondaryTitle": "MOVIES",
+  "previewFile": "triangular-quilt.jpg",
+  "samplePosters": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "canvas": {
+    "version": "6.0.0",
+    "width": 1920,
+    "height": 1080,
+    "randomOnGeneration": false,
+    "randomBackgroundStyle": "cinema-mesh",
+    "background": "#efddc4",
+    "objects": [
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Textbox",
+        "name": "装饰文字",
+        "id": "collection-1",
+        "left": 144,
+        "top": 66,
+        "width": 1600,
+        "height": 36,
+        "text": "TRIANGLES / SIX PIECES",
+        "fontFamily": "sans-serif",
+        "fontSize": 30,
+        "fontWeight": "normal",
+        "fill": "#937562",
+        "textAlign": "left",
+        "fitText": true,
+        "lineHeight": 1.16,
+        "charSpacing": 100
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.508,
+        "scaleY": 0.508,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 1",
+        "id": "collection-2",
+        "posterVar": "post1",
+        "isPoster": true,
+        "src": "/api/templates/posters/1.jpg",
+        "crossOrigin": "anonymous",
+        "left": 408,
+        "top": 434,
+        "width": 1000,
+        "height": 968.503937007874,
+        "cropX": 0,
+        "cropY": 265.748031496063,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 1000,
+          "height": 968.503937007874,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 1000,
+              "y": 0
+            },
+            {
+              "x": 500,
+              "y": 968.503937007874
+            }
+          ],
+          "pathOffset": {
+            "x": 500,
+            "y": 484.251968503937
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.254,
+        "scaleY": 0.254,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 2",
+        "id": "collection-3",
+        "posterVar": "post2",
+        "isPoster": true,
+        "src": "/api/templates/posters/2.jpg",
+        "crossOrigin": "anonymous",
+        "left": 408,
+        "top": 448,
+        "width": 2000,
+        "height": 1937.007874015748,
+        "cropX": 0,
+        "cropY": 531.496062992126,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 2000,
+          "height": 1937.007874015748,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 1000,
+              "y": 0
+            },
+            {
+              "x": 2000,
+              "y": 1937.007874015748
+            },
+            {
+              "x": 0,
+              "y": 1937.007874015748
+            }
+          ],
+          "pathOffset": {
+            "x": 1000,
+            "y": 968.503937007874
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.254,
+        "scaleY": 0.254,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 3",
+        "id": "collection-4",
+        "posterVar": "post3",
+        "isPoster": true,
+        "src": "/api/templates/posters/3.jpg",
+        "crossOrigin": "anonymous",
+        "left": 960,
+        "top": 434,
+        "width": 2000,
+        "height": 1937.007874015748,
+        "cropX": 0,
+        "cropY": 531.496062992126,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 2000,
+          "height": 1937.007874015748,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 2000,
+              "y": 0
+            },
+            {
+              "x": 1000,
+              "y": 1937.007874015748
+            }
+          ],
+          "pathOffset": {
+            "x": 1000,
+            "y": 968.503937007874
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.4703703703703704,
+        "scaleY": 0.4703703703703704,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 4",
+        "id": "collection-5",
+        "posterVar": "post4",
+        "isPoster": true,
+        "src": "/api/templates/posters/4.jpg",
+        "crossOrigin": "anonymous",
+        "left": 960,
+        "top": 448,
+        "width": 1080,
+        "height": 1045.984251968504,
+        "cropX": 0,
+        "cropY": 287.00787401574803,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 1080,
+          "height": 1045.984251968504,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 540,
+              "y": 0
+            },
+            {
+              "x": 1080,
+              "y": 1045.984251968504
+            },
+            {
+              "x": 0,
+              "y": 1045.984251968504
+            }
+          ],
+          "pathOffset": {
+            "x": 540,
+            "y": 522.992125984252
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.4425087108013937,
+        "scaleY": 0.4425087108013937,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 5",
+        "id": "collection-6",
+        "posterVar": "post5",
+        "isPoster": true,
+        "src": "/api/templates/posters/5.jpg",
+        "crossOrigin": "anonymous",
+        "left": 1512,
+        "top": 434,
+        "width": 1148,
+        "height": 1111.8425196850394,
+        "cropX": 0,
+        "cropY": 305.0787401574803,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 1148,
+          "height": 1111.8425196850394,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 0,
+              "y": 0
+            },
+            {
+              "x": 1148,
+              "y": 0
+            },
+            {
+              "x": 574,
+              "y": 1111.8425196850394
+            }
+          ],
+          "pathOffset": {
+            "x": 574,
+            "y": 555.9212598425197
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.3175,
+        "scaleY": 0.3175,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "name": "海报 6",
+        "id": "collection-7",
+        "posterVar": "post6",
+        "isPoster": true,
+        "src": "/api/templates/posters/6.jpg",
+        "crossOrigin": "anonymous",
+        "left": 1512,
+        "top": 448,
+        "width": 1600,
+        "height": 1549.6062992125985,
+        "cropX": 0,
+        "cropY": 425.19685039370074,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 1549.6062992125985,
+          "fill": "#000000",
+          "type": "Polygon",
+          "points": [
+            {
+              "x": 800,
+              "y": 0
+            },
+            {
+              "x": 1600,
+              "y": 1549.6062992125985
+            },
+            {
+              "x": 0,
+              "y": 1549.6062992125985
+            }
+          ],
+          "pathOffset": {
+            "x": 800,
+            "y": 774.8031496062993
+          }
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "top",
+        "type": "Textbox",
+        "name": "装饰文字",
+        "id": "primary-title",
+        "left": 960,
+        "top": 788,
+        "width": 1600,
+        "height": 204,
+        "text": "电影",
+        "fontFamily": "sans-serif",
+        "fontSize": 170,
+        "fontWeight": "bold",
+        "fill": "#4b493d",
+        "textAlign": "center",
+        "fitText": true,
+        "lineHeight": 1.16,
+        "textVar": "{{primary_title}}"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "top",
+        "type": "Textbox",
+        "name": "装饰文字",
+        "id": "secondary-title",
+        "left": 960,
+        "top": 986,
+        "width": 1600,
+        "height": 65,
+        "text": "MOVIES",
+        "fontFamily": "sans-serif",
+        "fontSize": 54,
+        "fontWeight": "normal",
+        "fill": "#8d7d65",
+        "textAlign": "center",
+        "fitText": true,
+        "lineHeight": 1.16,
+        "textVar": "{{secondary_title}}",
+        "charSpacing": 170
+      }
+    ]
+  }
+}

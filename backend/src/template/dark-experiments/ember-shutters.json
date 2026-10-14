@@ -1,0 +1,513 @@
+{
+  "version": "1.0.0",
+  "author": {
+    "name": "HappyQuQu",
+    "url": "https://github.com/HappyQuQu"
+  },
+  "changelog": "深色试作首版，独立构图，可编辑图层与媒体库变量。",
+  "id": "d13c7001-6ea1-4c89-a5ba-000000000003",
+  "name": "赤焰快门",
+  "description": "三幅长条海报裁成斜向快门，暗红背景、珊瑚色细边。",
+  "primaryTitle": "电影",
+  "secondaryTitle": "MOVIES",
+  "previewFile": "ember-shutters.jpg",
+  "samplePosters": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "canvas": {
+    "version": "6.0.0",
+    "width": 1920,
+    "height": 1080,
+    "randomOnGeneration": false,
+    "randomBackgroundStyle": "cinema-mesh",
+    "background": "#130b0e",
+    "objects": [
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Rect",
+        "id": "dark-layer-1",
+        "name": "暗红底光",
+        "left": 0,
+        "top": 0,
+        "width": 1920,
+        "height": 1080,
+        "fill": {
+          "type": "linear",
+          "gradientUnits": "pixels",
+          "coords": {
+            "x1": 0,
+            "y1": 0,
+            "x2": 1920,
+            "y2": 0
+          },
+          "colorStops": [
+            {
+              "offset": 0,
+              "color": "#130b0e"
+            },
+            {
+              "offset": 1,
+              "color": "#401b22"
+            }
+          ]
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Rect",
+        "id": "dark-layer-2",
+        "name": "红色封面签",
+        "left": 116,
+        "top": 128,
+        "width": 114,
+        "height": 10,
+        "fill": "#f47761"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Textbox",
+        "id": "dark-layer-3",
+        "name": "快门眉题",
+        "left": 116,
+        "top": 170,
+        "width": 650,
+        "height": 39,
+        "text": "TRIPLE EXPOSURE",
+        "fontFamily": "sans-serif",
+        "fontSize": 32,
+        "fontWeight": "normal",
+        "fill": "#d08683",
+        "textAlign": "left",
+        "lineHeight": 1.16,
+        "fitText": true,
+        "charSpacing": 130
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Textbox",
+        "id": "primary-title",
+        "name": "主标题 · 媒体库变量",
+        "left": 112,
+        "top": 420,
+        "width": 620,
+        "height": 228,
+        "text": "电影",
+        "fontFamily": "sans-serif",
+        "fontSize": 190,
+        "fontWeight": "bold",
+        "fill": "#fff0e7",
+        "textAlign": "left",
+        "lineHeight": 1.16,
+        "fitText": true,
+        "textVar": "{{primary_title}}"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Textbox",
+        "id": "secondary-title",
+        "name": "副标题 · 媒体库变量",
+        "left": 122,
+        "top": 644,
+        "width": 610,
+        "height": 77,
+        "text": "MOVIES",
+        "fontFamily": "sans-serif",
+        "fontSize": 64,
+        "fontWeight": "500",
+        "fill": "#efa69b",
+        "textAlign": "left",
+        "lineHeight": 1.16,
+        "fitText": true,
+        "textVar": "{{secondary_title}}",
+        "charSpacing": 100
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Textbox",
+        "id": "dark-layer-6",
+        "name": "快门底注",
+        "left": 116,
+        "top": 963,
+        "width": 900,
+        "height": 33,
+        "text": "THREE VIEWS / ONE LIBRARY",
+        "fontFamily": "sans-serif",
+        "fontSize": 27,
+        "fontWeight": "normal",
+        "fill": "#a97477",
+        "textAlign": "left",
+        "lineHeight": 1.16,
+        "fitText": true,
+        "charSpacing": 60
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Polygon",
+        "id": "dark-layer-7",
+        "name": "快门光边 1",
+        "left": 770,
+        "top": 168,
+        "width": 348,
+        "height": 790,
+        "points": [
+          {
+            "x": 69.60000000000001,
+            "y": 0
+          },
+          {
+            "x": 348,
+            "y": 0
+          },
+          {
+            "x": 278.40000000000003,
+            "y": 790
+          },
+          {
+            "x": 0,
+            "y": 790
+          }
+        ],
+        "pathOffset": {
+          "x": 174,
+          "y": 395
+        },
+        "fill": "#ae625b"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.516,
+        "scaleY": 0.516,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "id": "poster-1",
+        "name": "海报 1",
+        "posterVar": "post1",
+        "isPoster": true,
+        "src": "/api/templates/posters/1.jpg",
+        "crossOrigin": "anonymous",
+        "left": 944,
+        "top": 563,
+        "width": 643.4108527131783,
+        "height": 1500,
+        "cropX": 178.29457364341084,
+        "cropY": 0,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "type": "Polygon",
+          "left": 0,
+          "top": 0,
+          "width": 643.4108527131783,
+          "height": 1500,
+          "points": [
+            {
+              "x": 128.68217054263567,
+              "y": 0
+            },
+            {
+              "x": 643.4108527131783,
+              "y": 0
+            },
+            {
+              "x": 514.7286821705427,
+              "y": 1500
+            },
+            {
+              "x": 0,
+              "y": 1500
+            }
+          ],
+          "pathOffset": {
+            "x": 321.70542635658916,
+            "y": 750
+          },
+          "fill": "#000000"
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Polygon",
+        "id": "dark-layer-9",
+        "name": "快门光边 2",
+        "left": 1120,
+        "top": 104,
+        "width": 348,
+        "height": 790,
+        "points": [
+          {
+            "x": 69.60000000000001,
+            "y": 0
+          },
+          {
+            "x": 348,
+            "y": 0
+          },
+          {
+            "x": 278.40000000000003,
+            "y": 790
+          },
+          {
+            "x": 0,
+            "y": 790
+          }
+        ],
+        "pathOffset": {
+          "x": 174,
+          "y": 395
+        },
+        "fill": "#ae625b"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.258,
+        "scaleY": 0.258,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "id": "poster-2",
+        "name": "海报 2",
+        "posterVar": "post2",
+        "isPoster": true,
+        "src": "/api/templates/posters/2.jpg",
+        "crossOrigin": "anonymous",
+        "left": 1294,
+        "top": 499,
+        "width": 1286.8217054263566,
+        "height": 3000,
+        "cropX": 356.5891472868217,
+        "cropY": 0,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "type": "Polygon",
+          "left": 0,
+          "top": 0,
+          "width": 1286.8217054263566,
+          "height": 3000,
+          "points": [
+            {
+              "x": 257.36434108527135,
+              "y": 0
+            },
+            {
+              "x": 1286.8217054263566,
+              "y": 0
+            },
+            {
+              "x": 1029.4573643410854,
+              "y": 3000
+            },
+            {
+              "x": 0,
+              "y": 3000
+            }
+          ],
+          "pathOffset": {
+            "x": 643.4108527131783,
+            "y": 1500
+          },
+          "fill": "#000000"
+        }
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 1,
+        "scaleY": 1,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "left",
+        "originY": "top",
+        "type": "Polygon",
+        "id": "dark-layer-11",
+        "name": "快门光边 3",
+        "left": 1470,
+        "top": 204,
+        "width": 348,
+        "height": 790,
+        "points": [
+          {
+            "x": 69.60000000000001,
+            "y": 0
+          },
+          {
+            "x": 348,
+            "y": 0
+          },
+          {
+            "x": 278.40000000000003,
+            "y": 790
+          },
+          {
+            "x": 0,
+            "y": 790
+          }
+        ],
+        "pathOffset": {
+          "x": 174,
+          "y": 395
+        },
+        "fill": "#ae625b"
+      },
+      {
+        "version": "6.0.0",
+        "opacity": 1,
+        "visible": true,
+        "scaleX": 0.258,
+        "scaleY": 0.258,
+        "angle": 0,
+        "strokeWidth": 0,
+        "originX": "center",
+        "originY": "center",
+        "type": "Image",
+        "id": "poster-3",
+        "name": "海报 3",
+        "posterVar": "post3",
+        "isPoster": true,
+        "src": "/api/templates/posters/3.jpg",
+        "crossOrigin": "anonymous",
+        "left": 1644,
+        "top": 599,
+        "width": 1286.8217054263566,
+        "height": 3000,
+        "cropX": 356.5891472868217,
+        "cropY": 0,
+        "clipPath": {
+          "version": "6.0.0",
+          "opacity": 1,
+          "visible": true,
+          "scaleX": 1,
+          "scaleY": 1,
+          "angle": 0,
+          "strokeWidth": 0,
+          "originX": "center",
+          "originY": "center",
+          "type": "Polygon",
+          "left": 0,
+          "top": 0,
+          "width": 1286.8217054263566,
+          "height": 3000,
+          "points": [
+            {
+              "x": 257.36434108527135,
+              "y": 0
+            },
+            {
+              "x": 1286.8217054263566,
+              "y": 0
+            },
+            {
+              "x": 1029.4573643410854,
+              "y": 3000
+            },
+            {
+              "x": 0,
+              "y": 3000
+            }
+          ],
+          "pathOffset": {
+            "x": 643.4108527131783,
+            "y": 1500
+          },
+          "fill": "#000000"
+        }
+      }
+    ]
+  }
+}
