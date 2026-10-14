@@ -107,6 +107,7 @@ jobs:
             --repo "${GITHUB_REPOSITORY}" \
             --squash \
             --subject "${pr_title}" \
+            --body "" \
             --delete-branch
 
       - name: Finalize automatically merged release
