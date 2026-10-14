@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -17,12 +18,14 @@ import { cn } from '@/lib/utils';
 import { useState, useRef, useEffect } from 'react';
 import { useAppReleases } from '@/api/system';
 import { UpdateDot } from '@/components/VersionStatus';
+import { LanguageSelect } from '@/components/LanguageSelect';
 
 interface MainLayoutProps {
   children: React.ReactNode;
 }
 
 export function MainLayout({ children }: MainLayoutProps) {
+  const { t } = useTranslation();
   const resolvedMode = useThemeStore(state => state.resolvedMode);
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
@@ -32,14 +35,14 @@ export function MainLayout({ children }: MainLayoutProps) {
   const { data: releases } = useAppReleases();
 
   const navItems = [
-    { to: '/', icon: LayoutDashboard, label: '仪表盘' },
-    { to: '/servers', icon: Server, label: '媒体源' },
-    { to: '/templates', icon: Palette, label: '模板库' },
-    { to: '/template-store', icon: Store, label: '模板商店' },
-    { to: '/editor', icon: PenTool, label: '设计器' },
-    { to: '/tasks', icon: Clock, label: '自动化' },
-    ...(user?.role === 'admin' ? [{ to: '/settings?tab=users', icon: Users, label: '用户管理' }] : []),
-    { to: '/settings', icon: Settings, label: '设置' }
+    { to: '/', icon: LayoutDashboard, label: t('nav.dashboard') },
+    { to: '/servers', icon: Server, label: t('nav.servers') },
+    { to: '/templates', icon: Palette, label: t('nav.templates') },
+    { to: '/template-store', icon: Store, label: t('nav.templateStore') },
+    { to: '/editor', icon: PenTool, label: t('nav.designer') },
+    { to: '/tasks', icon: Clock, label: t('nav.tasks') },
+    ...(user?.role === 'admin' ? [{ to: '/settings?tab=users', icon: Users, label: t('nav.users') }] : []),
+    { to: '/settings', icon: Settings, label: t('nav.settings') }
   ];
 
   const handleLogout = () => {
@@ -85,7 +88,7 @@ export function MainLayout({ children }: MainLayoutProps) {
         </div>
 
         {/* Navigation Links */}
-        <nav className="app-navigation" aria-label="主导航">
+        <nav className="app-navigation" aria-label={t('nav.main')}>
           {navItems.map((item) => {
             const isSettings = item.to.startsWith('/settings');
             const isUserMgmt = item.to.includes('tab=users');
@@ -127,7 +130,8 @@ export function MainLayout({ children }: MainLayoutProps) {
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowUserMenu(!showUserMenu)}
-              aria-label={`账号：${user?.username || 'User'}`}
+              data-account-menu
+              aria-label={t('nav.account', { username: user?.username || t('common.user') })}
               aria-expanded={showUserMenu}
               className="flex items-center gap-2 h-9 pl-1 pr-2 rounded-lg transition-all hover:bg-(--bg-tertiary)"
             >
@@ -138,7 +142,7 @@ export function MainLayout({ children }: MainLayoutProps) {
                 {user?.username?.[0]?.toUpperCase() || 'U'}
               </div>
               <span className="app-account-name text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                {user?.username || 'User'}
+                {user?.username || t('common.user')}
               </span>
               <ChevronDown className="w-4 h-4" style={{ color: 'var(--text-tertiary)' }} />
             </button>
@@ -157,23 +161,24 @@ export function MainLayout({ children }: MainLayoutProps) {
                     {user?.username}
                   </div>
                   <div className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
-                    {user?.role === 'admin' ? '管理员' : '用户'}
+                    {user?.role === 'admin' ? t('common.administrator') : t('common.user')}
                   </div>
                 </div>
+                <div className="px-3 py-2"><LanguageSelect compact /></div>
                 <button
                   onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
                   className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-(--bg-tertiary) transition-all"
                   style={{ color: 'var(--text-secondary)' }}
                 >
                   <Settings className="w-4 h-4" />
-                  个人设置
+                  {t('nav.personalSettings')}
                 </button>
                 <button
                   onClick={handleLogout}
                   className="w-full px-3 py-2 flex items-center gap-2 text-sm hover:bg-(--bg-tertiary) transition-all text-red-500"
                 >
                   <LogOut className="w-4 h-4" />
-                  退出登录
+                  {t('nav.logout')}
                 </button>
               </div>
             )}

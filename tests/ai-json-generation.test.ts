@@ -77,7 +77,7 @@ test('truncated generation retries once with more space and emits only one compl
   assert.deepEqual(fixture.requests[0].response_format, {type:'json_object'});
   assert.ok(fixture.requests[0].max_tokens > 4096);
   assert.ok(fixture.requests[1].max_tokens > fixture.requests[0].max_tokens);
-  assert.ok(result.some(chunk => chunk.type === 'status'));
+  assert.ok(result.some(chunk => chunk.type === 'status' && chunk.code === 'AI_RETRY_TRUNCATED'));
   assert.equal(result.filter(chunk => chunk.type === 'complete').length, 1);
   assert.deepEqual(result.at(-1)?.canvasJson, canvas);
 });
@@ -87,6 +87,7 @@ test('persistent invalid responses stop after one regeneration with a useful err
   assert.equal(fixture.requests.length, 2);
   assert.equal(result.at(-1)?.type, 'error');
   assert.match(result.at(-1)?.error || '', /长度限制/);
+  assert.equal(result.at(-1)?.code, 'AI_RESPONSE_TRUNCATED');
   assert.ok(!result.some(chunk => chunk.type === 'complete'));
 });
 test('invalid SVG triggers one retry before any complete design is emitted', async t => {
@@ -103,7 +104,9 @@ test('compatible endpoints can opt out of unsupported JSON mode, but auth errors
   assert.equal(fixture.requests.length, 2);
   assert.equal(fixture.requests[1].response_format, undefined);
   const denied = await gateway(t, () => ({status:401,error:'Invalid authentication'}));
-  assert.equal((await collect(denied.provider)).at(-1)?.type, 'error');
+  const rejected = (await collect(denied.provider)).at(-1);
+  assert.equal(rejected?.type, 'error');
+  assert.equal(rejected?.code, 'AI_UPSTREAM_UNAUTHORIZED');
   assert.equal(denied.requests.length, 1);
 });
 test('prematurely closed streams never emit a success or save a partial design', async t => {
@@ -112,4 +115,5 @@ test('prematurely closed streams never emit a success or save a partial design',
   assert.equal(fixture.requests.length, 1);
   assert.equal(result.at(-1)?.type, 'error');
   assert.match(result.at(-1)?.error || '', /连接提前结束/);
+  assert.equal(result.at(-1)?.code, 'AI_STREAM_INCOMPLETE');
 });

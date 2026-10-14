@@ -1,3 +1,6 @@
+import { getLocalizedApiError } from '@/lib/apiError';
+import { formatDisplayDate } from '@/lib/displayFormat';
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { TaskHistoryDialog } from '@/components/tasks/TaskHistoryDialog';
 import { TaskConfigDialog } from '@/components/tasks/TaskConfigDialog';
@@ -20,6 +23,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 
 export function TasksPage() {
+  const { t, i18n } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [logsTaskId, setLogsTaskId] = useState<string | null>(null);
@@ -32,21 +36,21 @@ export function TasksPage() {
   const handleEdit = (task: Task) => { setEditingTask(task); setIsDialogOpen(true); };
   const handleNewTask = () => { setEditingTask(null); setIsDialogOpen(true); };
   const handleDelete = async (taskId: string) => {
-    if (!confirm('确定要删除这个任务吗？')) return;
+    if (!confirm(t('tasks.deleteConfirm'))) return;
     try {
       await deleteMutation.mutateAsync(taskId);
-      toast({ title: '任务已删除' });
+      toast({ title: i18n.t('tasks.deleted') });
     } catch (error: any) {
-      toast({ title: '删除失败', description: error.response?.data?.error?.message, variant: 'destructive' });
+      toast({ title: i18n.t('tasks.deleteFailed'), description: getLocalizedApiError(error), variant: 'destructive' });
     }
   };
 
   const handleRun = async (id: string) => {
     try {
       await runMutation.mutateAsync(id);
-      toast({ title: '任务已启动', description: '正在后台处理图片...' });
+      toast({ title: i18n.t('tasks.started'), description: i18n.t('tasks.startedHint') });
     } catch (error: any) {
-      toast({ title: '执行失败', description: error.response?.data?.error?.message, variant: 'destructive' });
+      toast({ title: i18n.t('tasks.runFailed'), description: getLocalizedApiError(error), variant: 'destructive' });
     }
   };
 
@@ -54,9 +58,9 @@ export function TasksPage() {
     try {
       await toggleMutation.mutateAsync(id);
       // Toast is handled by hook's success? No, let's add it here.
-      toast({ title: '状态已更新' });
+      toast({ title: i18n.t('tasks.statusUpdated') });
     } catch (error) {
-      toast({ title: '操作失败', variant: 'destructive' });
+      toast({ title: i18n.t('tasks.operationFailed'), variant: 'destructive' });
     }
   };
 
@@ -65,18 +69,18 @@ export function TasksPage() {
       {/* Header */}
       <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>自动化任务</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{t('tasks.pageTitle')}</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
-            通过定时任务或手动触发，自动批量更新媒体库封面
+            {t('tasks.pageDescription')}
           </p>
         </div>
 
-        <Button className="btn btn-primary" onClick={handleNewTask}><Plus size={16} />新建任务</Button>
+        <Button className="btn btn-primary" onClick={handleNewTask}><Plus size={16} />{t('tasks.newTask')}</Button>
       </div>
       {isDialogOpen && <TaskConfigDialog task={editingTask} onClose={() => { setIsDialogOpen(false); setEditingTask(null); }} />}
 
 
-      {isError && <div className="card" role="alert" style={{ padding: 20 }}>任务列表加载失败，请检查连接。<Button onClick={() => refetch()}>重试</Button></div>}
+      {isError && <div className="card" role="alert" style={{ padding: 20 }}>{t('tasks.loadFailed')}<Button onClick={() => refetch()}>{t('common.retry')}</Button></div>}
       {/* Task List */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px' }}>
         {isLoading ? (
@@ -89,13 +93,13 @@ export function TasksPage() {
               <div className="empty-state-icon">
                 <Zap style={{ width: 40, height: 40 }} />
               </div>
-              <div className="empty-state-title">尚未创建任何任务</div>
+              <div className="empty-state-title">{t('tasks.empty')}</div>
               <div className="empty-state-description" style={{ marginBottom: '24px' }}>
-                通过自动化任务，您可以让服务器在后台静默美化您的海报墙
+                {t('tasks.emptyHint')}
               </div>
               <Button className="btn btn-primary" onClick={handleNewTask}>
                 <Plus style={{ width: 18, height: 18 }} />
-                创建首个任务
+                {t('tasks.createFirst')}
               </Button>
             </div>
           </div>
@@ -114,9 +118,9 @@ export function TasksPage() {
                 libCount = configs.length;
                 if (libCount > 0) {
                   const firstLib = configs[0];
-                  const templateName = templates.find(t => t.id === firstLib.templateId)?.name || '未知模板';
+                  const templateName = templates.find(t => t.id === firstLib.templateId)?.name || t('tasks.unknownTemplate');
                   configSummary = configs.length > 1
-                    ? `${firstLib.libraryName} 等 ${libCount} 个媒体库`
+                    ? t('tasks.librarySummary', { name: firstLib.libraryName, count: libCount })
                     : `${firstLib.libraryName} (${templateName})`;
                 }
               }
@@ -126,7 +130,7 @@ export function TasksPage() {
 
             return (
               <div key={task.id} className="card group" style={{ padding: '0', overflow: 'hidden' }}>
-                <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div className="automation-task-body" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 20 }}>
                   {/* Status Indicator */}
                   <div style={{
                     width: 52, height: 52, borderRadius: 14,
@@ -141,27 +145,27 @@ export function TasksPage() {
                     )}
                   </div>
 
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="automation-task-info" style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h3 style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 16 }}>{task.name}</h3>
                       {task.type === 'scheduled' ? (
                         task.isEnabled ? (
-                          <span className={`badge ${isJellyfin ? 'badge-primary' : 'badge-success'}`}>定时启用</span>
+                          <span className={`badge ${isJellyfin ? 'badge-primary' : 'badge-success'}`}>{t('tasks.scheduledEnabled')}</span>
                         ) : (
-                          <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}>已暂停</span>
+                          <span className="badge" style={{ background: 'var(--bg-secondary)', color: 'var(--text-tertiary)' }}>{t('tasks.paused')}</span>
                         )
                       ) : (
-                        <span className="badge">手动触发</span>
+                        <span className="badge">{t('tasks.manual')}</span>
                       )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 6 }}>
+                    <div className="automation-task-meta" style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 6 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
                         <div style={{ width: 8, height: 8, borderRadius: '50%', background: brandColor }} />
-                        {server?.name || '未知服务器'}
+                        {server?.name || t('tasks.unknownServer')}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
                         <Palette style={{ width: 14, height: 14 }} />
-                        {configSummary || templates.find(t => t.id === task.templateId)?.name || '未配置'}
+                        {configSummary || templates.find(t => t.id === task.templateId)?.name || t('tasks.unconfigured')}
                       </div>
                       {task.type === 'scheduled' && task.cronExpression && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -173,7 +177,7 @@ export function TasksPage() {
                   </div>
 
                   {/* Actions Group */}
-                  <div style={{
+                  <div className="automation-task-actions" style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 8,
@@ -185,9 +189,9 @@ export function TasksPage() {
                   }}>
                     {/* Last Run Info (Compact) */}
                     <div style={{ padding: '0 12px', borderRight: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>最后执行</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('tasks.lastExecution')}</div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                        {task.lastRunAt ? new Date(task.lastRunAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '从未'}
+                        {task.lastRunAt ? formatDisplayDate(task.lastRunAt, i18n.language, { hour: '2-digit', minute: '2-digit', ...(task.timezone ? { timeZone: task.timezone } : {}) }) || t('common.unknownTime') : t('tasks.never')}
                       </div>
                     </div>
 
@@ -205,7 +209,7 @@ export function TasksPage() {
                         }}
                         onClick={() => handleToggle(task.id)}
                         disabled={toggleMutation.isPending}
-                        title={task.isEnabled ? "暂停定时执行" : "启用定时执行"}
+                        title={task.isEnabled ? t('tasks.pause') : t('tasks.enable')}
                       >
                         {toggleMutation.isPending ? (
                           <Loader2 style={{ width: 16, height: 16, animation: 'spin 1.5s linear infinite' }} />
@@ -238,7 +242,7 @@ export function TasksPage() {
                         }}
                       >
                         {runMutation.isPending ? <Loader2 style={{ width: 16, height: 16 }} className="animate-spin" /> : <Play style={{ width: 16, height: 16 }} />}
-                        立即执行
+                        {t('tasks.runNow')}
                       </button>
 
                       <div style={{ width: 1, height: 20, background: 'var(--border-color)', margin: '0 2px' }} />
@@ -255,7 +259,7 @@ export function TasksPage() {
                           cursor: 'pointer'
                         }}
                         onClick={() => handleEdit(task)}
-                        title="编辑配置"
+                        title={t('tasks.edit')}
                       >
                         <Edit style={{ width: 16, height: 16 }} />
                       </button>
@@ -271,7 +275,7 @@ export function TasksPage() {
                           opacity: 0.7
                         }}
                         onClick={() => handleDelete(task.id)}
-                        title="删除任务"
+                        title={t('tasks.deleteTask')}
                       >
                         <Trash2 style={{ width: 16, height: 16 }} />
                       </button>
@@ -281,12 +285,12 @@ export function TasksPage() {
 
                 {/* Progress / History Tab */}
                 <div style={{ height: 1, background: 'var(--border-color)' }} />
-                <div style={{ padding: '10px 20px', background: 'rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div className="automation-task-footer" style={{ padding: '10px 20px', background: 'rgba(0,0,0,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)' }} />
                     <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{task.nextRunAt && task.timezone
-                      ? `下次执行：${new Date(task.nextRunAt).toLocaleString('zh-CN', { timeZone: task.timezone })} · ${task.timezone}`
-                      : '每个已选媒体库生成一张封面'}</span>
+                      ? t('tasks.nextExecution', { time: formatDisplayDate(task.nextRunAt, i18n.language, { dateStyle: 'medium', timeStyle: 'short', timeZone: task.timezone }) || t('common.unknownTime'), timezone: task.timezone })
+                      : t('tasks.onePerLibrary')}</span>
                   </div>
                   <Button
                     variant="ghost"
@@ -294,7 +298,7 @@ export function TasksPage() {
                     className="h-8 text-[12px] text-(--primary) hover:text-(--primary) hover:bg-(--primary)/10"
                     onClick={() => setLogsTaskId(task.id)}
                   >
-                    查看执行历史
+                    {t('tasks.viewHistory')}
                     <ChevronRight style={{ width: 12, height: 12, marginLeft: 4 }} />
                   </Button>
                 </div>
@@ -304,7 +308,7 @@ export function TasksPage() {
         )}
       </div>
 
-      {logsTaskId && <TaskHistoryDialog taskId={logsTaskId} taskName={tasks.find(task => task.id === logsTaskId)?.name || '任务'} onClose={() => setLogsTaskId(null)} />}
+      {logsTaskId && <TaskHistoryDialog taskId={logsTaskId} taskName={tasks.find(task => task.id === logsTaskId)?.name || t('tasks.fallbackName')} onClose={() => setLogsTaskId(null)} />}
 
       {/* Warning/Info Banner */}
       <div style={{
@@ -315,10 +319,12 @@ export function TasksPage() {
       }}>
         <AlertCircle style={{ width: 24, height: 24, color: 'var(--primary)', flexShrink: 0 }} />
         <div>
-          <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>提示：封面生成是资源密集型操作</h4>
+          <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{t('tasks.resourceHint')}</h4>
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            自动化任务会在后台为您渲染海报并上传到您的媒体服务器。如果您有大量的媒体资源，请考虑将定时任务设置在访问量较低的时段（如凌晨）。
-            可先在配置界面生成真实样张，确认效果后再启用定时计划。
+            {t('tasks.resourceDescription')}
+          </p>
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 4 }}>
+            {t('tasks.previewHint')}
           </p>
         </div>
       </div>

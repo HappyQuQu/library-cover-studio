@@ -1,3 +1,4 @@
+import i18n from '@/lib/i18n';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 import type { Canvas } from 'fabric';
@@ -66,7 +67,7 @@ export function useEditorDraft(canvas: Canvas | null, ready: boolean, readOnly: 
   const blocker = useBlocker(() => latest.current.ready && !latest.current.readOnly && check(!pendingDraft));
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    if (window.confirm(storageFailed.current ? '设计尚未保存，浏览器也无法保存草稿。离开会丢失本次修改，确定离开吗？' : '设计尚未保存。离开后可在本浏览器恢复草稿，确定离开吗？')) blocker.proceed();
+    if (window.confirm(storageFailed.current ? i18n.t('designer.leaveWithoutDraft') : i18n.t('designer.leaveWithDraft'))) blocker.proceed();
     else blocker.reset();
   }, [blocker]);
   useEffect(() => {

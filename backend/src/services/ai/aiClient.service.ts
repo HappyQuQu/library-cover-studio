@@ -19,6 +19,8 @@ export interface StreamChunk {
   content?: string;
   canvasJson?: any;
   error?: string;
+  code?: string;
+  params?: Record<string, unknown>;
 }
 
 export interface AIProvider {

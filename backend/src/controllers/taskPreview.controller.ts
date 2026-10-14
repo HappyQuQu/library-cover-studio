@@ -19,7 +19,7 @@ export function previewSchedule(req: Request, res: Response) {
   try {
     return res.json({ timezone, executions: getUpcomingExecutions(expression, timezone) });
   } catch (error: any) {
-    return res.status(400).json({ error: error.message, timezone });
+    return res.status(400).json({ error: error.message, code: 'INVALID_SCHEDULE', timezone });
   }
 }
 
@@ -54,6 +54,8 @@ export async function previewCover(req: Request, res: Response, next: NextFuncti
     }, posters, { width: template.width || 1920, height: template.height || 1080, ...settings, backdropBuffer: backdrop });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ image: `data:image/${settings.format};base64,${buffer.toString('base64')}`, posterCount: uniqueCount,
+      noteCode: !requiredCount ? 'NO_POSTERS_REQUIRED' : uniqueCount < requiredCount ? 'POSTERS_REUSED' : 'LIBRARY_POSTERS',
+      noteParams: { count: uniqueCount },
       note: !requiredCount ? '纯文字模板，无需海报素材' : uniqueCount < requiredCount ? `使用 ${uniqueCount} 张可用海报，重复填充其余位置` : '使用媒体库中的真实海报' });
   } catch (error) { next(error); }
 }

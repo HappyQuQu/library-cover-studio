@@ -28,9 +28,10 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const authEntryRequest = /\/auth\/(?:login|register|refresh)(?:[?#]|$)/.test(originalRequest?.url || '');
     
     // Token 过期，尝试刷新
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && originalRequest && !authEntryRequest && !originalRequest._retry) {
       originalRequest._retry = true;
       
       const refreshToken = useAuthStore.getState().refreshToken;

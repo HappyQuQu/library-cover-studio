@@ -1,3 +1,4 @@
+import { aiFailureCode } from '../utils/feedback.js';
 import axios from 'axios';
 import { StringDecoder } from 'node:string_decoder';
 import type { AIProvider, AIProviderConfig, TemplateContext, StreamChunk } from '../aiClient.service.js';
@@ -99,7 +100,8 @@ export class OllamaProvider implements AIProvider {
     } catch (error: any) {
       yield {
         type: 'error',
-        error: referenceImageError(error, !!context?.referenceImages?.length)
+        error: referenceImageError(error, !!context?.referenceImages?.length),
+        code: aiFailureCode(error, !!context?.referenceImages?.length)
       };
     }
   }

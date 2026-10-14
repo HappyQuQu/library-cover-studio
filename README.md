@@ -1,89 +1,76 @@
-# 🎨 LibraryCoverStudio
+# LibraryCoverStudio
 
-**为 Jellyfin / Emby 设计媒体库封面，让电影、剧集和动漫分类按计划自动焕新。**
+<p align="center">
+  <strong>简体中文</strong> · <a href="README.en.md">English</a> · <a href="CHANGELOG.md">更新日志</a>
+</p>
 
-[![CI](https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/evanqu/library-cover-studio)
-![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="web/public/logo-d.png">
+    <img src="web/public/logo-l.png" alt="LibraryCoverStudio 标志" width="96">
+  </picture>
+</p>
 
-[Docker 部署](#-docker-部署) · [自动化教程](#-自动化任务教程) · [界面预览](#界面预览) · [完整部署指南](doc/Docker_Deployment.md) · [发布流程](doc/Publishing.md)
+<p align="center">
+  <strong>🎨 为 Jellyfin / Emby 设计媒体库封面，按计划自动焕新。</strong>
+</p>
+
+<p align="center">
+  选模板、改设计、预览效果，让电影、剧集和动漫分类拥有统一风格。
+</p>
+
+<p align="center">
+  <a href="https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/HappyQuQu/library-cover-studio/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://hub.docker.com/r/evanqu/library-cover-studio"><img alt="Docker Hub" src="https://img.shields.io/badge/docker-evanqu%2Flibrary--cover--studio-2496ED?logo=docker&logoColor=white"></a>
+  <img alt="Platforms: Linux amd64 and arm64" src="https://img.shields.io/badge/platform-linux%2Famd64%20%7C%20linux%2Farm64-lightgrey.svg">
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-green.svg">
+</p>
+
+<p align="center">
+  <a href="#quick-start">快速开始</a> · <a href="#screenshots">界面预览</a> · <a href="#automation">自动化教程</a> · <a href="https://github.com/HappyQuQu/library-cover-store">社区模板</a> · <a href="#documentation">更多文档</a>
+</p>
+
+LibraryCoverStudio 是一个自托管的媒体库封面设计与自动化工具。通过 Jellyfin / Emby API
+读取海报素材，生成并上传**媒体库分类封面**：选择三个媒体库，就为它们分别生成一张封面。
+无需挂载电影文件目录，基础功能无需配置 AI 服务。
 
 ![可视化设计器：左侧添加元素，中间编辑封面，右侧管理图层](doc/images/screenshots/editor.jpg)
 
-## ✨ 能做什么
+## ✨ 主要功能
 
-| 功能 | 使用方式 |
+| 功能 | 能做什么 |
 | --- | --- |
-| 可视化设计 | 拖拽海报、文字和形状，调整图层、圆角、旋转、描边与背景，实时查看画布。 |
-| 七套内置模板 | 首次启动即可使用 1920 × 1080 模板，也可以复制后修改、导入或导出模板。 |
-| 社区模板商店 | 从公开 GitHub 模板仓库浏览、搜索和下载设计，下载后自动加入模板菜单，按模板显示全站累计下载次数。 |
-| Jellyfin / Emby | 连接媒体服务器，读取媒体库海报，为每个选中的媒体库生成一张分类封面。 |
-| 自动更新 | 按天、周、月或自定义 Cron 执行；每个媒体库可单独设置模板、标题和素材排序。 |
-| 真实样张 | 保存任务前读取媒体库海报生成样张，预览不会上传或修改媒体服务器。 |
-| 执行历史 | 查看每次执行的结果、逐库封面预览，并下载当次生成的原图。 |
-| AI 设计助手 | 配置自己的 AI 服务，通过文字或参考图生成可编辑设计；基础功能无需 AI。 |
-| 数据维护 | 配置 PNG / JPEG / WebP 输出、历史保留上限、自定义字体、配置导出和缓存清理。 |
-| 关于与版本记录 | 查看作者 GitHub、项目源码和更新说明；有新正式版本时显示红点提醒。 |
+| 可视化设计器 | 拖拽海报、文字和形状，调整图层、圆角、旋转、描边与背景，实时预览。 |
+| 七套内置模板 | 1920 × 1080，开箱即用；支持复制修改、ZIP 导入导出和设计历史回退。 |
+| 社区模板商店 | 搜索和下载社区设计，查看作者、版本与累计下载次数，一键加入模板库。 |
+| Jellyfin / Emby | 连接媒体服务器，为每个媒体库分别配置模板、主副标题和素材排序。 |
+| 自动化更新 | 手动执行，或按天、周、月及自定义 Cron 定时生成并上传封面。 |
+| 真实样张与执行历史 | 上传前用媒体库真实海报预览，执行后查看逐库结果并下载当次原图。 |
+| 可选 AI 助手 | 接入自己的 AI 服务，通过文字或参考图生成可编辑设计。 |
+| 字体与数据管理 | 自定义字体、PNG / JPEG / WebP 输出、历史保留、配置导出与缓存清理。 |
+| 中英文界面 | 中文默认，可随时切换英文；切换保留草稿、画布、任务配置与 AI 对话。 |
+| 版本提醒 | 在设置中查看正式版本更新说明，发现新版本时显示提醒。 |
 
-「设置 → 关于」展示 [HappyQuQu 的 GitHub 主页](https://github.com/HappyQuQu)、Studio 与 Store 仓库地址和当前运行版本。「设置 → 版本记录」展示正式 Release 的更新说明，并与当前后端版本按数字比较；有新版本时设置及版本记录入口显示红点，升级到最新版本后自动消失，查看记录不会清除提醒。登录后自动检查，每 30 分钟刷新一次，也可以点击「检查更新」。GitHub API 限流或不可用时，自动从官方最新发布页的跳转确认版本，并读取对应标签下的更新日志。两种渠道都不可用时保留缓存、显示原因及上次成功检查时间。检查结果在后端缓存 30 分钟，手动检查间隔至少 1 分钟，自动检查失败后等待 5 分钟再重试；无需配置 GitHub Token。已登录访问 `/login` 会回到仪表盘，同一来源的多个浏览器标签页会同步登录状态。
+## 🌐 界面语言
 
-## 界面预览
+支持简体中文与英文，**首次访问默认中文**。可在登录页、账号菜单或「设置 → 外观设置 → 语言」切换；任务向导、模板信息和 AI 工作区也提供原地切换入口。选择保存在当前浏览器，同源标签页同步，刷新或退出登录后继续保留。
 
-### 社区模板商店
+语言切换仅改变界面与日期、数字的显示格式，不会清空未保存表单、画布与撤销记录、任务向导或参考图，也不会重发样张和 AI 生成请求。任务的 Cron、调度时区与执行时刻保持不变。
 
-筛选栏可选择每页 12、24、48、96 个模板，默认 24 个，并记住浏览器中的选择。切换每页数量、搜索或排序会回到第一页，分页区显示当前范围、总数及首页/末页跳转。
+模板和媒体库名称、画布文字、用户输入、社区说明、发布正文、日志诊断及 AI 指令/对话/输出保留原文。生成内容的语言由你的需求或提示词决定。无可用翻译时回退中文；首次访问不根据浏览器语言自动切换。
 
-打开「模板商店」浏览系统默认七套和社区七套设计，支持按模板、作者或说明搜索、按下载次数排序和分页。点击「下载并添加」后，模板自动出现在模板库、设计器及自动化的模板菜单中，同一版本不会重复添加。模板库已有同名模板时会先提示覆盖风险，可选择「先复制备份再更新」或「直接覆盖更新」，更新保留原模板 ID、任务引用和历史。相同设计会复用原模板并同步元数据；锁定或共享默认模板设计不同则添加新版副本。「提交模板」先显示导出、整理文件和提交 Pull Request 的步骤，再由用户点击仓库链接。
+![英文任务向导：保留中文内容与服务器调度时区](doc/images/screenshots/i18n-task-wizard-en.png)
 
-设计器中的「模板信息」可填写版本、作者主页、说明、更新记录及最低应用版本，这些信息会随 ZIP 导入导出、复制和历史回退保留。首次初始化的默认七套也附带元数据，升级时会为旧默认模板补齐缺失信息，并保留已有设计与锁定状态。
+> 以上为隔离环境中的英文界面演示，使用示例账号、媒体库、内置海报和模拟样张响应。
 
-模板源是 [library-cover-store](https://github.com/HappyQuQu/library-cover-store)。下载次数来自各版本 GitHub Release ZIP 附件，按 Release 批量查询并缓存约 2 分钟；接口不可用或受限时回退到每小时汇总的目录。成功下载后以「≥ N · 同步中」显示本机确认的下载下限，GitHub 官方统计追上后取消同步标记，不会重复累加。目录在后端缓存 5 分钟。服务器需要能访问 GitHub、api.github.com 和 raw.githubusercontent.com，无需给应用配置 GitHub Token。
+<a id="quick-start"></a>
 
-分享模板：从模板库导出 ZIP，解压后将 `template.json` 和 `preview.jpg` 放进模板仓库根目录的独立文件夹，提交 Pull Request。完整格式与上架流程见 [提交指南](https://github.com/HappyQuQu/library-cover-store#提交模板)。仓库首次运行发布工作流后会生成商店目录。
+## 🚀 快速开始
 
-模板导出会自动附带实际使用的自定义字体（包含分组和局部文字样式），在 `template.json` 的 `fonts` 清单中记录名称、文件及 SHA-256，并将文件放入 `fonts/`。提交商店时请一起保留该目录。手动导入和商店下载都会自动将随包字体加入「设置 → 字体管理」；相同内容的字体复用，同名不同内容的字体另存并调整模板引用，原字体与已有模板保留。安装或模板保存失败时回滚新字体。旧模板包仍可导入，系统字体不会自动打包。含字体的 ZIP 及解压内容总计不超过 64 MB，字体单个不超过 50 MB、最多 16 项；JSON 与预览图仍合计不超过 5 MB。
+需要 Docker 和 Compose v2，镜像支持 Linux `amd64` / `arm64`。
+**一个镜像、一个容器、一个端口**，包含网页、API、封面渲染与定时任务。
 
-无法连接商店时，管理员可在「设置 → 网络」配置 GitHub 连接，选择跟随后端环境变量、直接连接或指定 HTTP / HTTPS / SOCKS5 / SOCKS5H 代理。点击「测试连接」可在保存前检查商店目录、GitHub 发布页及 API；保存立即生效。商店目录、预览图、模板下载、下载统计和版本检查均从后端使用这项配置，认证代理的凭据加密保存且不回显。Docker 中请填写容器可访问的代理地址，不能使用指向容器自身的 `127.0.0.1`；具体示例见 [GitHub 网络设置](doc/Docker_Deployment.md#github-网络设置)。
-
-![模板商店演示：模板预览、累计下载次数及下载后已添加状态](doc/images/screenshots/template-store-demo.png)
-
-> 商店截图使用隔离演示环境，模板与下载次数为测试数据。
-
-![模板信息演示：版本、作者主页、说明及更新记录](doc/images/screenshots/template-metadata-demo.png)
-
-> 元数据截图中的版本为演示数据，实际模板版本以商店目录为准。
-
-### 模板库：选择风格，复制后开始设计
-
-内置七套模板：柔彩扇形、直列海报墙、倾斜圆角海报墙、斜切大图、柔雾居中标题、圆角叠卡和横幅背景海报列。默认模板已锁定，可直接用于任务；修改时建议先复制，保留原始样式。模板保存历史最多保留最近 50 条，支持回退。管理员可在「设置 → 数据管理」一键还原全部默认模板，补回已删除的模板，并保留还原前的历史。
-
-设计器的「背景设置 → 影片背景」可选择首张海报或首个影片的横向背景图铺满背景，并调节模糊程度与压暗程度。自动化生成时读取对应影片的真实图片，横向背景图缺失时回退首张海报。倾斜圆角海报墙默认使用首张海报模糊背景；横幅背景海报列使用首个影片的横向背景图，底部排列五张直立圆角海报。
-
-![模板库中的七套默认锁定模板，包含横幅背景海报列](doc/images/screenshots/templates.jpg)
-
-![影片背景设置：使用首个影片的横向背景图，调整模糊程度与背景压暗](doc/images/screenshots/editor-background.jpg)
-
-### 默认模板恢复：改乱后找回内置样式
-
-管理员进入「设置 → 数据管理」，可一键还原七套默认模板。自建和复制模板会保留，还原前的已保存设计可从模板历史找回。
-
-![数据管理中的一键还原默认模板，展示七套内置模板状态](doc/images/screenshots/default-template-reset.jpg)
-
-### 媒体源：连接服务器，查看媒体库
-
-支持 Jellyfin / Emby 基础地址及反向代理子路径，图片通过应用的认证代理读取。
-
-![媒体源页面展示示例服务器及电影、电视剧、动漫媒体库](doc/images/screenshots/servers.jpg)
-
-### 自动化：查看计划和执行结果
-
-![自动化任务列表中的定时任务、手动任务和下次运行时间](doc/images/screenshots/tasks.jpg)
-
-> 文档截图来自实际运行的应用，使用隔离的演示账号、示例媒体库和项目内置海报；不包含真实服务器配置或密钥。
-
-## 🐳 Docker 部署
-
-只需 Docker 和 Compose v2。新建一个空目录，将下面内容保存为 **`compose.yaml`**（也可下载 [部署示例](doc/compose.yaml)）：
+新建一个空目录，将下面内容保存为 `compose.yaml`，也可使用 [部署示例](doc/compose.yaml)：
 
 ```yaml
 services:
@@ -99,92 +86,167 @@ services:
       - ./data:/app/data
 ```
 
-把 `JWT_SECRET` 和 `ENCRYPTION_KEY` 分别换成不同的随机密钥。可执行两次 `openssl rand -hex 32`，将结果填入对应位置。**升级时保留这两个值。**
-
-在这个目录执行：
+分别运行两次 `openssl rand -hex 32`，将两个不同的结果填入对应密钥，然后启动：
 
 ```bash
 docker compose up -d
 ```
 
-打开 **[http://192.168.1.10:8080](http://192.168.1.10:8080)**（换成自己的服务器地址；本机使用 `http://localhost:8080`），点击「立即注册」，第一个账号成为管理员。
+打开 `http://<服务器局域网地址>:8080`（本机使用 [http://localhost:8080](http://localhost:8080)），
+点击「立即注册」。**第一个账号成为管理员。**
 
-**一个镜像、一个容器、一个端口。** 网页、API、封面渲染和定时任务均在这个容器中运行，数据自动保存在同目录的 **`data` 文件夹**。改端口只需修改 `8080:8080` 的左侧；NAS 直接使用局域网地址访问，不必另配 `FRONTEND_URL`。镜像标签以 Docker Hub 实际发布结果为准。
+### 配置说明
 
-NAS 与本机使用同一份配置。首次部署、反向代理、升级备份及源码构建见 **[完整部署教程](doc/Docker_Deployment.md)**。已有安装请先按教程的迁移说明保留原密钥和数据。
+| 配置项 | 如何修改 |
+| --- | --- |
+| `image` | 默认使用 `latest`；需要固定版本时，选择 Docker Hub 已发布的版本标签。 |
+| `JWT_SECRET` | 登录令牌签名密钥，首次部署时替换为随机值，升级时保留。 |
+| `ENCRYPTION_KEY` | 用于加密媒体服务器与 AI 密钥，首次部署时替换为另一个随机值，升级时保留。 |
+| `ports` | 修改左侧端口，例如 `"9000:8080"`，随后访问宿主机的 `9000` 端口。 |
+| `./data:/app/data` | 保存数据库、模板、字体、设置和执行历史；可修改左侧为 NAS 上的绝对目录。 |
 
-## ⚡ 自动化任务教程
+升级前备份 `compose.yaml` 和完整 `data` 目录，保留原密钥与 `data/.encryption-salt`。
+NAS 访问、反向代理、备份恢复和旧版迁移见 [Docker 部署教程](doc/Docker_Deployment.md)。
 
-一次配置，即可定期更新所选媒体库的封面。以下示例每周一 04:00 更新电影、电视剧和动漫三个分类。
+<a id="screenshots"></a>
 
-### 1. 连接媒体服务器
+## 🖼️ 界面预览
 
-在「媒体源 → 添加服务器」填写名称、类型、**后端容器可以访问的服务器地址**和 API 密钥。保存后测试连接并查看媒体库。Docker 容器中的 `localhost` 指向容器自身；媒体服务器在 NAS 或局域网时，应填写它的局域网地址或可访问的域名。
+### 模板库：选一种风格，复制后开始设计
 
-### 2. 选择范围、配置封面
+内置柔彩扇形、直列海报墙、倾斜圆角海报墙、斜切大图、柔雾居中标题、圆角叠卡和横幅背景海报列。
+默认模板已锁定，可直接用于任务；复制后即可修改。模板历史最多保留最近 50 条，支持回退；
+管理员也可在「设置 → 数据管理」一键还原默认模板，保留自建与复制的模板。
 
-进入「自动化 → 新建任务」，填写任务名称并勾选媒体库。下一步批量应用模板，再按媒体库调整主标题、副标题和素材排序，点击「生成真实样张」检查效果。
+![模板库中的七套默认模板](doc/images/screenshots/templates.jpg)
 
-![任务配置：每个媒体库设置模板和标题，右侧显示真实样张](doc/images/screenshots/task-cover.jpg)
+### 社区模板商店：发现并添加新设计
 
-### 3. 设置执行时间
+按模板、作者或说明搜索，按下载次数排序，支持分页浏览。下载后自动加入模板库、设计器和自动化的模板菜单，
+同一版本不会重复添加。同名模板更新时，可先复制备份；更新保留原模板 ID、任务引用与历史。
 
-在「设置时间」选择「按计划运行」，使用「每周一」预设，或者设置频率和时间。查看调度时区与未来三次执行时间，勾选「保存后启用此计划」。
+![社区模板商店：模板预览、累计下载次数与添加状态](doc/images/screenshots/template-store-demo.png)
 
-![执行时间设置：每周一凌晨四点，展示调度时区和未来三次执行](doc/images/screenshots/task-schedule.jpg)
+### 自动化：预览真实效果，再查看执行结果
 
-| 想要的计划 | Cron 表达式 |
+每个媒体库可以使用不同模板和标题。保存前生成真实样张，执行后逐库查看上传结果和封面原图。
+
+![执行历史：逐媒体库展示上传结果和封面预览](doc/images/screenshots/task-history.jpg)
+
+<details>
+<summary>查看更多界面：媒体源、背景设置、模板信息与任务计划</summary>
+
+### 媒体源
+
+![媒体源：连接服务器并查看媒体库](doc/images/screenshots/servers.jpg)
+
+### 影片背景
+
+可使用首张海报或首个影片的横向背景图，并调节模糊与压暗程度；横向背景图缺失时回退到首张海报。
+
+![设计器中的影片背景设置](doc/images/screenshots/editor-background.jpg)
+
+### 模板信息
+
+版本、作者主页、说明、更新记录与最低应用版本会随 ZIP 导入导出、复制和历史回退保留。
+
+![模板信息：版本、作者与更新记录](doc/images/screenshots/template-metadata-demo.png)
+
+### 默认模板恢复
+
+![数据管理中的默认模板恢复](doc/images/screenshots/default-template-reset.jpg)
+
+### 任务配置与计划
+
+![按媒体库配置模板、标题与真实样张](doc/images/screenshots/task-cover.jpg)
+
+![执行计划：时区与未来三次执行时间](doc/images/screenshots/task-schedule.jpg)
+
+![自动化任务列表](doc/images/screenshots/tasks.jpg)
+
+</details>
+
+> 截图来自隔离演示环境，使用示例账号、媒体库和项目内置海报。商店下载次数及模板版本为演示数据。
+
+<a id="automation"></a>
+
+## ⚡ 从连接到自动更新
+
+1. **连接服务器**：进入「媒体源 → 添加服务器」，填写类型、地址与 API 密钥，测试连接并查看媒体库。地址必须能从后端容器访问；NAS 或局域网服务器使用局域网 IP 或可访问的域名。
+2. **配置封面**：进入「自动化 → 新建任务」，选择媒体库，批量应用模板，再逐库调整主副标题和素材排序。点击「生成真实样张」确认效果，预览不会上传或修改媒体服务器。
+3. **设置计划**：选择手动运行，或按天、周、月及 Cron 执行。核对调度时区和未来三次执行时间，再启用计划。
+4. **保存并执行**：保存本身不会立即上传；可点击「立即执行」验收，之后在「执行历史」查看逐库结果并下载封面。
+
+| 计划 | Cron 表达式 |
 | --- | --- |
 | 每天 04:00 | `0 4 * * *` |
 | 每周一 04:00 | `0 4 * * 1` |
 | 每月 1 日 04:00 | `0 4 1 * *` |
 | 每小时整点 | `0 * * * *` |
 
-默认调度时区是 `Asia/Shanghai`，以任务页面显示的时区为准。任务执行需要后端持续运行；暂停后停止未来触发，重启后会重新加载已启用的计划。关机期间错过的时间不会自动补跑。
+默认调度时区为 `Asia/Shanghai`，以任务页面显示为准。后端需持续运行；重启后恢复已启用的计划，
+关机期间错过的执行不会自动补跑。执行历史默认每个任务保留最多 50 次、30 天内的已结束记录，管理员可调整上限。
 
-### 4. 确认、执行、查看历史
+**执行会替换所选媒体库的分类封面。** 需要保留原封面时请提前备份；执行历史保存的是本项目生成的图片。
+完整图文步骤、暂停计划与问题排查见 [自动化使用指南](doc/Automation_Guide.md)。
 
-检查「预览确认」页后保存任务。保存本身不会立即上传；可以先点一次「立即执行」，再在「执行历史」查看结果、封面大图和下载按钮。
+## 🎨 自定义与分享模板
 
-![执行历史：逐媒体库展示当次上传结果和封面预览](doc/images/screenshots/task-history.jpg)
+在设计器中使用 `{{primary_title}}`、`{{secondary_title}}` 和 `post1`～`post9` 海报占位，
+让同一布局适配不同媒体库。可设置固定背景或「生成任务时随机背景」，修改后先保存模板再执行任务。
 
-**执行会替换所选媒体库的封面。** 应先生成样张，必要时自行备份媒体服务器原封面；执行历史保存的是本项目生成的图片。默认每个任务保留最多 50 次、30 天内的已结束执行，管理员可修改上限。
+从模板库导出 ZIP，即可备份、迁移或分享设计。导出会附带实际使用的自定义字体，导入和商店下载时自动安装；
+同名但内容不同的字体会另存并调整引用，保留原字体。系统字体不会自动打包。
 
-完整四步教程、变量说明、手动运行、暂停、历史保留与问题排查见 **[自动化使用指南](doc/Automation_Guide.md)**。
+分享至 [library-cover-store](https://github.com/HappyQuQu/library-cover-store)：
+解压 ZIP，将 `template.json`、`preview.jpg` 及随包的 `fonts/` 放入独立模板文件夹，再提交 Pull Request。
+格式、文件大小限制与上架流程见 [模板提交指南](https://github.com/HappyQuQu/library-cover-store#提交模板)。
 
-## 🤖 AI 与自定义设计
+商店与版本检查需要后端访问 GitHub，无需配置 GitHub Token。连接失败时，可在「设置 → 网络」测试连接，
+选择直连、跟随环境变量或指定代理，详见 [GitHub 网络设置](doc/Docker_Deployment.md#github-网络设置)。
 
-在「设置 → AI 配置」添加自己的服务，填写地址与密钥，获取模型列表并选择默认模型。支持 OpenAI 兼容接口、Claude、Ollama 等服务；模型支持图片输入时，可添加最多 3 张 JPG / PNG / WebP 参考图。能力未知时需要手动确认，生成后可先预览再应用到画布。
+## 🤖 可选 AI 设计助手
 
-自动化封面主要使用 `{{primaryTitle}}`、`{{secondaryTitle}}` 与 `post1`～`post9` 海报占位。勾选「生成任务时随机背景」可让同一布局每次采用不同配色，关闭后使用固定背景。修改后的模板需保存，任务执行才会读取新版本。
+在「设置 → AI 配置」接入自己的服务，填写地址与密钥，获取模型列表并选择默认模型。
+支持 OpenAI 兼容接口、Claude 和 Ollama；支持图片输入的模型可使用最多 3 张 JPG / PNG / WebP 参考图。
+模型图片能力未知时需手动确认。生成结果可先预览，再应用到画布继续编辑。
+
+<a id="development"></a>
 
 ## 🧑‍💻 本地开发
 
-环境：Node.js 22、pnpm 10.28.0。开发时前端默认 `5173`，后端默认 `3000`。
+环境：Node.js 22、pnpm 10.28.0。前端默认 `5173`，后端默认 `3000`。
 
 ```bash
 corepack enable
 pnpm install --frozen-lockfile
 cp .env.example .env
-# 编辑 .env，将 JWT_SECRET 和 ENCRYPTION_KEY 改为随机字符串
+# 编辑 .env，将 JWT_SECRET 和 ENCRYPTION_KEY 改为不同的随机密钥
 pnpm db:migrate
 pnpm dev
 ```
 
 ```bash
-pnpm test          # 隔离数据库与本地模拟媒体 API 的回归测试
-pnpm build         # 构建前后端
+pnpm check:i18n  # 全前端文案、词典、插值与复数检查
+pnpm test   # 使用隔离数据库与本地模拟媒体 API 的回归测试
+pnpm build  # 构建前后端
 ```
 
-前端使用 React 19、Vite、Tailwind CSS、Fabric.js、Zustand 和 TanStack Query；后端使用 Node.js、Express、SQLite / Drizzle，渲染使用 `@napi-rs/canvas` 与 Sharp。
+前端使用 React 19、Vite、Tailwind CSS、Fabric.js、Zustand 和 TanStack Query；
+后端使用 Node.js、Express、SQLite / Drizzle，通过 `@napi-rs/canvas` 与 Sharp 渲染封面。
 
-## 📚 文档与发布
+<a id="documentation"></a>
 
-- [Docker 部署教程](doc/Docker_Deployment.md)：安装、NAS 访问、升级与备份恢复。
-- [自动化使用指南](doc/Automation_Guide.md)：连接、配置、定时执行与历史记录。
-- [GitHub Actions 与 Docker Hub 发布](doc/Publishing.md)：自动检查、版本发布、镜像标签和 Overview 同步。
-- [Docker Hub 专用说明](README.dockerhub.md)：适合镜像页面阅读的部署和使用教程。
+## 📖 更多文档
+
+- [贡献规则](CONTRIBUTING.md) · [双语回归清单](doc/I18n_QA.md)：文案约定、源内容边界和隔离验证方法。
+
+- [Docker 部署教程](doc/Docker_Deployment.md)：NAS 访问、反向代理、升级与备份恢复。
+- [自动化使用指南](doc/Automation_Guide.md)：任务配置、变量、定时执行与历史记录。
+- [发布流程](doc/Publishing.md)：GitHub Actions、Docker Hub 镜像与版本发布。
+- [Docker Hub 说明](README.dockerhub.md)：镜像页面的部署与使用教程。
 - [用户手册](doc/Product_Manual.md) · [技术架构](doc/Technical_Architecture.md)。
+- [更新日志](CHANGELOG.md) · [问题反馈](https://github.com/HappyQuQu/library-cover-studio/issues)。
 
 ## 📄 许可证
 

@@ -28,7 +28,7 @@ const upload = multer({
         if (allowedExts.includes(ext)) {
             cb(null, true);
         } else {
-            cb(new Error('Only font files (.ttf, .otf, .woff, .woff2) are allowed'));
+            cb(Object.assign(new Error('Only font files (.ttf, .otf, .woff, .woff2) are allowed'), { code: 'INVALID_FONT_FILE' }));
         }
     },
     limits: {

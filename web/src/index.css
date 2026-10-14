@@ -975,6 +975,7 @@
 .ai-empty p { font-size: 12px; line-height: 1.8; }
 .task-config-dialog { display: flex; flex-direction: column; }
 .task-config-header { display: flex; align-items: center; gap: 14px; padding: 24px 55px 22px 24px; flex-shrink: 0; }
+.task-language-control { padding: 0 24px 14px; flex-shrink: 0; }
 .task-config-header [data-radix-dialog-description] { font-size: 12px; }
 .task-header-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); flex-shrink: 0; }
 .task-steps { display: flex; gap: 12px; padding: 0 24px 18px; border-bottom: 1px solid var(--border-color); flex-shrink: 0; }
@@ -1139,6 +1140,13 @@
 }
 .page-heading { gap: 16px; flex-wrap: wrap; }
 .page-heading > div { min-width: 0; }
+.page-heading > div:last-child { flex-wrap: wrap; }
+@media (max-width: 720px) {
+  .dashboard-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .dashboard-quick-actions { grid-template-columns: minmax(0, 1fr) !important; }
+  .dashboard-banner { flex-wrap: wrap; }
+  .dashboard-banner > div:nth-child(2) { flex-basis: 100% !important; }
+}
 .page-heading button { white-space: nowrap; flex-shrink: 0; }
 .server-card-heading { gap: 12px; }
 .server-card-identity { min-width: 0; }
@@ -1362,3 +1370,41 @@
 .template-import-error { margin-top: 16px; padding: 12px 16px; border: 1px solid rgba(239,68,68,.3); border-radius: 10px; background: rgba(239,68,68,.06); color: var(--text-primary); font-size: 13px; line-height: 1.7; }
 .template-import-error strong { color: var(--danger); }
 .template-import-progress { display: flex; align-items: center; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--text-secondary); }
+
+/* Long translated task labels wrap within narrow cards. */
+.automation-task-meta { flex-wrap: wrap; }
+.automation-task-info h3 { overflow-wrap: anywhere; }
+@media (max-width: 800px) {
+  .automation-task-body { flex-wrap: wrap; }
+  .automation-task-info { flex-basis: calc(100% - 72px); }
+  .automation-task-actions { flex-wrap: wrap; max-width: 100%; margin-left: auto; }
+  .automation-task-actions > div:last-child { flex-wrap: wrap; }
+  .automation-task-footer { flex-wrap: wrap; gap: 10px; }
+}
+
+/* Translated feedback and settings must fit narrow workspaces. */
+.ai-panel-header { flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+.ai-header-actions { margin-left: auto; }
+.ai-panel > .ai-model-settings, .ai-panel > .ai-scope { flex-shrink: 0; }
+.ai-result-heading, .ai-composer-footer { flex-wrap: wrap; }
+.ai-message, .ai-model-status, .ai-change-list { overflow-wrap: anywhere; }
+.settings-log-status { padding: 10px 16px; font-size: 12px; color: var(--text-secondary); }
+.settings-log-status > p { margin-top: 6px; font-size: 11px; }
+.settings-log-status button { margin-left: 12px; }
+.settings-content .card-header { flex-wrap: wrap; gap: 12px; }
+.settings-content fieldset > div { gap: 16px; flex-wrap: wrap; }
+.ai-provider-row { gap: 12px; flex-wrap: wrap; }
+.ai-provider-row > div:first-child { flex: 1; min-width: 150px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .settings-content .card-body { padding: 18px; }
+  .ai-provider-row > div:first-child { flex-basis: 100%; }
+  .ai-provider-row > div:last-child { margin-left: auto; }
+}
+
+@media (max-width: 480px) {
+  .task-schedule-presets { grid-template-columns: minmax(0, 1fr); }
+  .task-schedule-presets button { flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+}
+
+.ai-panel { overflow-y: auto; }
+.ai-messages { min-height: 120px; }

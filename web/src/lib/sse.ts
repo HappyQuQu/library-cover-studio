@@ -1,3 +1,5 @@
+import { CodedError } from './codedError';
+
 /** Decode complete SSE frames; UTF-8 and JSON may both be split across network chunks. */
 export async function* readSSE<T>(body: ReadableStream<Uint8Array>): AsyncGenerator<T> {
   const reader = body.getReader();
@@ -5,7 +7,9 @@ export async function* readSSE<T>(body: ReadableStream<Uint8Array>): AsyncGenera
   let buffer = '';
   const parse = (frame: string): T | undefined => {
     const data = frame.split(/\r?\n/).filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
-    return data ? JSON.parse(data) as T : undefined;
+    if (!data) return undefined;
+    try { return JSON.parse(data) as T; }
+    catch { throw new CodedError('SSE_INVALID_EVENT'); }
   };
   try {
     while (true) {

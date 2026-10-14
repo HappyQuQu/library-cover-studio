@@ -25,6 +25,11 @@ export function LayerPanel({
   onMove
 }: LayerPanelProps) {
   const { t } = useTranslation();
+  const layerLabel = (layer: { name?: string; type: string }) => {
+    if (layer.name) return layer.name;
+    const typeLabels = { 'i-text': t('designer.text'), textbox: t('designer.text'), image: t('designer.image'), rect: t('designer.rectangle'), circle: t('designer.circle'), triangle: t('designer.triangle'), line: t('designer.line'), polygon: t('designer.shape'), group: t('designer.group') };
+    return typeLabels[layer.type as keyof typeof typeLabels] || layer.type;
+  };
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -55,7 +60,7 @@ export function LayerPanel({
       <div className="flex items-center justify-between p-3 mb-2 rounded-lg bg-(--bg-tertiary)/50 border border-(--border-color)">
         <div className="flex items-center gap-2">
           <Layers className="w-4 h-4 text-(--primary)" />
-          <span className="text-xs font-bold text-(--text-secondary)">{t('designer.layers', '图层')}</span>
+          <span className="text-xs font-bold text-(--text-secondary)">{t('designer.layers')}</span>
         </div>
         <span className="text-[10px] bg-(--bg-glass) px-1.5 py-0.5 rounded text-(--text-tertiary) font-mono shadow-sm">
           {layers.length}
@@ -65,7 +70,7 @@ export function LayerPanel({
       <div className="flex-1 overflow-auto space-y-1 pr-1">
         {layers.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-40 text-center px-4">
-            <p className="text-[12px] text-(--text-tertiary)">{t('designer.noLayers', '暂无图层')}</p>
+            <p className="text-[12px] text-(--text-tertiary)">{t('designer.noLayers')}</p>
           </div>
         ) : (
           layers.map((layer, index) => {
@@ -103,15 +108,17 @@ export function LayerPanel({
                   {editingId === layer.id ? (
                     <input
                       type="text"
+                      aria-label={t('designer.layerName')}
                       value={editingName}
+                      placeholder={layerLabel(layer)}
                       onChange={(e) => setEditingName(e.target.value)}
                       onBlur={() => {
-                        onRename(layer.id, editingName);
+                        if (editingName !== (layer.name || '')) onRename(layer.id, editingName);
                         setEditingId(null);
                       }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
-                          onRename(layer.id, editingName);
+                          if (editingName !== (layer.name || '')) onRename(layer.id, editingName);
                           setEditingId(null);
                         }
                         if (e.key === 'Escape') {
@@ -130,10 +137,10 @@ export function LayerPanel({
                       onDoubleClick={(e) => {
                         e.stopPropagation();
                         setEditingId(layer.id);
-                        setEditingName(layer.name || (layer.type === 'i-text' ? 'Text' : layer.type));
+                        setEditingName(layer.name || '');
                       }}
                     >
-                      {layer.name || (layer.type === 'i-text' ? 'Text' : layer.type)}
+                      {layerLabel(layer)}
                     </div>
                   )}
                 </div>
@@ -141,6 +148,7 @@ export function LayerPanel({
                 {/* Quick Actions */}
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
+                    aria-label={layer.locked ? t('designer.unlockLayer') : t('designer.lockLayer')}
                     onClick={(e) => { e.stopPropagation(); onToggleLock(layer.id); }}
                     className={cn(
                       "p-1.5 rounded-md transition-colors",
@@ -150,6 +158,7 @@ export function LayerPanel({
                     {layer.locked ? <Lock className="w-3.5 h-3.5" /> : <Unlock className="w-3.5 h-3.5" />}
                   </button>
                   <button
+                    aria-label={layer.visible ? t('designer.hideLayer') : t('designer.showLayer')}
                     onClick={(e) => { e.stopPropagation(); onToggleVisibility(layer.id); }}
                     className={cn(
                       "p-1.5 rounded-md transition-colors",
@@ -160,6 +169,7 @@ export function LayerPanel({
                   </button>
                   <div className="flex flex-col gap-0.5 ml-1">
                     <button
+                      aria-label={t('designer.moveLayerUp')}
                       onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'up'); }}
                       disabled={index === 0}
                       className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"
@@ -167,6 +177,7 @@ export function LayerPanel({
                       <ChevronUp className="w-3 h-3" />
                     </button>
                     <button
+                      aria-label={t('designer.moveLayerDown')}
                       onClick={(e) => { e.stopPropagation(); onReorder(layer.id, 'down'); }}
                       disabled={index === layers.length - 1}
                       className="p-0.5 text-(--text-tertiary) hover:text-(--primary) disabled:opacity-0"

@@ -20,9 +20,9 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
   };
 
   const shapes = [
-    { id: 'rect', icon: Square, label: '矩形' },
-    { id: 'circle', icon: Circle, label: '圆形' },
-    { id: 'triangle', icon: Triangle, label: '三角形' },
+    { id: 'rect', icon: Square, label: t('designer.rectangle') },
+    { id: 'circle', icon: Circle, label: t('designer.circle') },
+    { id: 'triangle', icon: Triangle, label: t('designer.triangle') },
   ];
 
   const gradientPresets = [
@@ -50,7 +50,7 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
         >
           <div className="flex items-center gap-2">
             <Palette className="w-4 h-4 text-(--primary)" />
-            <span className="text-sm font-semibold text-(--text-primary)">{t('designer.background', '背景设置')}</span>
+            <span className="text-sm font-semibold text-(--text-primary)">{t('designer.background')}</span>
           </div>
           <ChevronDown className={cn("w-4 h-4 text-(--text-tertiary) transition-transform", expandedSections.background && "rotate-180")} />
         </button>
@@ -60,32 +60,32 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
             <div className="flex gap-2 mb-4">
               <button className="flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg bg-linear-to-br from-(--primary) to-purple-600 text-white text-xs font-medium shadow-lg">
                 <Sparkles className="w-5 h-5" />
-                <span>渐变</span>
+                <span>{t('designer.gradient')}</span>
               </button>
               <button className="flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg bg-(--bg-tertiary) text-(--text-secondary) text-xs font-medium hover:bg-(--bg-primary) transition-colors">
                 <Brush className="w-5 h-5" />
-                <span>纯色</span>
+                <span>{t('designer.solid')}</span>
               </button>
               <button className="flex-1 flex flex-col items-center gap-1 py-3 px-2 rounded-lg bg-(--bg-tertiary) text-(--text-secondary) text-xs font-medium hover:bg-(--bg-primary) transition-colors">
                 <Wand2 className="w-5 h-5" />
-                <span>随机</span>
+                <span>{t('designer.random')}</span>
               </button>
             </div>
 
-            <div className="text-xs text-(--text-secondary) mb-2">预设渐变</div>
+            <div className="text-xs text-(--text-secondary) mb-2">{t('designer.gradientPresets')}</div>
             <div className="grid grid-cols-4 gap-2 mb-4">
               {gradientPresets.map((preset, idx) => (
                 <button
                   key={idx}
                   className="aspect-square rounded-lg cursor-pointer border-2 border-transparent hover:border-(--primary) hover:scale-105 transition-all"
                   style={{ background: preset.css }}
-                  title={`渐变 ${idx + 1}`}
+                  title={t('designer.gradientNumber', { number: idx + 1 })}
                 />
               ))}
             </div>
 
             <button className="w-full py-2.5 rounded-lg bg-(--primary) text-white text-sm font-medium hover:opacity-90 transition-opacity">
-              应用背景
+              {t('designer.applyBackground')}
             </button>
           </div>
         )}
@@ -99,7 +99,7 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
         >
           <div className="flex items-center gap-2">
             <Plus className="w-4 h-4 text-(--primary)" />
-            <span className="text-sm font-semibold text-(--text-primary)">{t('designer.addElement', '添加元素')}</span>
+            <span className="text-sm font-semibold text-(--text-primary)">{t('designer.addElement')}</span>
           </div>
           <ChevronDown className={cn("w-4 h-4 text-(--text-tertiary) transition-transform", expandedSections.elements && "rotate-180")} />
         </button>
@@ -122,7 +122,7 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
                 )}>
                   <TypeIcon className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-medium">文字</span>
+                <span className="text-xs font-medium">{t('designer.text')}</span>
               </button>
 
               <button
@@ -140,7 +140,7 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
                 )}>
                   <ImageIcon className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-medium">图片</span>
+                <span className="text-xs font-medium">{t('designer.image')}</span>
               </button>
 
               <button
@@ -158,13 +158,13 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
                 )}>
                   <Star className="w-5 h-5" />
                 </div>
-                <span className="text-xs font-medium">海报</span>
+                <span className="text-xs font-medium">{t('designer.poster')}</span>
               </button>
             </div>
 
             <div className="flex items-center gap-3 mb-3">
               <div className="flex-1 h-px bg-(--border-color)" />
-              <span className="text-xs text-(--text-tertiary)">形状</span>
+              <span className="text-xs text-(--text-tertiary)">{t('designer.shape')}</span>
               <div className="flex-1 h-px bg-(--border-color)" />
             </div>
 
@@ -201,7 +201,7 @@ export function Toolbar({ activeTool, onToolClick }: ToolbarProps) {
           )}
         >
           <MousePointer2 className="w-5 h-5" />
-          <span className="text-sm">{t('common.select', '选择工具')}</span>
+          <span className="text-sm">{t('designer.selectTool')}</span>
         </button>
       </div>
     </div>

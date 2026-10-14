@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import {
   Type,
@@ -66,13 +67,6 @@ const gradientPresets = [
   { css: 'linear-gradient(135deg, #232526 0%, #414345 100%)', color1: '#232526', color2: '#414345' },
 ];
 
-const directions = [
-  { id: 'leftToRight', label: '左→右', icon: ArrowRightIcon },
-  { id: 'topToBottom', label: '上→下', icon: ArrowDown },
-  { id: 'bottomToTop', label: '下→上', icon: ArrowUp },
-  { id: 'leftTopToRightBottom', label: '左上→右下', icon: ArrowDownRight },
-  { id: 'rightTopToLeftBottom', label: '右上→左下', icon: ArrowDownLeft },
-];
 
 const stripeAngles = [
   { deg: 0, label: '0°' },
@@ -81,19 +75,28 @@ const stripeAngles = [
   { deg: 135, label: '135°' },
 ];
 
-const shapes = [
-  { type: 'rect', label: '矩形', icon: Square },
-  { type: 'circle', label: '圆形', icon: Circle },
-  { type: 'triangle', label: '三角形', icon: Triangle },
-  { type: 'line', label: '直线', icon: Minus },
-  { type: 'star', label: '五角星', icon: Star },
-  { type: 'arrow', label: '箭头', icon: ArrowRight },
-];
 
 // Reusable slider style
 const sliderCls = "w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md";
 
 export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
+  const { t } = useTranslation();
+const directions = [
+  { id: 'leftToRight', label: t('designer.leftToRight'), icon: ArrowRightIcon },
+  { id: 'topToBottom', label: t('designer.topToBottom'), icon: ArrowDown },
+  { id: 'bottomToTop', label: t('designer.bottomToTop'), icon: ArrowUp },
+  { id: 'leftTopToRightBottom', label: t('designer.diagonalDown'), icon: ArrowDownRight },
+  { id: 'rightTopToLeftBottom', label: t('designer.diagonalUp'), icon: ArrowDownLeft },
+];
+const shapes = [
+  { type: 'rect', label: t('designer.rectangle'), icon: Square },
+  { type: 'circle', label: t('designer.circle'), icon: Circle },
+  { type: 'triangle', label: t('designer.triangle'), icon: Triangle },
+  { type: 'line', label: t('designer.line'), icon: Minus },
+  { type: 'star', label: t('designer.star'), icon: Star },
+  { type: 'arrow', label: t('designer.arrow'), icon: ArrowRight },
+];
+
   const [activeTab, setActiveTab] = useState<'elements' | 'background'>('elements');
   const [bgType, setBgType] = useState<'color' | 'gradient' | 'random' | 'pattern' | 'poster-blur'>(initialPosterBackground ? 'poster-blur' : 'gradient');
   const [posterSource, setPosterSource] = useState<'poster' | 'backdrop'>(initialPosterBackground?.source ?? 'poster');
@@ -199,7 +202,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
           )}
         >
           <Sparkles className="w-4 h-4" />
-          添加元素
+          {t('designer.addElement')}
         </button>
         <button
           onClick={() => setActiveTab('background')}
@@ -211,7 +214,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
           )}
         >
           <Palette className="w-4 h-4" />
-          背景设置
+          {t('designer.background')}
         </button>
       </div>
 
@@ -223,7 +226,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {/* Posters Section */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-(--text-primary)">海报模板</span>
+                <span className="text-xs font-semibold text-(--text-primary)">{t('designer.posterTemplates')}</span>
                 <div className="flex-1 h-px bg-(--border-color)" />
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -232,11 +235,11 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                     key={`poster-${i + 1}`}
                     onClick={() => onAddShape('poster', getSamplePosterUrl(i + 1))}
                     className="aspect-[2/3] relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group"
-                    title={`海报 ${i + 1}`}
+                    title={t('designer.posterNumber', { number: i + 1 })}
                   >
                     <img
                       src={getSamplePosterUrl(i + 1)}
-                      alt={`Poster ${i + 1}`}
+                      alt={t('designer.posterNumber', { number: i + 1 })}
                       className="w-full h-full object-cover"
                       loading="lazy"
                     />
@@ -251,7 +254,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {/* Basic Elements */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-(--text-primary)">基础元素</span>
+                <span className="text-xs font-semibold text-(--text-primary)">{t('designer.basicElements')}</span>
                 <div className="flex-1 h-px bg-(--border-color)" />
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -262,7 +265,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   <div className="w-10 h-10 rounded-xl bg-linear-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
                     <Type className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-medium text-(--text-primary)">文字</span>
+                  <span className="text-xs font-medium text-(--text-primary)">{t('designer.text')}</span>
                 </button>
                 <button
                   onClick={onAddImage}
@@ -271,7 +274,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   <div className="w-10 h-10 rounded-xl bg-linear-to-br from-cyan-500 to-blue-500 flex items-center justify-center text-white">
                     <ImageIcon className="w-5 h-5" />
                   </div>
-                  <span className="text-xs font-medium text-(--text-primary)">图片</span>
+                  <span className="text-xs font-medium text-(--text-primary)">{t('designer.image')}</span>
                 </button>
               </div>
             </div>
@@ -279,7 +282,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {/* Shapes */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="text-xs font-semibold text-(--text-primary)">形状</span>
+                <span className="text-xs font-semibold text-(--text-primary)">{t('designer.shape')}</span>
                 <div className="flex-1 h-px bg-(--border-color)" />
               </div>
               <div className="grid grid-cols-3 gap-2">
@@ -304,11 +307,11 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {/* Background Type Selector — 2x2 grid */}
             <div className="grid grid-cols-2 gap-2">
               {[
-                { id: 'color' as const, icon: Palette, label: '纯色' },
-                { id: 'gradient' as const, icon: Sparkles, label: '渐变' },
-                { id: 'random' as const, icon: Shuffle, label: '随机渐变' },
-                { id: 'pattern' as const, icon: LayoutGrid, label: '图案' },
-                { id: 'poster-blur' as const, icon: ImageIcon, label: '影片背景' },
+                { id: 'color' as const, icon: Palette, label: t('designer.solid') },
+                { id: 'gradient' as const, icon: Sparkles, label: t('designer.gradient') },
+                { id: 'random' as const, icon: Shuffle, label: t('designer.randomGradient') },
+                { id: 'pattern' as const, icon: LayoutGrid, label: t('designer.pattern') },
+                { id: 'poster-blur' as const, icon: ImageIcon, label: t('designer.movieBackground') },
               ].map((item) => (
                 <button
                   key={item.id}
@@ -329,26 +332,26 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {bgType === 'poster-blur' && (
               <div className="space-y-4">
                 <label className="block space-y-2 text-xs text-(--text-secondary)">
-                  <span>背景来源</span>
-                  <select aria-label="影片背景来源" value={posterSource} onChange={e => setPosterSource(e.target.value as 'poster' | 'backdrop')}
+                  <span>{t('designer.backgroundSource')}</span>
+                  <select aria-label={t('designer.movieBackgroundSource')} value={posterSource} onChange={e => setPosterSource(e.target.value as 'poster' | 'backdrop')}
                     className="w-full rounded-lg border border-(--border-default) bg-(--bg-secondary) p-2">
-                    <option value="poster">首张海报</option><option value="backdrop">首个影片的横向背景图</option>
+                    <option value="poster">{t('designer.firstPoster')}</option><option value="backdrop">{t('designer.firstBackdrop')}</option>
                   </select>
                 </label>
-                <p className="text-xs text-(--text-tertiary) leading-relaxed">生成时跟随首张海报对应的影片；横向背景图缺失时使用海报。编辑器展示内置背景示例，真实样张会读取媒体库图片。</p>
+                <p className="text-xs text-(--text-tertiary) leading-relaxed">{t('designer.movieBackgroundHint')}</p>
                 <label className="block space-y-2 text-xs text-(--text-secondary)">
-                  <span className="flex justify-between">模糊程度 <span>{posterBlur}</span></span>
-                  <input type="range" aria-label="海报背景模糊程度" min="0" max="150" step="5" value={posterBlur}
+                  <span className="flex justify-between">{t('designer.blurAmount')} <span>{posterBlur}</span></span>
+                  <input type="range" aria-label={t('designer.posterBackgroundBlur')} min="0" max="150" step="5" value={posterBlur}
                     onChange={e => setPosterBlur(Number(e.target.value))} className={sliderCls} />
                 </label>
                 <label className="block space-y-2 text-xs text-(--text-secondary)">
-                  <span className="flex justify-between">背景压暗 <span>{Math.round(posterDim * 100)}%</span></span>
-                  <input type="range" aria-label="海报背景压暗程度" min="0" max="80" step="5" value={Math.round(posterDim * 100)}
+                  <span className="flex justify-between">{t('designer.darken')} <span>{Math.round(posterDim * 100)}%</span></span>
+                  <input type="range" aria-label={t('designer.posterBackgroundDim')} min="0" max="80" step="5" value={Math.round(posterDim * 100)}
                     onChange={e => setPosterDim(Number(e.target.value) / 100)} className={sliderCls} />
                 </label>
                 <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim, source: posterSource })}
                   className="w-full rounded-lg bg-(--primary) text-white py-2.5 text-xs font-medium hover:opacity-90 transition-opacity">
-                  应用影片背景
+                  {t('designer.applyMovieBackground')}
                 </button>
               </div>
             )}
@@ -356,7 +359,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             {/* ── Color Mode ── */}
             {bgType === 'color' && (
               <div className="space-y-3">
-                <span className="text-xs text-(--text-tertiary)">预设色板</span>
+                <span className="text-xs text-(--text-tertiary)">{t('designer.colorPresets')}</span>
                 <div className="grid grid-cols-8 gap-1.5">
                   {solidColorPresets.map((color) => (
                     <button
@@ -374,8 +377,8 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   ))}
                 </div>
                 <div className="flex items-center gap-3 pt-1 border-t border-(--border-color)">
-                  <span className="text-xs text-(--text-tertiary)">自定义</span>
-                  <input
+                  <span className="text-xs text-(--text-tertiary)">{t('designer.custom')}</span>
+                  <input aria-label={t('designer.solid')}
                     type="color"
                     value={bgColor}
                     onChange={(e) => handleColorChange(e.target.value)}
@@ -391,7 +394,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
               <div className="space-y-3">
                 {/* Linear / Radial toggle */}
                 <div className="space-y-1.5">
-                  <span className="text-xs text-(--text-tertiary)">渐变样式</span>
+                  <span className="text-xs text-(--text-tertiary)">{t('designer.gradientStyle')}</span>
                   <div className="grid grid-cols-2 gap-2">
                     {(['linear', 'radial'] as const).map((s) => (
                       <button
@@ -404,17 +407,18 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                             : "bg-(--bg-tertiary) text-(--text-secondary) border-(--border-color) hover:border-(--primary)"
                         )}
                       >
-                        {s === 'linear' ? '线性渐变' : '径向渐变'}
+                        {s === 'linear' ? t('designer.linearGradient') : t('designer.radialGradient')}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <span className="text-xs text-(--text-tertiary)">预设渐变</span>
+                <span className="text-xs text-(--text-tertiary)">{t('designer.gradientPresets')}</span>
                 <div className="grid grid-cols-4 gap-2">
                   {gradientPresets.map((preset, idx) => (
                     <button
                       key={idx}
+                      title={t('designer.gradientNumber', { number: idx + 1 })}
                       onClick={() => applyPreset(idx)}
                       className={cn(
                         "aspect-square rounded-lg transition-all hover:scale-105",
@@ -428,7 +432,7 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 {/* Direction — only for linear */}
                 {gradientStyle === 'linear' && (
                   <div className="space-y-2">
-                    <span className="text-xs text-(--text-tertiary)">渐变方向</span>
+                    <span className="text-xs text-(--text-tertiary)">{t('designer.gradientDirection')}</span>
                     <div className="flex gap-2">
                       {directions.map((dir) => (
                         <button
@@ -451,16 +455,16 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
 
                 {/* Custom gradient */}
                 <div className="space-y-2 pt-2 border-t border-(--border-color)">
-                  <span className="text-xs text-(--text-tertiary)">自定义渐变</span>
+                  <span className="text-xs text-(--text-tertiary)">{t('designer.customGradient')}</span>
                   <div className="flex items-center gap-2">
-                    <input type="color" value={customColor1} onChange={(e) => setCustomColor1(e.target.value)}
-                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title="颜色 1" />
+                    <input aria-label={t('designer.colorOne')} type="color" value={customColor1} onChange={(e) => setCustomColor1(e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title={t('designer.colorOne')} />
                     <span className="text-xs text-(--text-tertiary) flex-1 text-center">→</span>
-                    <input type="color" value={customColor2} onChange={(e) => setCustomColor2(e.target.value)}
-                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title="颜色 2" />
+                    <input aria-label={t('designer.colorTwo')} type="color" value={customColor2} onChange={(e) => setCustomColor2(e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title={t('designer.colorTwo')} />
                     <button onClick={applyCustomGradient}
                       className="px-3 py-2 rounded-lg bg-(--primary) text-white text-xs font-medium hover:opacity-90 transition-all">
-                      应用
+                      {t('designer.apply')}
                     </button>
                   </div>
                   <div className="h-6 rounded-lg border border-(--border-color)" style={{
@@ -470,13 +474,13 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   }} />
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-(--text-tertiary)">渐变力度</span>
+                      <span className="text-xs text-(--text-tertiary)">{t('designer.gradientIntensity')}</span>
                       <span className="text-[10px] font-medium text-(--text-tertiary)">{gradientIntensity}%</span>
                     </div>
-                    <input type="range" min="0" max="100" value={gradientIntensity}
+                    <input aria-label={t('designer.gradientIntensity')} type="range" min="0" max="100" value={gradientIntensity}
                       onChange={(e) => setGradientIntensity(parseInt(e.target.value))} className={sliderCls} />
                     <div className="flex justify-between text-[9px] text-(--text-tertiary)">
-                      <span>柔和</span><span>锐利</span>
+                      <span>{t('designer.soft')}</span><span>{t('designer.sharp')}</span>
                     </div>
                   </div>
                 </div>
@@ -488,10 +492,10 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
               <div className="space-y-3">
                 <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 text-amber-600 text-xs">
                   <Sparkles className="w-4 h-4" />
-                  <span>每次点击生成随机渐变色</span>
+                  <span>{t('designer.randomGradientHint')}</span>
                 </div>
                 <label className="flex items-center gap-3 p-3 rounded-lg border border-(--border-color) cursor-pointer hover:bg-(--bg-tertiary) transition-all">
-                  <input
+                  <input aria-label={t('designer.randomizeOnGeneration')}
                     type="checkbox"
                     checked={randomOnGeneration}
                     onChange={(e) => {
@@ -501,13 +505,13 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                     className="w-4 h-4 accent-(--primary) cursor-pointer"
                   />
                   <div className="flex-1">
-                    <span className="text-sm font-medium text-(--text-primary)">生成任务时随机背景</span>
-                    <p className="text-xs text-(--text-tertiary) mt-0.5">样张和任务每次生成都会随机配色；默认模板保持原背景风格</p>
+                    <span className="text-sm font-medium text-(--text-primary)">{t('designer.randomizeOnGeneration')}</span>
+                    <p className="text-xs text-(--text-tertiary) mt-0.5">{t('designer.randomizeHint')}</p>
                   </div>
                   <Shuffle className="w-4 h-4 text-(--text-tertiary)" />
                 </label>
                 <div className="space-y-2">
-                  <span className="text-xs text-(--text-tertiary)">渐变方向</span>
+                  <span className="text-xs text-(--text-tertiary)">{t('designer.gradientDirection')}</span>
                   <div className="flex gap-2">
                     {directions.map((dir) => (
                       <button key={dir.id} onClick={() => setGradientDirection(dir.id)}
@@ -522,16 +526,16 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-(--text-tertiary)">渐变力度</span>
+                    <span className="text-xs text-(--text-tertiary)">{t('designer.gradientIntensity')}</span>
                     <span className="text-[10px] font-medium text-(--text-tertiary)">{gradientIntensity}%</span>
                   </div>
-                  <input type="range" min="0" max="100" value={gradientIntensity}
+                  <input aria-label={t('designer.gradientIntensity')} type="range" min="0" max="100" value={gradientIntensity}
                     onChange={(e) => setGradientIntensity(parseInt(e.target.value))} className={sliderCls} />
-                  <div className="flex justify-between text-[9px] text-(--text-tertiary)"><span>柔和</span><span>锐利</span></div>
+                  <div className="flex justify-between text-[9px] text-(--text-tertiary)"><span>{t('designer.soft')}</span><span>{t('designer.sharp')}</span></div>
                 </div>
                 <button onClick={applyRandomGradient}
                   className="w-full py-2.5 rounded-lg bg-linear-to-r from-amber-500 to-rose-500 text-white text-sm font-medium hover:opacity-90 transition-all">
-                  <Shuffle className="w-4 h-4 inline mr-2" />随机渐变背景
+                  <Shuffle className="w-4 h-4 inline mr-2" />{t('designer.randomGradientBackground')}
                 </button>
               </div>
             )}
@@ -542,15 +546,15 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                 {/* Mesh Gradient */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-(--text-primary)">网格渐变</span>
+                    <span className="text-xs font-semibold text-(--text-primary)">{t('designer.meshGradient')}</span>
                     <div className="flex-1 h-px bg-(--border-color)" />
                   </div>
-                  <p className="text-[11px] text-(--text-tertiary)">4 个颜色光斑自由融合，Apple / Stripe 风格</p>
+                  <p className="text-[11px] text-(--text-tertiary)">{t('designer.meshHint')}</p>
                   {/* 2x2 color pickers */}
                   <div className="grid grid-cols-2 gap-2">
                     {meshColors.map((color, idx) => (
                       <div key={idx} className="flex items-center gap-2 p-2 rounded-lg bg-(--bg-tertiary)">
-                        <input
+                        <input aria-label={t('designer.colorNumber', { number: idx + 1 })}
                           type="color"
                           value={color}
                           onChange={(e) => updateMeshColor(idx, e.target.value)}
@@ -570,30 +574,30 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   }} />
                   <button onClick={applyMeshGradient}
                     className="w-full py-2 rounded-lg bg-(--primary) text-white text-xs font-medium hover:opacity-90 transition-all">
-                    应用网格渐变
+                    {t('designer.applyMesh')}
                   </button>
                 </div>
 
                 {/* Stripes */}
                 <div className="space-y-2 pt-2 border-t border-(--border-color)">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-(--text-primary)">条纹图案</span>
+                    <span className="text-xs font-semibold text-(--text-primary)">{t('designer.stripes')}</span>
                     <div className="flex-1 h-px bg-(--border-color)" />
                   </div>
-                  <p className="text-[11px] text-(--text-tertiary)">双色交替条纹，支持角度和宽度调节</p>
+                  <p className="text-[11px] text-(--text-tertiary)">{t('designer.stripesHint')}</p>
                   {/* Colors */}
                   <div className="flex items-center gap-2">
-                    <input type="color" value={stripeColor1} onChange={(e) => setStripeColor1(e.target.value)}
-                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title="条纹色 1" />
+                    <input aria-label={t('designer.stripeOne')} type="color" value={stripeColor1} onChange={(e) => setStripeColor1(e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title={t('designer.stripeOne')} />
                     <div className="flex-1 h-10 rounded-lg border border-(--border-color) overflow-hidden" style={{
                       backgroundImage: `repeating-linear-gradient(${stripeAngle}deg, ${stripeColor1} 0px, ${stripeColor1} ${stripeWidth}px, ${stripeColor2} ${stripeWidth}px, ${stripeColor2} ${stripeWidth * 2}px)`
                     }} />
-                    <input type="color" value={stripeColor2} onChange={(e) => setStripeColor2(e.target.value)}
-                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title="条纹色 2" />
+                    <input aria-label={t('designer.stripeTwo')} type="color" value={stripeColor2} onChange={(e) => setStripeColor2(e.target.value)}
+                      className="w-10 h-10 rounded-lg border border-(--border-color) cursor-pointer" title={t('designer.stripeTwo')} />
                   </div>
                   {/* Angle */}
                   <div className="space-y-1">
-                    <span className="text-xs text-(--text-tertiary)">角度</span>
+                    <span className="text-xs text-(--text-tertiary)">{t('designer.angle')}</span>
                     <div className="grid grid-cols-4 gap-1.5">
                       {stripeAngles.map(({ deg, label }) => (
                         <button key={deg} onClick={() => setStripeAngle(deg)}
@@ -609,15 +613,15 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                   {/* Width */}
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-(--text-tertiary)">条纹宽度</span>
+                      <span className="text-xs text-(--text-tertiary)">{t('designer.stripeWidth')}</span>
                       <span className="text-[10px] font-medium text-(--text-tertiary)">{stripeWidth}px</span>
                     </div>
-                    <input type="range" min="5" max="120" value={stripeWidth}
+                    <input aria-label={t('designer.stripeWidth')} type="range" min="5" max="120" value={stripeWidth}
                       onChange={(e) => setStripeWidth(parseInt(e.target.value))} className={sliderCls} />
                   </div>
                   <button onClick={applyStripes}
                     className="w-full py-2 rounded-lg bg-(--primary) text-white text-xs font-medium hover:opacity-90 transition-all">
-                    应用条纹背景
+                    {t('designer.applyStripes')}
                   </button>
                 </div>
               </div>
@@ -627,39 +631,39 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
             <div className="pt-2 border-t border-(--border-color) space-y-3">
               <div className="flex items-center gap-2">
                 <Layers2 className="w-3.5 h-3.5 text-(--text-tertiary)" />
-                <span className="text-xs font-semibold text-(--text-primary)">叠加效果</span>
-                <span className="text-[10px] text-(--text-tertiary)">添加在背景之上</span>
+                <span className="text-xs font-semibold text-(--text-primary)">{t('designer.overlays')}</span>
+                <span className="text-[10px] text-(--text-tertiary)">{t('designer.overlaysHint')}</span>
               </div>
 
               {/* Vignette */}
               <div className="p-3 rounded-xl bg-(--bg-tertiary) space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-(--text-primary)">暗角</span>
-                  <span className="text-[10px] text-(--text-tertiary)">Vignette</span>
+                  <span className="text-xs font-medium text-(--text-primary)">{t('designer.vignette')}</span>
+                  <span className="text-[10px] text-(--text-tertiary)">{t('designer.vignetteOverlay')}</span>
                 </div>
                 {/* Preview */}
                 <div className="h-12 rounded-lg overflow-hidden border border-(--border-color)" style={{
                   background: `radial-gradient(ellipse at center, transparent ${100 - vignetteSpread}%, ${vignetteColor}${Math.round(vignetteIntensity * 2.55).toString(16).padStart(2, '0')} 100%), #1a1a2e`
                 }} />
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] text-(--text-tertiary)">暗角颜色</span>
-                  <input type="color" value={vignetteColor} onChange={(e) => setVignetteColor(e.target.value)}
-                    className="w-6 h-6 rounded border border-(--border-color) cursor-pointer p-0" title="暗角颜色" />
+                  <span className="text-[10px] text-(--text-tertiary)">{t('designer.vignetteColor')}</span>
+                  <input aria-label={t('designer.vignetteColor')} type="color" value={vignetteColor} onChange={(e) => setVignetteColor(e.target.value)}
+                    className="w-6 h-6 rounded border border-(--border-color) cursor-pointer p-0" title={t('designer.vignetteColor')} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-[10px] text-(--text-tertiary)">强度</span>
+                    <span className="text-[10px] text-(--text-tertiary)">{t('designer.intensity')}</span>
                     <span className="text-[10px] text-(--text-tertiary)">{vignetteIntensity}%</span>
                   </div>
-                  <input type="range" min="10" max="95" value={vignetteIntensity}
+                  <input aria-label={t('designer.intensity')} type="range" min="10" max="95" value={vignetteIntensity}
                     onChange={(e) => setVignetteIntensity(parseInt(e.target.value))} className={sliderCls} />
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-[10px] text-(--text-tertiary)">范围</span>
+                    <span className="text-[10px] text-(--text-tertiary)">{t('designer.radius')}</span>
                     <span className="text-[10px] text-(--text-tertiary)">{vignetteSpread}%</span>
                   </div>
-                  <input type="range" min="10" max="90" value={vignetteSpread}
+                  <input aria-label={t('designer.radius')} type="range" min="10" max="90" value={vignetteSpread}
                     onChange={(e) => setVignetteSpread(parseInt(e.target.value))} className={sliderCls} />
                 </div>
                 <div className="flex gap-2">
@@ -667,12 +671,12 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                     onClick={() => onChangeBackground({ type: 'vignette', intensity: vignetteIntensity / 100, spread: vignetteSpread / 100, color: vignetteColor })}
                     className="flex-1 py-1.5 rounded-lg bg-(--bg-secondary) border border-(--border-color) text-xs font-medium text-(--text-primary) hover:border-(--primary) hover:text-(--primary) transition-all"
                   >
-                    添加暗角
+                    {t('designer.addVignette')}
                   </button>
                   <button
                     onClick={() => onChangeBackground({ type: 'clear-vignette' })}
                     className="px-3 py-1.5 rounded-lg bg-(--bg-secondary) border border-(--border-color) text-(--text-tertiary) hover:border-red-500 hover:text-red-500 hover:bg-red-50 transition-all focus:outline-none"
-                    title="清除暗角"
+                    title={t('designer.clearVignette')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -682,18 +686,18 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
               {/* Film Grain */}
               <div className="p-3 rounded-xl bg-(--bg-tertiary) space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-(--text-primary)">噪点纹理</span>
-                  <span className="text-[10px] text-(--text-tertiary)">Film Grain</span>
+                  <span className="text-xs font-medium text-(--text-primary)">{t('designer.noiseTexture')}</span>
+                  <span className="text-[10px] text-(--text-tertiary)">{t('designer.filmGrain')}</span>
                 </div>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-[10px] text-(--text-tertiary)">不透明度</span>
+                    <span className="text-[10px] text-(--text-tertiary)">{t('designer.opacity')}</span>
                     <span className="text-[10px] text-(--text-tertiary)">{grainOpacity}%</span>
                   </div>
-                  <input type="range" min="3" max="40" value={grainOpacity}
+                  <input aria-label={t('designer.opacity')} type="range" min="3" max="40" value={grainOpacity}
                     onChange={(e) => setGrainOpacity(parseInt(e.target.value))} className={sliderCls} />
                   <div className="flex justify-between text-[9px] text-(--text-tertiary)">
-                    <span>微弱</span><span>明显</span>
+                    <span>{t('designer.subtle')}</span><span>{t('designer.strong')}</span>
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -701,12 +705,12 @@ export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackgr
                     onClick={() => onChangeBackground({ type: 'grain', opacity: grainOpacity / 100 })}
                     className="flex-1 py-1.5 rounded-lg bg-(--bg-secondary) border border-(--border-color) text-xs font-medium text-(--text-primary) hover:border-(--primary) hover:text-(--primary) transition-all"
                   >
-                    添加噪点
+                    {t('designer.addNoise')}
                   </button>
                   <button
                     onClick={() => onChangeBackground({ type: 'clear-grain' })}
                     className="px-3 py-1.5 rounded-lg bg-(--bg-secondary) border border-(--border-color) text-(--text-tertiary) hover:border-red-500 hover:text-red-500 hover:bg-red-50 transition-all focus:outline-none"
-                    title="清除噪点"
+                    title={t('designer.clearNoise')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

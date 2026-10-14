@@ -66,6 +66,9 @@ jobs:
           if (new Set(versions).size !== 1) throw new Error('Package and release manifest versions must match');
           JS
 
+      - name: Check translation resources
+        run: pnpm check:i18n
+
       - name: Run isolated tests
         run: pnpm test
 

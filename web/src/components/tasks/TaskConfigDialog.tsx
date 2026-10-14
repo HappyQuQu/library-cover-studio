@@ -1,3 +1,8 @@
+import { displayMessage, type DisplayMessage } from '@/lib/displayMessage';
+import { getLocalizedApiError } from '@/lib/apiError';
+import { formatDisplayDate } from '@/lib/displayFormat';
+import { getPreviewNote, getPreviewNoteDetails, type CoverPreview } from '@/lib/coverPreview';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -10,20 +15,21 @@ import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
 import { buildSchedule, describeSchedule, parseLibraryConfigs, readSchedule, reconcileLibraries, SORT_OPTIONS, WEEKDAYS } from '@/lib/taskConfig';
 import type { LibraryConfig, ScheduleConfig } from '@/lib/taskConfig';
+import { LanguageSelect } from '@/components/LanguageSelect';
+import { ErrorDetails } from '@/components/ErrorDetails';
 
-const STEPS = ['选择媒体库', '配置封面', '设置时间', '预览确认'];
-const errorMessage = (error: any) => typeof error?.response?.data?.error === 'string' ? error.response.data.error
-  : error?.response?.data?.error?.message || error?.message || '操作失败，请重试';
-const formatExecution = (value: string, timezone: string, includeSeconds = false) => new Intl.DateTimeFormat('zh-CN', {
-  timeZone: timezone, month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', second: includeSeconds ? '2-digit' : undefined, hourCycle: 'h23'
-}).format(new Date(value));
+const STEPS = ['taskWizard.stepLibraries', 'taskWizard.stepCovers', 'taskWizard.stepSchedule', 'taskWizard.stepReview'] as const;
 
 export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose: () => void }) {
+  const { t, i18n } = useTranslation();
+  const formatExecution = (value: string, timezone: string, includeSeconds = false) => formatDisplayDate(value, i18n.language, {
+    timeZone: timezone, month: '2-digit', day: '2-digit', weekday: 'short', hour: '2-digit', minute: '2-digit', second: includeSeconds ? '2-digit' : undefined, hourCycle: 'h23'
+  }) || t('common.unknownTime');
   const [step, setStep] = useState(0);
   const [name, setName] = useState(task?.name || '');
   const [serverId, setServerId] = useState(task?.serverId || '');
   const [search, setSearch] = useState('');
-  const [configError, setConfigError] = useState('');
+  const [configError, setConfigError] = useState<DisplayMessage | null>(null);
   const [configs, setConfigs] = useState<LibraryConfig[]>(() => {
     try { return parseLibraryConfigs(task?.libraryConfigs); } catch { return []; }
   });
@@ -37,8 +43,8 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   const [advanced, setAdvanced] = useState(!initialSchedule);
   const [customCron, setCustomCron] = useState(task?.cronExpression || '0 4 * * *');
   const [previewLibrary, setPreviewLibrary] = useState('');
-  const [coverPreview, setCoverPreview] = useState<{ key: string; image: string; note: string } | null>(null);
-  const [previewError, setPreviewError] = useState('');
+  const [coverPreview, setCoverPreview] = useState<(CoverPreview & { key: string }) | null>(null);
+  const [previewError, setPreviewError] = useState<DisplayMessage | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const previewRequest = useRef<AbortController | null>(null);
   const fieldsRef = useRef<HTMLElement>(null);
@@ -59,6 +65,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   const visible = configs.filter(config => config.libraryName.toLowerCase().includes(search.toLowerCase()));
   const server = servers.find(item => item.id === serverId);
   const sortOptions = SORT_OPTIONS.filter(([value]) => server?.type !== 'emby' || value !== 'OfficialRating');
+  const sortLabel = (value: string) => { const option = SORT_OPTIONS.find(item => item[0] === value); return option ? t(option[1]) : value; };
   const sortsValid = selected.every(config => sortOptions.some(([value]) => value === config.sortBy));
   const effectiveCron = advanced ? customCron.trim() : buildSchedule(schedule);
   const [debouncedCron, setDebouncedCron] = useState(type === 'scheduled' ? effectiveCron : '');
@@ -75,7 +82,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   const scheduleValid = type === 'manual' || (debouncedCron === effectiveCron && !!scheduleQuery.data?.executions.length && !scheduleQuery.isError && !scheduleQuery.isFetching);
 
   useEffect(() => {
-    try { parseLibraryConfigs(task?.libraryConfigs); } catch { setConfigError('原任务的媒体库配置无法读取，请重新选择媒体库'); }
+    try { parseLibraryConfigs(task?.libraryConfigs); } catch { setConfigError({ key: 'taskWizard.invalidOriginal' }); }
   }, [task]);
   useEffect(() => { if (!defaultTemplate && templates[0]) setDefaultTemplate(templates[0].id); }, [templates, defaultTemplate]);
   useEffect(() => {
@@ -93,176 +100,178 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   const previewTemplate = templates.find(template => template.id === previewConfig?.templateId);
   const previewKey = JSON.stringify([serverId, previewConfig, previewTemplate?.updatedAt]);
   const previewImage = coverPreview?.key === previewKey ? coverPreview.image : null;
-  useEffect(() => { previewRequest.current?.abort(); setPreviewLoading(false); setPreviewError(''); }, [previewKey]);
-  const previewNote = coverPreview?.key === previewKey ? coverPreview.note : '';
+  useEffect(() => { previewRequest.current?.abort(); setPreviewLoading(false); setPreviewError(null); }, [previewKey]);
+  const previewNote = coverPreview?.key === previewKey ? getPreviewNote(coverPreview) : '';
   const missingLibraries = selected.some(config => !librariesQuery.data?.some(library => library.id === config.libraryId));
   const libraryValid = !!name.trim() && !!serverId && selected.length > 0 && !librariesQuery.isFetching && !librariesQuery.isError && !missingLibraries;
   const templatesValid = selected.every(config => templates.some(template => template.id === config.templateId));
-  const errors = useMemo(() => {
-    if (!name.trim()) return '请填写任务名称';
-    if (!serverId) return '请选择媒体服务器';
-    if (librariesQuery.isFetching) return '正在读取媒体库，请稍候';
-    if (librariesQuery.isError) return '媒体库读取失败，请重试';
-    if (!selected.length) return '请至少选择一个媒体库';
-    if (missingLibraries) return '部分媒体库无法读取，请刷新或重新选择';
-    if (step > 0 && !sortsValid) return '此服务器不支持当前排序方式，请重新选择素材排序';
-    if (step > 0 && !templatesValid) return '请为每个已选媒体库选择有效模板';
-    if (step > 1 && !scheduleValid) return '请先检查执行计划，等待执行时间校验完成';
-    return '';
+  const errors = useMemo<DisplayMessage | null>(() => {
+    if (!name.trim()) return { key: 'taskWizard.nameRequired' };
+    if (!serverId) return { key: 'taskWizard.serverRequired' };
+    if (librariesQuery.isFetching) return { key: 'taskWizard.librariesLoading' };
+    if (librariesQuery.isError) return { key: 'taskWizard.librariesFailed' };
+    if (!selected.length) return { key: 'taskWizard.libraryRequired' };
+    if (missingLibraries) return { key: 'taskWizard.librariesMissing' };
+    if (step > 0 && !sortsValid) return { key: 'taskWizard.sortInvalid' };
+    if (step > 0 && !templatesValid) return { key: 'taskWizard.templateRequired' };
+    if (step > 1 && !scheduleValid) return { key: 'taskWizard.schedulePending' };
+    return null;
   }, [name, serverId, librariesQuery.isFetching, librariesQuery.isError, selected.length, missingLibraries, templatesValid, sortsValid, step, scheduleValid]);
   const updateConfig = (id: string, updates: Partial<LibraryConfig>) => setConfigs(previous => previous.map(config => config.libraryId === id ? { ...config, ...updates } : config));
 
   const generatePreview = async () => {
     if (!previewConfig || !previewTemplate) return;
     const controller = new AbortController(); previewRequest.current?.abort(); previewRequest.current = controller;
-    setPreviewError(''); setPreviewLoading(true);
+    setPreviewError(null); setPreviewLoading(true);
     try {
-      const response = await apiClient.post<{ image: string; note: string }>('/tasks/preview-cover', { serverId, ...previewConfig }, { signal: controller.signal });
+      const response = await apiClient.post<CoverPreview>('/tasks/preview-cover', { serverId, ...previewConfig }, { signal: controller.signal });
       if (!controller.signal.aborted) setCoverPreview({ key: previewKey, ...response.data });
-    } catch (error) { if (!controller.signal.aborted) setPreviewError(errorMessage(error)); }
+    } catch (error) { if (!controller.signal.aborted) setPreviewError({ error }); }
     finally { if (previewRequest.current === controller) { setPreviewLoading(false); previewRequest.current = null; } }
   };
   const save = async () => {
     if (saving) return;
-    if (!libraryValid || !templatesValid || !sortsValid || !scheduleValid) { setConfigError(errors || '请检查任务配置'); return; }
+    if (!libraryValid || !templatesValid || !sortsValid || !scheduleValid) { setConfigError(errors || { key: 'taskWizard.checkConfig' }); return; }
     try {
       const payload = { name: name.trim(), serverId, type, cronExpression: type === 'scheduled' ? effectiveCron : undefined,
         libraryConfigs: JSON.stringify(configs), isEnabled: type === 'scheduled' && enabled };
       if (task) await updateMutation.mutateAsync({ id: task.id, ...payload });
       else await createMutation.mutateAsync(payload);
-      toast({ title: task ? '任务已更新' : '任务已创建', description: type === 'scheduled' && enabled ? '将按计划执行' : '任务已保存，可手动运行' });
+      toast({ title: task ? i18n.t('taskWizard.updated') : i18n.t('taskWizard.created'), description: type === 'scheduled' && enabled ? i18n.t('taskWizard.willRun') : i18n.t('taskWizard.savedManual') });
       onClose();
-    } catch (error) { setConfigError(errorMessage(error)); }
+    } catch (error) { setConfigError({ error }); }
   };
   const goNext = () => {
     if (errors) { setConfigError(errors); return; }
-    setConfigError(''); setStep(Math.min(3, step + 1));
+    setConfigError(null); setStep(Math.min(3, step + 1));
   };
 
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
     <DialogContent className="task-config-dialog" style={{ maxWidth: 1080, width: 'calc(100vw - 32px)', height: 'min(820px, 90dvh)', padding: 0, overflow: 'hidden' }}>
       <div className="task-config-header"><div className="task-header-icon"><Zap size={22} /></div><div>
-        <DialogTitle>{task ? '编辑自动化任务' : '创建自动化任务'}</DialogTitle>
-        <DialogDescription>每个媒体库生成一张封面，先配置和预览，再按计划更新。</DialogDescription>
+        <DialogTitle>{task ? t('taskWizard.editTitle') : t('taskWizard.createTitle')}</DialogTitle>
+        <DialogDescription>{t('taskWizard.hint')}</DialogDescription>
       </div></div>
-      <nav className="task-steps" aria-label="任务配置步骤">{STEPS.map((label, index) => <button type="button" key={label}
+      <div className="task-language-control"><LanguageSelect compact /></div>
+      <nav className="task-steps" aria-label={t('taskWizard.steps')}>{STEPS.map((label, index) => <button type="button" key={index}
         className={index === step ? 'current' : index < step ? 'completed' : ''} aria-current={index === step ? 'step' : undefined}
-        disabled={index > step || saving} onClick={() => { setStep(index); setConfigError(''); }}>
-        <span>{index < step ? <Check size={13} /> : index + 1}</span><strong>{label}</strong></button>)}</nav>
+        disabled={index > step || saving} onClick={() => { setStep(index); setConfigError(null); }}>
+        <span>{index < step ? <Check size={13} /> : index + 1}</span><strong>{t(label)}</strong></button>)}</nav>
       <div className="task-config-body" ref={bodyRef}>
         <main className="task-config-fields" ref={fieldsRef}>
           {step === 0 && <>
-            <div className="task-section-heading"><Server size={18} /><div><h3>选择更新范围</h3><p>选择服务器及需要更新封面的媒体库。</p></div></div>
-            <label className="studio-field">任务名称<input className="studio-input" value={name} maxLength={100} placeholder="例如：每周电影库封面更新" onChange={event => setName(event.target.value)} /></label>
-            <label className="studio-field">媒体服务器<select className="studio-input" value={serverId} onChange={event => {
-              setServerId(event.target.value); setConfigs([]); setSearch(''); setConfigError(''); setCoverPreview(null);
-            }}><option value="">选择媒体服务器</option>{servers.map(item => <option key={item.id} value={item.id}>{item.name} · {item.type === 'jellyfin' ? 'Jellyfin' : 'Emby'}</option>)}</select></label>
-            {serversQuery.isLoading && <p className="studio-muted" role="status">正在读取服务器…</p>}
-            {serversQuery.isError && <p role="alert">服务器加载失败 <button type="button" className="studio-secondary" onClick={() => void serversQuery.refetch()}>重试</button></p>}
-            {!serversQuery.isLoading && !servers.length && <Link to="/servers" className="studio-secondary">先添加媒体服务器<ArrowRight size={14} /></Link>}
+            <div className="task-section-heading"><Server size={18} /><div><h3>{t('taskWizard.scopeTitle')}</h3><p>{t('taskWizard.scopeHint')}</p></div></div>
+            <label className="studio-field">{t('taskWizard.name')}<input className="studio-input" value={name} maxLength={100} placeholder={t('taskWizard.namePlaceholder')} onChange={event => setName(event.target.value)} /></label>
+            <label className="studio-field">{t('taskWizard.server')}<select className="studio-input" value={serverId} onChange={event => {
+              setServerId(event.target.value); setConfigs([]); setSearch(''); setConfigError(null); setCoverPreview(null);
+            }}><option value="">{t('taskWizard.selectServer')}</option>{servers.map(item => <option key={item.id} value={item.id}>{item.name} · {item.type === 'jellyfin' ? 'Jellyfin' : 'Emby'}</option>)}</select></label>
+            {serversQuery.isLoading && <p className="studio-muted" role="status">{t('taskWizard.serversLoading')}</p>}
+            {serversQuery.isError && <p role="alert">{t('taskWizard.serversFailed')} <button type="button" className="studio-secondary" onClick={() => void serversQuery.refetch()}>{t('common.retry')}</button></p>}
+            {!serversQuery.isLoading && !servers.length && <Link to="/servers" className="studio-secondary">{t('taskWizard.addServer')}<ArrowRight size={14} /></Link>}
             {serverId && <>
-              <div className="task-library-toolbar"><label className="studio-search"><Search size={15} /><input aria-label="搜索媒体库" placeholder="搜索媒体库名称" value={search} onChange={event => setSearch(event.target.value)} /></label>
+              <div className="task-library-toolbar"><label className="studio-search"><Search size={15} /><input aria-label={t('taskWizard.searchLibraries')} placeholder={t('taskWizard.searchPlaceholder')} value={search} onChange={event => setSearch(event.target.value)} /></label>
                 <button type="button" className="studio-secondary" disabled={!visible.length} onClick={() => {
                   const allSelected = visible.every(config => config.enabled);
                   setConfigs(previous => previous.map(config => visible.some(item => item.libraryId === config.libraryId) ? { ...config, enabled: !allSelected } : config));
-                }}>{visible.length && visible.every(config => config.enabled) ? '取消全选' : '全选当前结果'}</button></div>
-              <div className="task-selection-count">已选 {selected.length} / {configs.length} 个媒体库</div>
-              {librariesQuery.isFetching ? <div className="studio-empty"><Loader2 className="animate-spin" size={22} />正在读取媒体库</div>
-                : librariesQuery.isError ? <div className="studio-empty" role="alert">读取失败<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>重新读取</button></div>
-                : !librariesQuery.data?.length ? <div className="studio-empty">未读取到媒体库，请检查服务器连接或库配置<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>刷新媒体库</button></div>
-                : !visible.length ? <div className="studio-empty">没有匹配的媒体库</div>
+                }}>{visible.length && visible.every(config => config.enabled) ? t('taskWizard.clearSelection') : t('taskWizard.selectResults')}</button></div>
+              <div className="task-selection-count">{t('taskWizard.selectionCount', { count: selected.length, total: configs.length })}</div>
+              {librariesQuery.isFetching ? <div className="studio-empty"><Loader2 className="animate-spin" size={22} />{t('taskWizard.readingLibraries')}</div>
+                : librariesQuery.isError ? <div className="studio-empty" role="alert">{t('taskWizard.readFailed')}<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>{t('taskWizard.reload')}</button></div>
+                : !librariesQuery.data?.length ? <div className="studio-empty">{t('taskWizard.noLibraries')}<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>{t('taskWizard.refreshLibraries')}</button></div>
+                : !visible.length ? <div className="studio-empty">{t('taskWizard.noMatches')}</div>
                 : <div className="task-library-list">{visible.map(config => { const Icon = config.libraryType === 'movies' ? Film : config.libraryType === 'tvshows' ? Tv : Folder;
                   return <label key={config.libraryId} className={`task-library-choice ${config.enabled ? 'selected' : ''}`}>
                     <input type="checkbox" checked={config.enabled} onChange={event => updateConfig(config.libraryId, { enabled: event.target.checked })} /><Icon size={19} />
-                    <span><strong>{config.libraryName}</strong><small>{config.libraryType === 'movies' ? '电影' : config.libraryType === 'tvshows' ? '电视剧' : '媒体库'}</small></span>
-                    <small>1 张封面</small></label>;
+                    <span><strong>{config.libraryName}</strong><small>{config.libraryType === 'movies' ? t('taskWizard.movies') : config.libraryType === 'tvshows' ? t('taskWizard.series') : t('taskWizard.library')}</small></span>
+                    <small>{t('taskWizard.oneCover')}</small></label>;
                 })}</div>}
             </>}
           </>}
           {step === 1 && <>
-            <div className="task-section-heading"><Palette size={18} /><div><h3>为媒体库配置封面</h3><p>先统一设置，再按需调整单个媒体库。</p></div></div>
-            <div className="task-batch-settings"><span className="studio-label">批量设置 · {selected.length} 个媒体库</span>
-              <div className="studio-field-row"><label className="studio-field">统一模板<select className="studio-input" value={defaultTemplate} onChange={event => setDefaultTemplate(event.target.value)}>
-                <option value="">选择模板</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
-                <label className="studio-field">素材排序<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{sortOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></div>
-              <button type="button" className="studio-secondary" disabled={!defaultTemplate} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, templateId: defaultTemplate, sortBy: defaultSort } : config))}>应用到所有已选媒体库<Check size={14} /></button>
+            <div className="task-section-heading"><Palette size={18} /><div><h3>{t('taskWizard.coversTitle')}</h3><p>{t('taskWizard.coversHint')}</p></div></div>
+            <div className="task-batch-settings"><span className="studio-label">{t('taskWizard.batchCount', { count: selected.length })}</span>
+              <div className="studio-field-row"><label className="studio-field">{t('taskWizard.sharedTemplate')}<select className="studio-input" value={defaultTemplate} onChange={event => setDefaultTemplate(event.target.value)}>
+                <option value="">{t('taskWizard.selectTemplate')}</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+                <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label></div>
+              <button type="button" className="studio-secondary" disabled={!defaultTemplate} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, templateId: defaultTemplate, sortBy: defaultSort } : config))}>{t('taskWizard.applyAll')}<Check size={14} /></button>
             </div>
-            {templatesQuery.isError && <div role="alert">模板加载失败<button className="studio-secondary" onClick={() => void templatesQuery.refetch()}>重试</button></div>}
-            {!templates.length && !templatesQuery.isLoading && <Link to="/templates" className="studio-secondary">先创建封面模板<ArrowRight size={14} /></Link>}
+            {templatesQuery.isError && <div role="alert">{t('taskWizard.templatesFailed')}<button className="studio-secondary" onClick={() => void templatesQuery.refetch()}>{t('common.retry')}</button></div>}
+            {!templates.length && !templatesQuery.isLoading && <Link to="/templates" className="studio-secondary">{t('taskWizard.createTemplate')}<ArrowRight size={14} /></Link>}
             <div className="task-library-list">{selected.map(config => <div key={config.libraryId} className="task-library-config">
               <button type="button" className="task-library-summary" aria-expanded={expandedId === config.libraryId} onClick={() => { setExpandedId(expandedId === config.libraryId ? '' : config.libraryId); setPreviewLibrary(config.libraryId); }}>
-                <Folder size={17} /><span><strong>{config.libraryName}</strong><small>{templates.find(template => template.id === config.templateId)?.name || '请选择模板'} · {SORT_OPTIONS.find(([value]) => value === config.sortBy)?.[1] || config.sortBy}</small></span><ChevronDown size={16} /></button>
+                <Folder size={17} /><span><strong>{config.libraryName}</strong><small>{templates.find(template => template.id === config.templateId)?.name || t('taskWizard.pleaseSelectTemplate')} · {sortLabel(config.sortBy)}</small></span><ChevronDown size={16} /></button>
               {expandedId === config.libraryId && <div className="task-library-details">
-                <label className="studio-field">封面模板<select className="studio-input" value={config.templateId} onChange={event => updateConfig(config.libraryId, { templateId: event.target.value })}>
-                  <option value="">选择模板</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
-                <div className="studio-field-row"><label className="studio-field">主标题<input className="studio-input" maxLength={200} value={config.primaryTitle} placeholder={config.libraryName} onChange={event => updateConfig(config.libraryId, { primaryTitle: event.target.value })} /></label>
-                  <label className="studio-field">副标题（选填）<input className="studio-input" maxLength={200} value={config.secondaryTitle} placeholder="例如：精选佳作" onChange={event => updateConfig(config.libraryId, { secondaryTitle: event.target.value })} /></label></div>
-                <label className="studio-field">素材排序<select className="studio-input" value={config.sortBy} onChange={event => updateConfig(config.libraryId, { sortBy: event.target.value })}>{!sortOptions.some(([value]) => value === config.sortBy) && <option value={config.sortBy}>不支持：{config.sortBy}</option>}{sortOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                <label className="studio-field">{t('taskWizard.coverTemplate')}<select className="studio-input" value={config.templateId} onChange={event => updateConfig(config.libraryId, { templateId: event.target.value })}>
+                  <option value="">{t('taskWizard.selectTemplate')}</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+                <div className="studio-field-row"><label className="studio-field">{t('taskWizard.primaryTitle')}<input className="studio-input" maxLength={200} value={config.primaryTitle} placeholder={config.libraryName} onChange={event => updateConfig(config.libraryId, { primaryTitle: event.target.value })} /></label>
+                  <label className="studio-field">{t('taskWizard.secondaryTitle')}<input className="studio-input" maxLength={200} value={config.secondaryTitle} placeholder={t('taskWizard.secondaryPlaceholder')} onChange={event => updateConfig(config.libraryId, { secondaryTitle: event.target.value })} /></label></div>
+                <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={config.sortBy} onChange={event => updateConfig(config.libraryId, { sortBy: event.target.value })}>{!sortOptions.some(([value]) => value === config.sortBy) && <option value={config.sortBy}>{t('taskWizard.unsupportedSort', { value: config.sortBy })}</option>}{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
               </div>}
             </div>)}</div>
           </>}
           {step === 2 && <>
-            <div className="task-section-heading"><Clock size={18} /><div><h3>设置执行时间</h3><p>时间以服务器调度时区为准。</p></div></div>
+            <div className="task-section-heading"><Clock size={18} /><div><h3>{t('taskWizard.scheduleTitle')}</h3><p>{t('taskWizard.scheduleHint')}</p></div></div>
             <div className="segmented task-trigger-mode">{(['manual', 'scheduled'] as const).map(value => <button type="button" key={value} aria-pressed={type === value}
-              onClick={() => { setType(value); setConfigError(''); }}>{value === 'manual' ? '手动运行' : '按计划运行'}</button>)}</div>
-            {type === 'manual' ? <div className="task-schedule-info"><Zap size={20} /><strong>保存后由你手动触发</strong><p>创建任务不会立即更新封面。需要时在任务列表点击运行。</p></div> : <>
-              <div className="task-schedule-presets">{[['每天凌晨', '0 4 * * *'], ['每周一', '0 4 * * 1'], ['每月 1 日', '0 4 1 * *']] .map(([label, expression]) =>
+              onClick={() => { setType(value); setConfigError(null); }}>{value === 'manual' ? t('taskWizard.manual') : t('taskWizard.scheduled')}</button>)}</div>
+            {type === 'manual' ? <div className="task-schedule-info"><Zap size={20} /><strong>{t('taskWizard.manualTitle')}</strong><p>{t('taskWizard.manualHint')}</p></div> : <>
+              <div className="task-schedule-presets">{[[t('taskWizard.presetDaily'), '0 4 * * *'], [t('taskWizard.presetWeekly'), '0 4 * * 1'], [t('taskWizard.presetMonthly'), '0 4 1 * *']] .map(([label, expression]) =>
                 <button type="button" key={expression} aria-pressed={effectiveCron === expression} onClick={() => { setSchedule(readSchedule(expression)!); setAdvanced(false); setCustomCron(expression); }}>{label}<small>04:00</small></button>)}</div>
               {!advanced && <>
-                <div className="studio-field-row"><label className="studio-field">执行频率<select className="studio-input" value={schedule.frequency} onChange={event => setSchedule({ ...schedule, frequency: event.target.value as ScheduleConfig['frequency'] })}>
-                  <option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="hourly">每小时</option></select></label>
-                  <label className="studio-field">{schedule.frequency === 'hourly' ? '在第几分钟执行' : '执行时间'}{schedule.frequency === 'hourly'
+                <div className="studio-field-row"><label className="studio-field">{t('taskWizard.frequency')}<select className="studio-input" value={schedule.frequency} onChange={event => setSchedule({ ...schedule, frequency: event.target.value as ScheduleConfig['frequency'] })}>
+                  <option value="daily">{t('taskWizard.daily')}</option><option value="weekly">{t('taskWizard.weekly')}</option><option value="monthly">{t('taskWizard.monthly')}</option><option value="hourly">{t('taskWizard.hourly')}</option></select></label>
+                  <label className="studio-field">{schedule.frequency === 'hourly' ? t('taskWizard.minute') : t('taskWizard.time')}{schedule.frequency === 'hourly'
                     ? <input className="studio-input" type="number" min={0} max={59} value={Number(schedule.time.split(':')[1])} onChange={event => setSchedule({ ...schedule, time: `04:${event.target.value.padStart(2, '0')}` })} />
                     : <input className="studio-input" type="time" required value={schedule.time} onChange={event => setSchedule({ ...schedule, time: event.target.value })} />}</label></div>
-                {schedule.frequency === 'weekly' && <label className="studio-field">星期<select className="studio-input" value={schedule.weekday} onChange={event => setSchedule({ ...schedule, weekday: event.target.value })}>{WEEKDAYS.map((day, index) => <option key={day} value={index}>{day}</option>)}</select></label>}
-                {schedule.frequency === 'monthly' && <label className="studio-field">日期<select className="studio-input" value={schedule.day} onChange={event => setSchedule({ ...schedule, day: event.target.value })}>{Array.from({ length: 31 }, (_, index) => <option key={index} value={index + 1}>每月 {index + 1} 日</option>)}</select><small>当月没有该日期时不执行。</small></label>}
+                {schedule.frequency === 'weekly' && <label className="studio-field">{t('taskWizard.weekday')}<select className="studio-input" value={schedule.weekday} onChange={event => setSchedule({ ...schedule, weekday: event.target.value })}>{WEEKDAYS.map((day, index) => <option key={index} value={index}>{t(day)}</option>)}</select></label>}
+                {schedule.frequency === 'monthly' && <label className="studio-field">{t('taskWizard.day')}<select className="studio-input" value={schedule.day} onChange={event => setSchedule({ ...schedule, day: event.target.value })}>{Array.from({ length: 31 }, (_, index) => <option key={index} value={index + 1}>{t('taskWizard.monthlyDay', { day: index + 1 })}</option>)}</select><small>{t('taskWizard.missingDayHint')}</small></label>}
               </>}
               <label className="task-advanced-toggle"><input type="checkbox" checked={advanced} onChange={event => {
                 if (event.target.checked) setCustomCron(buildSchedule(schedule));
-                else { const parsed = readSchedule(customCron); if (!parsed) { setConfigError('此表达式无法转换为简易设置，请选择一个时间预设'); return; } setSchedule(parsed); }
-                setAdvanced(event.target.checked); setConfigError('');
-              }} />高级设置：自定义 Cron</label>
-              {advanced && <label className="studio-field">Cron 表达式<input className="studio-input cron-input" value={customCron} placeholder="分 时 日 月 周，例如 0 4 * * 1" onChange={event => setCustomCron(event.target.value)} /><small>支持 5 或 6 个字段，日期与星期同时填写时须同时满足。</small></label>}
-              <div className="task-executions"><div><Clock size={15} /><strong>{describeSchedule(effectiveCron)}</strong><span>{timezone || '正在读取时区'}</span></div>
-                <p className="studio-muted">未来 3 次执行时间</p>
-                {debouncedCron !== effectiveCron || scheduleQuery.isFetching ? <p role="status">正在校验执行计划…</p>
-                  : scheduleQuery.isError ? <p className="studio-error" role="alert">{errorMessage(scheduleQuery.error)}</p>
+                else { const parsed = readSchedule(customCron); if (!parsed) { setConfigError({ key: 'taskWizard.cannotSimplify' }); return; } setSchedule(parsed); }
+                setAdvanced(event.target.checked); setConfigError(null);
+              }} />{t('taskWizard.advanced')}</label>
+              {advanced && <label className="studio-field">{t('taskWizard.cron')}<input className="studio-input cron-input" value={customCron} placeholder={t('taskWizard.cronPlaceholder')} onChange={event => setCustomCron(event.target.value)} /><small>{t('taskWizard.cronHint')}</small></label>}
+              <div className="task-executions"><div><Clock size={15} /><strong>{describeSchedule(effectiveCron)}</strong><span>{timezone || t('taskWizard.timezoneLoading')}</span></div>
+                <p className="studio-muted">{t('taskWizard.nextThree')}</p>
+                {debouncedCron !== effectiveCron || scheduleQuery.isFetching ? <p role="status">{t('taskWizard.validating')}</p>
+                  : scheduleQuery.isError ? <div role="alert"><p className="studio-error">{getLocalizedApiError(scheduleQuery.error)}</p><ErrorDetails error={scheduleQuery.error} /></div>
                   : scheduleQuery.data?.executions.map((date, index) => <p key={date}><span>{index + 1}</span>{formatExecution(date, scheduleQuery.data.timezone, effectiveCron.split(/\s+/).length === 6)}</p>)}
               </div>
-              <label className="task-advanced-toggle"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />保存后启用此计划</label>
+              <label className="task-advanced-toggle"><input type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} />{t('taskWizard.enableAfterSave')}</label>
             </>}
           </>}
           {step === 3 && <>
-            <div className="task-section-heading"><Check size={18} /><div><h3>确认更新计划</h3><p>检查配置并生成真实样张，保存后按你的设置执行。</p></div></div>
-            <div className="task-review"><dl><div><dt>任务名称</dt><dd>{name}</dd></div><div><dt>媒体服务器</dt><dd>{server?.name}</dd></div>
-              <div><dt>更新范围</dt><dd>{selected.length} 个媒体库 · {selected.length} 张封面</dd></div>
-              <div><dt>执行方式</dt><dd>{type === 'manual' ? '手动运行' : `${describeSchedule(effectiveCron)} · ${enabled ? '保存后启用' : '保持暂停'}`}</dd></div>
-              {type === 'scheduled' && timezone && <div><dt>调度时区</dt><dd>{timezone}</dd></div>}
-              {type === 'scheduled' && enabled && scheduleQuery.data?.executions[0] && <div><dt>下次执行</dt><dd>{formatExecution(scheduleQuery.data.executions[0], scheduleQuery.data.timezone, effectiveCron.split(/\s+/).length === 6)}</dd></div>}</dl></div>
+            <div className="task-section-heading"><Check size={18} /><div><h3>{t('taskWizard.reviewTitle')}</h3><p>{t('taskWizard.reviewHint')}</p></div></div>
+            <div className="task-review"><dl><div><dt>{t('taskWizard.name')}</dt><dd>{name}</dd></div><div><dt>{t('taskWizard.server')}</dt><dd>{server?.name}</dd></div>
+              <div><dt>{t('taskWizard.scope')}</dt><dd>{t('taskWizard.scopeSummary', { count: selected.length })}</dd></div>
+              <div><dt>{t('taskWizard.trigger')}</dt><dd>{type === 'manual' ? t('taskWizard.manual') : `${describeSchedule(effectiveCron)} · ${enabled ? t('taskWizard.enabled') : t('taskWizard.paused')}`}</dd></div>
+              {type === 'scheduled' && timezone && <div><dt>{t('taskWizard.timezone')}</dt><dd>{timezone}</dd></div>}
+              {type === 'scheduled' && enabled && scheduleQuery.data?.executions[0] && <div><dt>{t('taskWizard.nextRun')}</dt><dd>{formatExecution(scheduleQuery.data.executions[0], scheduleQuery.data.timezone, effectiveCron.split(/\s+/).length === 6)}</dd></div>}</dl></div>
             <div className="task-library-list">{selected.map(config => <div className="task-review-library" key={config.libraryId}><Folder size={16} /><strong>{config.libraryName}</strong><span>{templates.find(template => template.id === config.templateId)?.name}</span></div>)}</div>
-            <div className="task-review-note"><AlertCircle size={16} /><p>执行时会替换所选媒体库的封面。样张只用于预览，保存任务也不会立即上传。</p></div>
+            <div className="task-review-note"><AlertCircle size={16} /><p>{t('taskWizard.replaceHint')}</p></div>
           </>}
         </main>
-        <aside className="task-preview-sidebar"><div className="task-preview-title"><Eye size={17} /><strong>封面预览</strong><span>样张</span></div>
-          <label className="studio-field">预览媒体库<select className="studio-input" value={previewConfig?.libraryId || ''} disabled={!selected.length} onChange={event => setPreviewLibrary(event.target.value)}>
-            {!selected.length && <option value="">先选择媒体库</option>}{selected.map(config => <option key={config.libraryId} value={config.libraryId}>{config.libraryName}</option>)}</select></label>
-          <div className="task-cover-preview" style={{ aspectRatio: previewTemplate ? `${previewTemplate.width} / ${previewTemplate.height}` : '16 / 9' }}>{previewImage ? <img src={previewImage} alt={`${previewConfig?.libraryName} 的真实封面样张`} />
+        <aside className="task-preview-sidebar"><div className="task-preview-title"><Eye size={17} /><strong>{t('taskWizard.previewTitle')}</strong><span>{t('taskWizard.sample')}</span></div>
+          <label className="studio-field">{t('taskWizard.previewLibrary')}<select className="studio-input" value={previewConfig?.libraryId || ''} disabled={!selected.length} onChange={event => setPreviewLibrary(event.target.value)}>
+            {!selected.length && <option value="">{t('taskWizard.selectLibraryFirst')}</option>}{selected.map(config => <option key={config.libraryId} value={config.libraryId}>{config.libraryName}</option>)}</select></label>
+          <div className="task-cover-preview" style={{ aspectRatio: previewTemplate ? `${previewTemplate.width} / ${previewTemplate.height}` : '16 / 9' }}>{previewImage ? <img src={previewImage} alt={t('taskWizard.sampleAlt', { name: previewConfig?.libraryName || '' })} />
             : previewTemplate?.thumbnailPath ? <AuthenticatedImage src={`/templates/${previewTemplate.id}/thumbnail`} refreshKey={previewTemplate.updatedAt}
-                alt="模板示例，尚未生成真实样张" fallback={<div className="preview-placeholder"><Palette size={30} /><span>模板示例暂不可用，可点击下方按钮生成真实样张</span></div>} />
-              : <div className="preview-placeholder"><Palette size={30} /><span>{previewTemplate ? '点击下方按钮生成封面样张' : selected.length ? '选择模板后查看封面' : '选择媒体库开始配置'}</span></div>}</div>
-          <p className="studio-muted">{previewImage ? previewNote : previewTemplate?.thumbnailPath ? '当前为模板示例，点击下方按钮生成真实媒体库样张。' : '选好媒体库和模板后，可生成真实样张。'}</p>
+                alt={t('taskWizard.templateExample')} fallback={<div className="preview-placeholder"><Palette size={30} /><span>{t('taskWizard.exampleUnavailable')}</span></div>} />
+              : <div className="preview-placeholder"><Palette size={30} /><span>{previewTemplate ? t('taskWizard.generateHint') : selected.length ? t('taskWizard.chooseTemplateHint') : t('taskWizard.startHint')}</span></div>}</div>
+          <p className="studio-muted">{previewImage ? previewNote : previewTemplate?.thumbnailPath ? t('taskWizard.exampleHint') : t('taskWizard.previewHint')}</p>
+          {previewImage && coverPreview && getPreviewNoteDetails(coverPreview) && <ErrorDetails error={{ message: getPreviewNoteDetails(coverPreview) }} />}
           <button type="button" className="studio-secondary task-preview-button" disabled={!previewTemplate || !previewConfig || previewLoading || librariesQuery.isFetching || missingLibraries} onClick={() => void generatePreview()}>
-            {previewLoading ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}{previewLoading ? '正在生成样张…' : previewImage ? '重新生成真实样张' : '生成真实样张'}</button>
-          {previewError && <p className="studio-error" role="alert">{previewError}</p>}
-          <div className="task-preview-meta"><span>{previewTemplate?.name || '尚未选择模板'}</span><span>{previewTemplate ? `${previewTemplate.width} × ${previewTemplate.height}` : '封面尺寸'}</span></div>
-          <p className="task-preview-hint">样张会读取所选媒体库的真实海报，不上传或修改媒体服务器。</p>
+            {previewLoading ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}{previewLoading ? t('taskWizard.generating') : previewImage ? t('taskWizard.regenerate') : t('taskWizard.generate')}</button>
+          {previewError && <div role="alert"><p className="studio-error">{displayMessage(previewError)}</p>{'error' in previewError && <ErrorDetails error={previewError.error} />}</div>}
+          <div className="task-preview-meta"><span>{previewTemplate?.name || t('taskWizard.noTemplate')}</span><span>{previewTemplate ? `${previewTemplate.width} × ${previewTemplate.height}` : t('taskWizard.coverSize')}</span></div>
+          <p className="task-preview-hint">{t('taskWizard.readOnlyPreviewHint')}</p>
         </aside>
       </div>
-      <footer className="task-config-footer"><div>{configError ? <p className="studio-error" role="alert">{configError}</p> : <span>第 {step + 1} 步，共 4 步</span>}</div>
-        <div><button type="button" className="studio-secondary" disabled={saving} onClick={() => step ? setStep(step - 1) : onClose()}>{step ? <ArrowLeft size={14} /> : null}{step ? '上一步' : '取消'}</button>
-          {step < 3 ? <button type="button" className="studio-primary" onClick={goNext} disabled={saving}>下一步<ArrowRight size={14} /></button>
+      <footer className="task-config-footer"><div>{configError ? <div role="alert"><p className="studio-error">{displayMessage(configError)}</p>{'error' in configError && <ErrorDetails error={configError.error} />}</div> : <span>{t('taskWizard.stepCount', { step: step + 1, total: 4 })}</span>}</div>
+        <div><button type="button" className="studio-secondary" disabled={saving} onClick={() => step ? setStep(step - 1) : onClose()}>{step ? <ArrowLeft size={14} /> : null}{step ? t('taskWizard.back') : t('common.cancel')}</button>
+          {step < 3 ? <button type="button" className="studio-primary" onClick={goNext} disabled={saving}>{t('taskWizard.next')}<ArrowRight size={14} /></button>
             : <button type="button" className="studio-primary" disabled={saving || !libraryValid || !templatesValid || !sortsValid || !scheduleValid} onClick={() => void save()}>
-              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}{saving ? '正在保存…' : task ? '保存修改' : '创建任务'}</button>}</div>
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}{saving ? t('taskWizard.saving') : task ? t('taskWizard.saveChanges') : t('taskWizard.create')}</button>}</div>
       </footer>
     </DialogContent>
   </Dialog>;
