@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.8.0...v1.8.1) (2026-10-14)
+
+
+### 🐛 修复
+
+* add GitHub proxy settings for template store connectivity ([#10](https://github.com/HappyQuQu/library-cover-studio/issues/10)) ([df101a6](https://github.com/HappyQuQu/library-cover-studio/commit/df101a671f7f3c7b9b828e931bcfeae65dd8941a))
+
 ## [1.8.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.7.0...v1.8.0) (2026-10-14)
 
 
