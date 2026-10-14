@@ -101,9 +101,12 @@ jobs:
         shell: bash
         run: |
           pr_number="$(jq -er '.number' <<<"${PR_JSON}")"
+          # Only the generated PR head skips event CI; keep the merged release commit runnable.
+          pr_title="$(jq -er '.title | rtrimstr(" [skip ci]")' <<<"${PR_JSON}")"
           gh pr merge "${pr_number}" \
             --repo "${GITHUB_REPOSITORY}" \
             --squash \
+            --subject "${pr_title}" \
             --delete-branch
 
       - name: Finalize automatically merged release

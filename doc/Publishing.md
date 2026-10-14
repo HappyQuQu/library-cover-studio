@@ -17,6 +17,8 @@
 
 正式发布仍然串行执行，且不会因新提交直接取消正在进行的发布。PR 检查只读、不使用 Docker Hub 凭据；原生镜像构建与运行检查由同一个可复用工作流执行。首次使用新的架构缓存仍需完整构建，后续耗时取决于缓存命中和 runner 排队情况。
 
+自动生成的版本 PR 标题和分支提交带有 `[skip ci]`，避免重复触发需要人工审批的 PR 工作流；机器人创建 PR 后立即合并，未审批的工作流会过期并留下失败记录。自动合并时移除这个标记，正式版本提交及手动标签发布仍可正常触发检查。版本 PR 的实际校验由发布流程中的「Verify generated release commit」承担，最终镜像也必须通过两个架构的运行检查才发布；普通功能 PR 不受影响。
+
 ## 仓库配置
 
 在 **Settings → Actions → General** 开启 **Allow GitHub Actions to create and approve pull requests**。PR 检查保持只读，仅发布 job 取得必要写权限。
