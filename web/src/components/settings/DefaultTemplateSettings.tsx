@@ -1,3 +1,5 @@
+import { getLocalizedApiError } from '@/lib/apiError';
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RotateCcw, Loader2 } from 'lucide-react';
@@ -14,6 +16,7 @@ interface DefaultTemplateStatus {
 }
 
 export function DefaultTemplateSettings() {
+  const { t, i18n } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const queryClient = useQueryClient();
@@ -32,50 +35,50 @@ export function DefaultTemplateSettings() {
         queryClient.invalidateQueries({ queryKey: ['template-history'] }),
         queryClient.invalidateQueries({ queryKey: ['default-template-status'] })
       ]);
-      toast({ title: result.restored + result.recreated ? '默认模板已还原' : '默认模板已是初始状态',
+      toast({ title: result.restored + result.recreated ? i18n.t('defaultTemplates.restored') : i18n.t('defaultTemplates.unchanged'),
         description: result.restored + result.recreated
-          ? `已还原 ${result.restored} 套，补回 ${result.recreated} 套。还原前的设计已保留在历史中。`
-          : `当前 ${result.total} 套默认模板完整且已锁定。` });
+          ? i18n.t('defaultTemplates.restoredHint', { restored: result.restored, recreated: result.recreated })
+          : i18n.t('defaultTemplates.complete', { count: result.total }) });
     } catch (error: any) {
-      toast({ title: '还原失败', description: error.response?.data?.error?.message || '请稍后重试', variant: 'destructive' });
+      toast({ title: i18n.t('defaultTemplates.failed'), description: getLocalizedApiError(error), variant: 'destructive' });
     } finally { setRestoring(false); }
   }
 
-  return <section aria-label="默认模板恢复" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)' }}>
+  return <section aria-label={t('defaultTemplates.section')} style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-color)' }}>
     <div className="flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-0 flex-1">
-        <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>还原默认模板</h3>
+        <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('defaultTemplates.title')}</h3>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
-          恢复项目内置的布局、文字、背景和预览图，补回已删除的默认模板，并重新锁定。
+          {t('defaultTemplates.hint')}
         </p>
-        {isLoading ? <p className="mt-2 text-xs text-(--text-tertiary)">正在读取默认模板…</p>
-          : isError ? <div className="mt-2 flex items-center gap-2 text-xs">模板状态加载失败<Button variant="ghost" size="sm" onClick={() => refetch()}>重试</Button></div>
+        {isLoading ? <p className="mt-2 text-xs text-(--text-tertiary)">{t('defaultTemplates.loading')}</p>
+          : isError ? <div className="mt-2 flex items-center gap-2 text-xs">{t('defaultTemplates.loadFailed')}<Button variant="ghost" size="sm" onClick={() => refetch()}>{t('common.retry')}</Button></div>
           : data && <p className="mt-2 text-xs text-(--text-secondary)">
-            共 {data.total} 套默认模板 · {data.modified} 套有修改 · {data.missing} 套已删除
+            {t('defaultTemplates.status', { total: data.total, modified: data.modified, missing: data.missing })}
           </p>}
       </div>
       <Button className="btn btn-secondary shrink-0" disabled={restoring || isLoading || isError} onClick={() => setConfirming(true)}>
         {restoring ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
-        {restoring ? '正在还原…' : '一键还原默认模板'}
+        {restoring ? t('defaultTemplates.restoring') : t('defaultTemplates.restoreAll')}
       </Button>
     </div>
     <Dialog open={confirming} onOpenChange={value => { if (!restoring) setConfirming(value); }}>
       <DialogContent style={{ width: 'calc(100vw - 32px)', maxWidth: 560 }}>
         <DialogHeader>
-          <DialogTitle>还原全部默认模板？</DialogTitle>
-          <DialogDescription>将恢复以下 {data?.total || 0} 套模板到项目内置版本。自建模板和复制模板会保留。</DialogDescription>
+          <DialogTitle>{t('defaultTemplates.confirmTitle')}</DialogTitle>
+          <DialogDescription>{t('defaultTemplates.confirmHint', { count: data?.total || 0 })}</DialogDescription>
         </DialogHeader>
-        <div className="my-4 flex flex-wrap gap-2" aria-label="将恢复的默认模板">
+        <div className="my-4 flex flex-wrap gap-2" aria-label={t('defaultTemplates.listLabel')}>
           {data?.templates.map(template => <span key={template.id} className="rounded-lg bg-(--bg-secondary) px-3 py-2 text-xs">
-            {template.name}{template.state === 'missing' ? ' · 补回' : template.state === 'modified' ? ' · 还原' : ''}
+            {template.name}{template.state === 'missing' ? t('defaultTemplates.recreateBadge') : template.state === 'modified' ? t('defaultTemplates.restoreBadge') : ''}
           </span>)}
         </div>
-        <p className="mb-3 text-sm text-(--text-secondary)">还原前的已保存设计会存入各模板的历史，保留最近 50 条。还原后默认锁定，解锁后可从历史找回修改。</p>
-        <p className="mb-5 text-xs text-(--text-tertiary)">使用默认模板的自动化任务将在下次生成时采用恢复后的样式。</p>
+        <p className="mb-3 text-sm text-(--text-secondary)">{t('defaultTemplates.historyHint')}</p>
+        <p className="mb-5 text-xs text-(--text-tertiary)">{t('defaultTemplates.taskHint')}</p>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setConfirming(false)} disabled={restoring}>取消</Button>
+          <Button variant="outline" onClick={() => setConfirming(false)} disabled={restoring}>{t('common.cancel')}</Button>
           <Button onClick={restore} disabled={restoring}>
-            {restoring && <Loader2 size={16} className="mr-2 animate-spin" />}{restoring ? '正在还原…' : '确认还原默认模板'}
+            {restoring && <Loader2 size={16} className="mr-2 animate-spin" />}{restoring ? t('defaultTemplates.restoring') : t('defaultTemplates.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

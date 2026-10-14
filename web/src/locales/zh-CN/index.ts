@@ -1,0 +1,24 @@
+import aiChat from './aiChat';
+import defaultTemplates from './defaultTemplates';
+import networkSettings from './networkSettings';
+import aiSettings from './aiSettings';
+import templateStore from './templateStore';
+import schedule from './schedule';
+import taskHistory from './taskHistory';
+import taskWizard from './taskWizard';
+import templateHistory from './templateHistory';
+import templateMetadata from './templateMetadata';
+import about from './about';
+import releases from './releases';
+import errors from './errors';
+import templates from './templates';
+import dashboard from './dashboard';
+import common from './common';
+import nav from './navigation';
+import designer from './designer';
+import servers from './servers';
+import tasks from './tasks';
+import auth from './auth';
+import settings from './settings';
+
+export default { aiChat, defaultTemplates, networkSettings, aiSettings, templateStore, schedule, taskHistory, taskWizard, templateHistory, templateMetadata, common, nav, designer, servers, tasks, auth, settings, dashboard, templates, errors, releases, about } as const;

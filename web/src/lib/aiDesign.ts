@@ -1,3 +1,5 @@
+import i18n from './i18n';
+import { CodedError } from './codedError';
 export type DesignScope = 'new' | 'canvas' | 'selection';
 export type CanvasJSON = Record<string, any> & { objects: Record<string, any>[] };
 
@@ -26,15 +28,15 @@ function restoreAsset(object: Record<string, any>, original?: Record<string, any
 
 /** Enforce edit boundaries even when a model returns changes outside the requested scope. */
 export function constrainDesign(result: CanvasJSON, baseline: CanvasJSON, scope: DesignScope, selectedIds: string[]): CanvasJSON {
-  if (!result || !Array.isArray(result.objects)) throw new Error('AI 返回的设计格式无效，请重试');
-  if (result.objects.some(object => !object || typeof object !== 'object')) throw new Error('AI 返回的图层格式无效，请重试');
+  if (!result || !Array.isArray(result.objects)) throw new CodedError('AI_INVALID_CANVAS');
+  if (result.objects.some(object => !object || typeof object !== 'object')) throw new CodedError('AI_INVALID_CANVAS');
   const ids = result.objects.map(object => object.id).filter(Boolean);
-  if (new Set(ids).size !== ids.length) throw new Error('AI 返回了重复的图层标识，请重试');
+  if (new Set(ids).size !== ids.length) throw new CodedError('AI_DUPLICATE_IDS');
   const originalById = new Map(baseline.objects.map(object => [object.id, object]));
   const generatedById = new Map(result.objects.map(object => [object.id, object]));
   if (scope === 'selection') {
-    if (!selectedIds.length) throw new Error('请先选择要修改的图层');
-    if (selectedIds.some(id => !generatedById.has(id))) throw new Error('AI 未保留选中图层的标识，请重试');
+    if (!selectedIds.length) throw new CodedError('AI_SELECTION_REQUIRED');
+    if (selectedIds.some(id => !generatedById.has(id))) throw new CodedError('AI_SELECTION_MISSING');
     return { ...baseline, objects: baseline.objects.map(object =>
       selectedIds.includes(object.id) && !isLocked(object)
         ? restoreAsset(generatedById.get(object.id)!, object) : object) };
@@ -57,19 +59,24 @@ export function constrainDesign(result: CanvasJSON, baseline: CanvasJSON, scope:
   return next;
 }
 
-export function describeChanges(baseline: CanvasJSON, result: CanvasJSON, scope: DesignScope): string[] {
-  if (scope === 'new') return ['生成新的封面布局', '保留已有锁定图层'];
+export function describeChangeKeys(baseline: CanvasJSON, result: CanvasJSON, scope: DesignScope) {
+  if (scope === 'new') return ['aiChat.changeNew', 'aiChat.changeLocked'] as const;
   const originals = new Map(baseline.objects.map(object => [object.id, object]));
-  const labels = new Set<string>();
+  const labels = new Set<'aiChat.changeAdded' | 'aiChat.changeText' | 'aiChat.changeLayout' | 'aiChat.changeStyle' | 'aiChat.changeRemoved' | 'aiChat.changeBackground'>();
   const changed = (a: any, b: any, keys: string[]) => keys.some(key => JSON.stringify(a[key]) !== JSON.stringify(b[key]));
   for (const object of result.objects) {
     const original = originals.get(object.id);
-    if (!original) { labels.add('新增设计元素'); continue; }
-    if (changed(original, object, ['text', 'fontSize', 'fontFamily', 'fontWeight', 'textAlign', 'lineHeight', 'charSpacing'])) labels.add('调整文字与标题排版');
-    if (changed(original, object, ['left', 'top', 'width', 'height', 'scaleX', 'scaleY', 'angle'])) labels.add('调整图层位置与排列');
-    if (changed(original, object, ['fill', 'stroke', 'opacity', 'shadow', 'rx', 'ry'])) labels.add('调整配色与视觉效果');
+    if (!original) { labels.add('aiChat.changeAdded'); continue; }
+    if (changed(original, object, ['text', 'fontSize', 'fontFamily', 'fontWeight', 'textAlign', 'lineHeight', 'charSpacing'])) labels.add('aiChat.changeText');
+    if (changed(original, object, ['left', 'top', 'width', 'height', 'scaleX', 'scaleY', 'angle'])) labels.add('aiChat.changeLayout');
+    if (changed(original, object, ['fill', 'stroke', 'opacity', 'shadow', 'rx', 'ry'])) labels.add('aiChat.changeStyle');
   }
-  if (baseline.objects.some(object => !result.objects.some(next => next.id === object.id))) labels.add('精简设计元素');
-  if (changed(baseline, result, ['background', 'backgroundImage', 'posterBackground'])) labels.add('调整封面背景');
-  return labels.size ? [...labels] : ['设计内容保持不变，可补充更具体的调整要求'];
+  if (baseline.objects.some(object => !result.objects.some(next => next.id === object.id))) labels.add('aiChat.changeRemoved');
+  if (changed(baseline, result, ['background', 'backgroundImage', 'posterBackground'])) labels.add('aiChat.changeBackground');
+  return labels.size ? [...labels] : ['aiChat.changeUnchanged'] as const;
+}
+
+/** Compatibility helper; chat state stores keys rather than these display strings. */
+export function describeChanges(baseline: CanvasJSON, result: CanvasJSON, scope: DesignScope): string[] {
+  return describeChangeKeys(baseline, result, scope).map(key => i18n.t(key));
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   Server,
@@ -12,38 +13,46 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useServers, useTemplates, useTasks, useStats } from '@/api';
+import { formatDisplayDate, formatDisplayNumber } from '@/lib/displayFormat';
 
 export function DashboardPage() {
-  const { data: servers = [] } = useServers();
-  const { data: templates = [] } = useTemplates();
-  const { data: tasks = [] } = useTasks();
-  const { data: statsData } = useStats();
+  const { t, i18n } = useTranslation();
+  const serversQuery = useServers();
+  const templatesQuery = useTemplates();
+  const tasksQuery = useTasks();
+  const statsQuery = useStats();
+  const { data: servers = [] } = serversQuery;
+  const { data: templates = [] } = templatesQuery;
+  const { data: tasks = [] } = tasksQuery;
+  const { data: statsData } = statsQuery;
+  const queries = [serversQuery, templatesQuery, tasksQuery, statsQuery];
+  const loading = queries.some(query => query.isPending);
 
   const stats = [
-    { title: '媒体源', value: servers.length, icon: Server, color: '#6366f1' },
-    { title: '设计模板', value: templates.length, icon: Palette, color: '#ec4899' },
-    { title: '自动化任务', value: tasks.length, icon: Clock, color: '#f59e0b' },
-    { title: '本月生成', value: statsData?.monthlyGenerated ?? '0', icon: TrendingUp, color: '#22c55e' },
+    { title: t('dashboard.sources'), value: servers.length, icon: Server, color: '#6366f1' },
+    { title: t('dashboard.templates'), value: templates.length, icon: Palette, color: '#ec4899' },
+    { title: t('dashboard.tasks'), value: tasks.length, icon: Clock, color: '#f59e0b' },
+    { title: t('dashboard.monthlyGenerated'), value: statsData?.monthlyGenerated ?? '0', icon: TrendingUp, color: '#22c55e' },
   ];
 
   const quickActions = [
     {
-      title: '连接服务器',
-      description: '添加 Jellyfin / Emby 服务器，同步媒体库数据',
+      title: t('dashboard.connect'),
+      description: t('dashboard.connectDescription'),
       icon: Server,
       to: '/servers',
       gradient: 'gradient-purple-blue',
     },
     {
-      title: '创建模板',
-      description: '使用可视化编辑器，设计精美的海报风格',
+      title: t('dashboard.create'),
+      description: t('dashboard.createDescription'),
       icon: Palette,
       to: '/editor',
       gradient: 'gradient-pink',
     },
     {
-      title: '自动化',
-      description: '设置定时任务，自动批量生成封面',
+      title: t('dashboard.automate'),
+      description: t('dashboard.automateDescription'),
       icon: Zap,
       to: '/tasks',
       gradient: 'gradient-orange',
@@ -53,25 +62,25 @@ export function DashboardPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '30px', fontWeight: 700, color: 'var(--text-primary)' }}>
-            仪表盘
+            {t('dashboard.title')}
           </h1>
           <p style={{ fontSize: '16px', marginTop: '8px', color: 'var(--text-secondary)' }}>
-            欢迎回来，开始美化你的媒体库
+            {t('dashboard.welcome')}
           </p>
         </div>
         <Link to="/editor">
           <Button className="btn btn-primary">
             <Sparkles className="w-4 h-4" />
-            开始创作
+            {t('dashboard.startDesigning')}
           </Button>
         </Link>
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+      <div className="dashboard-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
         {stats.map((stat, i) => (
           <div key={i} className="stat-card group">
             <div
@@ -80,18 +89,24 @@ export function DashboardPage() {
             >
               <stat.icon style={{ width: 24, height: 24, color: stat.color }} />
             </div>
-            <div className="stat-value">{stat.value}</div>
+            <div className="stat-value">{loading || queries[i].isError ? '—' : formatDisplayNumber(Number(stat.value), i18n.resolvedLanguage || 'zh-CN')}</div>
             <div className="stat-label">{stat.title}</div>
           </div>
         ))}
       </div>
 
+      {loading && <p role="status">{t('common.loading')}</p>}
+      {queries.some(query => query.isError) && <div className="card card-body" role="alert">
+        <p>{t('dashboard.loadFailed')}</p>
+        <Button variant="outline" onClick={() => queries.forEach(query => void query.refetch())}>{t('common.retry')}</Button>
+      </div>}
+
       {/* Quick Actions */}
       <div>
         <h2 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '16px', color: 'var(--text-primary)' }}>
-          快速开始
+          {t('dashboard.quickStart')}
         </h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+        <div className="dashboard-quick-actions" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
           {quickActions.map((action, i) => (
             <Link key={i} to={action.to}>
               <div className="action-card h-full group">
@@ -119,7 +134,7 @@ export function DashboardPage() {
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 500, color: 'var(--primary)' }}>
                   <Play style={{ width: 12, height: 12 }} />
-                  开始
+                  {t('dashboard.start')}
                 </div>
               </div>
             </Link>
@@ -142,7 +157,7 @@ export function DashboardPage() {
             background: 'linear-gradient(135deg, rgba(99,102,241,0.3), rgba(168,85,247,0.2))'
           }}
         />
-        <div style={{ position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', gap: 32 }}>
+        <div className="dashboard-banner" style={{ position: 'relative', zIndex: 10, display: 'flex', alignItems: 'center', gap: 32 }}>
           <div
             className="gradient-pink"
             style={{
@@ -160,15 +175,15 @@ export function DashboardPage() {
           </div>
           <div style={{ flex: 1 }}>
             <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8, color: 'var(--text-primary)' }}>
-              专业级海报设计器
+              {t('dashboard.featureTitle')}
             </h3>
             <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)', maxWidth: 600 }}>
-              使用强大的 Canvas 编辑器，支持动态变量、图层管理、实时预览。让你的媒体库封面整齐划一，告别杂乱无章。
+              {t('dashboard.featureDescription')}
             </p>
           </div>
           <Link to="/editor">
             <Button className="btn btn-secondary" style={{ flexShrink: 0 }}>
-              立即体验
+              {t('dashboard.tryNow')}
               <ArrowRight style={{ width: 16, height: 16 }} />
             </Button>
           </Link>
@@ -179,10 +194,10 @@ export function DashboardPage() {
       <div className="card">
         <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Clock style={{ width: 20, height: 20, color: 'var(--text-tertiary)' }} />
-          最近活动
+          {t('dashboard.recentActivity')}
         </div>
         <div className="card-body">
-          {tasks.length > 0 ? (
+          {tasksQuery.isError ? <p>{t('dashboard.loadFailed')}</p> : tasksQuery.isPending ? <p role="status">{t('common.loading')}</p> : tasks.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {tasks.slice(0, 3).map(task => (
                 <div key={task.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: 12 }}>
@@ -204,12 +219,12 @@ export function DashboardPage() {
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{task.name}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 2 }}>
-                        {task.lastRunAt ? `最后运行: ${new Date(task.lastRunAt).toLocaleTimeString()}` : '尚未运行'}
+                        {task.lastRunAt ? t('dashboard.lastRun', { time: formatDisplayDate(task.lastRunAt, i18n.resolvedLanguage || 'zh-CN', { hour: '2-digit', minute: '2-digit' }) || t('common.unknownTime') }) : t('dashboard.neverRun')}
                       </div>
                     </div>
                   </div>
                   <Link to="/tasks">
-                    <button className="btn-ghost" style={{ fontSize: 12 }}>管理</button>
+                    <button className="btn-ghost" style={{ fontSize: 12 }}>{t('dashboard.manage')}</button>
                   </Link>
                 </div>
               ))}
@@ -219,9 +234,9 @@ export function DashboardPage() {
               <div className="empty-state-icon">
                 <Clock style={{ width: 32, height: 32 }} />
               </div>
-              <div className="empty-state-title">暂无活动</div>
+              <div className="empty-state-title">{t('dashboard.noActivity')}</div>
               <div className="empty-state-description">
-                开始使用后，你的操作记录将显示在这里
+                {t('dashboard.activityHint')}
               </div>
             </div>
           )}

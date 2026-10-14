@@ -40,9 +40,9 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         <div className="w-16 h-16 rounded-2xl bg-(--bg-tertiary) flex items-center justify-center mb-4 shadow-inner">
           <MousePointer2 className="w-8 h-8 text-(--text-tertiary)" />
         </div>
-        <h4 className="text-sm font-semibold text-(--text-secondary)">{t('designer.noSelection', '未选择对象')}</h4>
+        <h4 className="text-sm font-semibold text-(--text-secondary)">{t('designer.noSelection')}</h4>
         <p className="text-xs text-(--text-tertiary) mt-2 max-w-[200px] leading-relaxed">
-          {t('designer.selectionHint', '点击画布上的元素来编辑其属性，或从侧边栏添加新元素')}
+          {t('designer.selectionHint')}
         </p>
       </div>
     );
@@ -61,7 +61,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           onClick={onDelete}
         >
           <Trash2 className="w-3.5 h-3.5 mr-1.5" />
-          {t('common.delete', '删除')}
+          {t('common.delete')}
         </Button>
         <Button
           variant="outline"
@@ -70,7 +70,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           onClick={onClone}
         >
           <Copy className="w-3.5 h-3.5 mr-1.5" />
-          {t('designer.duplicate', '复制')}
+          {t('designer.duplicate')}
         </Button>
       </div>
 
@@ -78,7 +78,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
       <section>
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-[10px] font-bold text-(--text-tertiary) uppercase tracking-wider">
-            {t('designer.layout', '布局')}
+            {t('designer.layout')}
           </h4>
           <span className="text-[10px] bg-(--bg-tertiary) px-1.5 py-0.5 rounded text-(--text-tertiary) font-mono">
             {selectedObject.type}
@@ -87,7 +87,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">X</label>
-            <Input
+            <Input aria-label={t('designer.positionX')}
               type="number"
               value={Math.round(selectedObject.left || 0)}
               className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
@@ -96,7 +96,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           </div>
           <div className="space-y-1.5">
             <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">Y</label>
-            <Input
+            <Input aria-label={t('designer.positionY')}
               type="number"
               value={Math.round(selectedObject.top || 0)}
               className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
@@ -104,8 +104,8 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.width', '宽度')}</label>
-            <Input
+            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.width')}</label>
+            <Input aria-label={t('common.width')}
               type="number"
               value={Math.round(selectedObject.getScaledWidth ? selectedObject.getScaledWidth() : (selectedObject.width * (selectedObject.scaleX || 1)))}
               className="h-8 text-xs bg-(--bg-tertiary) border-transparent text-(--text-secondary) font-mono"
@@ -113,8 +113,8 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.height', '高度')}</label>
-            <Input
+            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('common.height')}</label>
+            <Input aria-label={t('common.height')}
               type="number"
               value={Math.round(selectedObject.getScaledHeight ? selectedObject.getScaledHeight() : (selectedObject.height * (selectedObject.scaleY || 1)))}
               className="h-8 text-xs bg-(--bg-tertiary) border-transparent text-(--text-secondary) font-mono"
@@ -122,15 +122,15 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             />
           </div>
           <div className="col-span-2 space-y-1.5">
-            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.rotation', '旋转角度')}</label>
+            <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.rotation')}</label>
             <div className="flex items-center gap-2">
-              <Input
+              <Input aria-label={t('designer.rotation')}
                 type="number"
                 value={Math.round(selectedObject.angle || 0) % 360}
                 className="h-8 text-xs bg-(--bg-primary) border-(--border-color) focus:border-(--primary) transition-all font-mono text-(--text-primary)"
                 onChange={(e) => onPropertyChange('angle', parseInt(e.target.value))}
               />
-              <input
+              <input aria-label={t('designer.rotation')}
                 type="range"
                 min="0"
                 max="360"
@@ -154,7 +154,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             activeTab === 'style' ? "bg-white text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)"
           )}
         >
-          {t('designer.appearance', '外观')}
+          {t('designer.appearance')}
         </button>
         <button
           onClick={() => setActiveTab('shadow')}
@@ -163,7 +163,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             activeTab === 'shadow' ? "bg-white text-(--primary) shadow-sm" : "text-(--text-tertiary) hover:text-(--text-secondary)"
           )}
         >
-          {t('designer.shadow', '阴影')}
+          {t('designer.shadow')}
         </button>
       </div>
 
@@ -173,10 +173,10 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           <section className="space-y-4 animate-fade-in">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-(--text-secondary)">{t('designer.fillColor', '填充颜色')}</span>
+                <span className="text-xs font-medium text-(--text-secondary)">{t('designer.fillColor')}</span>
                 <div className="flex items-center gap-2 bg-(--bg-tertiary) pl-2 pr-1 py-1 rounded-md border border-(--border-color)">
                   <span className="text-[10px] font-mono text-(--text-tertiary) uppercase">{selectedObject.fill?.toString()}</span>
-                  <input
+                  <input aria-label={t('designer.fillColor')}
                     type="color"
                     value={toHex(selectedObject.fill)}
                     className="w-5 h-5 p-0 border-none bg-transparent cursor-pointer rounded overflow-hidden"
@@ -188,10 +188,10 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-(--text-secondary)">{t('designer.opacity', '不透明度')}</span>
+                <span className="text-xs font-medium text-(--text-secondary)">{t('designer.opacity')}</span>
                 <span className="text-[10px] font-medium text-(--text-tertiary)">{Math.round(selectedObject.opacity * 100)}%</span>
               </div>
-              <input
+              <input aria-label={t('designer.opacity')}
                 type="range"
                 min="0"
                 max="1"
@@ -213,10 +213,10 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               return (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-(--text-secondary)">圆角</span>
+                    <span className="text-xs font-medium text-(--text-secondary)">{t('designer.cornerRadius')}</span>
                     <span className="text-[10px] font-medium text-(--text-tertiary)">{visualRadius}px</span>
                   </div>
-                  <input
+                  <input aria-label={t('designer.cornerRadius')}
                     type="range"
                     min="0"
                     max="100"
@@ -253,38 +253,38 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             <section className="animate-fade-in pt-4 border-t border-(--border-color) space-y-4">
               {/* Font Family */}
               <div className="space-y-1.5">
-                <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontFamily', '字体')}</label>
-                <select
+                <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontFamily')}</label>
+                <select aria-label={t('designer.fontFamily')}
                   value={selectedObject.fontFamily || 'Arial'}
                   onChange={(e) => onPropertyChange('fontFamily', e.target.value)}
                   className="w-full h-8 text-xs bg-(--bg-primary) border border-(--border-color) rounded-md px-2 focus:border-(--primary) transition-all text-(--text-primary)"
                 >
-                  <optgroup label="无衬线字体">
+                  <optgroup label={t('designer.sansFonts')}>
                     <option value="Arial">Arial</option>
                     <option value="Helvetica">Helvetica</option>
-                    <option value="Microsoft YaHei">微软雅黑</option>
-                    <option value="PingFang SC">苹方</option>
-                    <option value="Noto Sans SC">思源黑体</option>
-                    <option value="sans-serif">系统默认无衬线</option>
+                    <option value="Microsoft YaHei">{t('designer.yahei')}</option>
+                    <option value="PingFang SC">{t('designer.pingfang')}</option>
+                    <option value="Noto Sans SC">{t('designer.notoSans')}</option>
+                    <option value="sans-serif">{t('designer.systemSans')}</option>
                   </optgroup>
-                  <optgroup label="衬线字体">
+                  <optgroup label={t('designer.serifFonts')}>
                     <option value="Times New Roman">Times New Roman</option>
                     <option value="Georgia">Georgia</option>
-                    <option value="SimSun">宋体</option>
-                    <option value="Noto Serif SC">思源宋体</option>
-                    <option value="serif">系统默认衬线</option>
+                    <option value="SimSun">{t('designer.simsun')}</option>
+                    <option value="Noto Serif SC">{t('designer.notoSerif')}</option>
+                    <option value="serif">{t('designer.systemSerif')}</option>
                   </optgroup>
-                  <optgroup label="等宽字体">
+                  <optgroup label={t('designer.monoFonts')}>
                     <option value="Courier New">Courier New</option>
                     <option value="Consolas">Consolas</option>
-                    <option value="monospace">系统默认等宽</option>
+                    <option value="monospace">{t('designer.systemMono')}</option>
                   </optgroup>
-                  <optgroup label="艺术字体">
+                  <optgroup label={t('designer.displayFonts')}>
                     <option value="Impact">Impact</option>
                     <option value="Comic Sans MS">Comic Sans MS</option>
                   </optgroup>
                   {customFonts.length > 0 && (
-                    <optgroup label="上传字体">
+                    <optgroup label={t('designer.uploadedFonts')}>
                       {customFonts.map(font => (
                         <option key={font.filename} value={font.name}>{font.name}</option>
                       ))}
@@ -295,8 +295,8 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontSize', '字号')}</label>
-                  <Input
+                  <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.fontSize')}</label>
+                  <Input aria-label={t('designer.fontSize')}
                     type="number"
                     value={selectedObject.fontSize}
                     className="h-8 text-xs bg-(--bg-primary) border-(--border-color)"
@@ -304,8 +304,8 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">行高</label>
-                  <Input
+                  <label className="text-[10px] text-(--text-tertiary) font-medium ml-1">{t('designer.lineHeight')}</label>
+                  <Input aria-label={t('designer.lineHeight')}
                     type="number"
                     value={selectedObject.lineHeight || 1}
                     step="0.1"
@@ -316,15 +316,15 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               </div>
 
               <div className="flex gap-1 bg-(--bg-tertiary) p-1 rounded-lg">
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.fontWeight === 'bold' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontWeight', selectedObject.fontWeight === 'bold' ? 'normal' : 'bold')}>B</Button>
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 italic", selectedObject.fontStyle === 'italic' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('fontStyle', selectedObject.fontStyle === 'italic' ? 'normal' : 'italic')}>I</Button>
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 underline", selectedObject.underline && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('underline', !selectedObject.underline)}>U</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.fontWeight === 'bold' && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.fontWeight')} onClick={() => onPropertyChange('fontWeight', selectedObject.fontWeight === 'bold' ? 'normal' : 'bold')}>B</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 italic", selectedObject.fontStyle === 'italic' && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.fontStyle')} onClick={() => onPropertyChange('fontStyle', selectedObject.fontStyle === 'italic' ? 'normal' : 'italic')}>I</Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0 underline", selectedObject.underline && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.underline')} onClick={() => onPropertyChange('underline', !selectedObject.underline)}>U</Button>
               </div>
 
               <div className="flex gap-1 bg-(--bg-tertiary) p-1 rounded-lg">
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'left' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'left')}><AlignLeft className="w-3.5 h-3.5" /></Button>
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'center' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'center')}><AlignCenter className="w-3.5 h-3.5" /></Button>
-                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'right' && "bg-white text-(--primary) shadow-sm")} onClick={() => onPropertyChange('textAlign', 'right')}><AlignRight className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'left' && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.alignLeft')} onClick={() => onPropertyChange('textAlign', 'left')}><AlignLeft className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'center' && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.alignCenter')} onClick={() => onPropertyChange('textAlign', 'center')}><AlignCenter className="w-3.5 h-3.5" /></Button>
+                <Button variant="ghost" size="sm" className={cn("flex-1 h-7 p-0", selectedObject.textAlign === 'right' && "bg-white text-(--primary) shadow-sm")} aria-label={t('designer.alignRight')} onClick={() => onPropertyChange('textAlign', 'right')}><AlignRight className="w-3.5 h-3.5" /></Button>
               </div>
             </section>
           )}
@@ -332,12 +332,12 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
           {/* Variable Binding - Text Only */}
           {isText && (() => {
             const TEXT_VARS = [
-              { var: '{{primary_title}}', label: '主标题', desc: '媒体库名称' },
-              { var: '{{secondary_title}}', label: '副标题', desc: '自定义副标题文字' },
-              { var: '{{title}}', label: '媒体标题', desc: '媒体项目标题' },
-              { var: '{{year}}', label: '年份', desc: '发行年份' },
-              { var: '{{rating}}', label: '评分', desc: '评分，如 8.5' },
-              { var: '{{genres}}', label: '类型', desc: '媒体类型，如 动作 / 剧情' },
+              { var: '{{primary_title}}', label: t('designer.primaryTitle'), desc: t('designer.libraryName') },
+              { var: '{{secondary_title}}', label: t('designer.secondaryTitle'), desc: t('designer.secondaryTitleDescription') },
+              { var: '{{title}}', label: t('designer.mediaTitle'), desc: t('designer.mediaTitleDescription') },
+              { var: '{{year}}', label: t('designer.year'), desc: t('designer.yearDescription') },
+              { var: '{{rating}}', label: t('designer.rating'), desc: t('designer.ratingDescription') },
+              { var: '{{genres}}', label: t('designer.genres'), desc: t('designer.genresDescription') },
             ];
             const boundVar = TEXT_VARS.find(v => selectedObject.textVar === v.var);
             return (
@@ -345,11 +345,11 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
                     <Wand2 className="w-3 h-3 text-(--primary)" />
-                    {t('designer.placeholder', '变量绑定')}
+                    {t('designer.placeholder')}
                   </span>
                   {boundVar && (
                     <span className="text-[10px] text-green-600 flex items-center gap-0.5 font-medium">
-                      <Check className="w-2.5 h-2.5" /> 已绑定
+                      <Check className="w-2.5 h-2.5" /> {t('designer.bound')}
                     </span>
                   )}
                 </div>
@@ -359,7 +359,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                   <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200">
                     <Check className="w-3 h-3 text-green-600 shrink-0" />
                     <span className="text-[11px] text-green-700 leading-relaxed flex-1">
-                      渲染时显示 <strong>{boundVar.desc}</strong>，原文字不变
+                      {t('designer.boundDescription', { description: boundVar.desc })}
                     </span>
                   </div>
                 )}
@@ -374,7 +374,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                           // 已绑定 → 点击取消绑定；未绑定 → 设置 textVar（不改 text）
                           onPropertyChange('textVar', isActive ? '' : item.var);
                         }}
-                        title={isActive ? '点击取消绑定' : `渲染时替换为：${item.desc}（不改变原文字）`}
+                        title={isActive ? t('designer.unbind') : t('designer.bindDescription', { description: item.desc })}
                         className={cn(
                           "flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-medium border transition-all",
                           isActive
@@ -391,7 +391,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
 
                 {!boundVar && (
                   <p className="text-[10px] text-(--text-tertiary) leading-relaxed">
-                    点击标签绑定变量，渲染时自动替换，不改变画布中的文字内容
+                    {t('designer.bindingHint')}
                   </p>
                 )}
               </section>
@@ -404,7 +404,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-bold text-(--text-secondary) uppercase flex items-center gap-1.5">
                   <Wand2 className="w-3 h-3 text-(--primary)" />
-                  海报变量
+                  {t('designer.posterVariable')}
                 </span>
               </div>
               <div className="grid grid-cols-3 gap-1.5">
@@ -423,11 +423,11 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                           ? "ring-2 ring-(--primary) border-transparent"
                           : "border-(--border-color) hover:border-(--primary) hover:shadow-sm"
                       )}
-                      title={`切换到海报 ${i + 1}`}
+                      title={t('designer.switchPoster', { number: i + 1 })}
                     >
                       <img
                         src={imgUrl}
-                        alt={`Poster ${i + 1}`}
+                        alt={t('designer.posterNumber', { number: i + 1 })}
                         className="w-full h-full object-cover"
                         loading="lazy"
                       />
@@ -445,7 +445,7 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               </div>
               {selectedObject.posterVar && (
                 <p className="text-[10px] text-(--text-tertiary)">
-                  当前绑定: <code className="text-(--primary)">{`{{${selectedObject.posterVar}}}`}</code>
+                  {t('designer.currentBinding', { variable: `{{${selectedObject.posterVar}}}` })}
                 </p>
               )}
             </section>
@@ -455,8 +455,8 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
         /* Shadow Controls */
         <section className="space-y-5 animate-fade-in">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-(--text-secondary)">启用阴影</span>
-            <input
+            <span className="text-xs font-medium text-(--text-secondary)">{t('designer.enableShadow')}</span>
+            <input aria-label={t('designer.enableShadow')}
               type="checkbox"
               checked={!!selectedObject.shadow}
               onChange={(e) => {
@@ -471,10 +471,10 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
             <>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-(--text-tertiary)">模糊度</span>
+                  <span className="text-xs font-medium text-(--text-tertiary)">{t('designer.shadowBlur')}</span>
                   <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.blur}px</span>
                 </div>
-                <input
+                <input aria-label={t('designer.shadowBlur')}
                   type="range" min="0" max="50"
                   value={selectedObject.shadow.blur || 0}
                   onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, blur: parseInt(e.target.value) })}
@@ -483,10 +483,10 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-(--text-tertiary)">偏移量</span>
+                  <span className="text-xs font-medium text-(--text-tertiary)">{t('designer.shadowOffset')}</span>
                   <span className="text-[10px] text-(--text-tertiary)">{selectedObject.shadow.offsetX}px</span>
                 </div>
-                <input
+                <input aria-label={t('designer.shadowOffset')}
                   type="range" min="-50" max="50"
                   value={selectedObject.shadow.offsetX || 0}
                   onChange={(e) => onPropertyChange('shadow', {
@@ -498,9 +498,9 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 />
               </div>
               <div className="space-y-2">
-                <span className="text-xs font-medium text-(--text-tertiary)">颜色</span>
+                <span className="text-xs font-medium text-(--text-tertiary)">{t('designer.shadowColor')}</span>
                 <div className="flex items-center gap-2">
-                  <input
+                  <input aria-label={t('designer.shadowColor')}
                     type="color"
                     value={toHex(selectedObject.shadow.color)}
                     onChange={(e) => onPropertyChange('shadow', { ...selectedObject.shadow, color: e.target.value })}

@@ -24,7 +24,7 @@ export async function getFonts(_req: Request, res: Response, next: NextFunction)
 export async function uploadFont(req: Request, res: Response, next: NextFunction) {
     try {
         if (!req.file) {
-            return res.status(400).json({ error: 'No font file uploaded' });
+            return res.status(400).json({ error: 'No font file uploaded', code: 'FONT_REQUIRED' });
         }
 
         // Fix encoding for originalname (multer default is latin1)
@@ -59,7 +59,7 @@ export async function deleteFont(req: Request, res: Response, next: NextFunction
         }
 
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Font not found' });
+            return res.status(404).json({ error: 'Font not found', code: 'FONT_NOT_FOUND' });
         }
 
         const stat = fs.lstatSync(filePath);

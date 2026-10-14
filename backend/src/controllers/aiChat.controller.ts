@@ -1,3 +1,4 @@
+import { aiFailureCode } from '../services/ai/utils/feedback.js';
 import { Request, Response } from 'express';
 import { eq, and, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -16,12 +17,12 @@ export async function generateTemplate(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { prompt, conversationId, providerId, currentCanvas, canvasSize, editMode, model: customModel } = req.body;
 
     if (!prompt) {
-      return res.status(400).json({ error: 'Prompt is required' });
+      return res.status(400).json({ error: 'Prompt is required', code: 'AI_PROMPT_REQUIRED' });
     }
     const referenceImages = await parseReferenceImages(req.body.referenceImages);
 
@@ -35,7 +36,7 @@ export async function generateTemplate(req: Request, res: Response) {
         .limit(1);
 
       if (providers.length === 0) {
-        return res.status(404).json({ error: 'AI provider not found' });
+        return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
       }
       provider = providers[0];
     } else {
@@ -47,12 +48,12 @@ export async function generateTemplate(req: Request, res: Response) {
         .limit(1);
 
       if (providers.length === 0) {
-        return res.status(400).json({ error: 'No default AI provider configured' });
+        return res.status(400).json({ error: 'No default AI provider configured', code: 'AI_NOT_CONFIGURED' });
       }
       provider = providers[0];
     }
 
-    if (!provider.isActive) return res.status(400).json({ error: 'AI 服务已停用' });
+    if (!provider.isActive) return res.status(400).json({ error: 'AI 服务已停用', code: 'AI_PROVIDER_INACTIVE' });
 
     // 获取对话历史
     let conversationHistory: Message[] = [];
@@ -183,7 +184,7 @@ export async function generateTemplate(req: Request, res: Response) {
       res.end();
     } catch (error: any) {
       if (controller.signal.aborted) return;
-      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message })}\n\n`);
+      res.write(`data: ${JSON.stringify({ type: 'error', error: error.message, code: aiFailureCode(error, !!referenceImages.length) })}\n\n`);
       res.end();
     } finally {
       res.off('close', cancel);
@@ -191,7 +192,7 @@ export async function generateTemplate(req: Request, res: Response) {
   } catch (error: any) {
     console.error('Failed to generate template:', error);
     if (!res.headersSent) {
-      res.status(error.statusCode || 500).json({ error: error.message });
+      res.status(error.statusCode || 500).json({ error: error.message, code: aiFailureCode(error) });
     }
   }
 }
@@ -201,7 +202,7 @@ export async function getConversations(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
 
     const conversations = await db
@@ -227,7 +228,7 @@ export async function getConversations(req: Request, res: Response) {
     res.json(result);
   } catch (error: any) {
     console.error('Failed to get conversations:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -236,7 +237,7 @@ export async function getConversation(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { id } = req.params;
     const conversationId = Array.isArray(id) ? id[0] : id;
@@ -248,7 +249,7 @@ export async function getConversation(req: Request, res: Response) {
       .limit(1);
 
     if (conversations.length === 0) {
-      return res.status(404).json({ error: 'Conversation not found' });
+      return res.status(404).json({ error: 'Conversation not found', code: 'AI_CONVERSATION_NOT_FOUND' });
     }
 
     const conversation = conversations[0];
@@ -260,7 +261,7 @@ export async function getConversation(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error('Failed to get conversation:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -269,7 +270,7 @@ export async function deleteConversation(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { id } = req.params;
     const conversationId = Array.isArray(id) ? id[0] : id;
@@ -281,7 +282,7 @@ export async function deleteConversation(req: Request, res: Response) {
       .limit(1);
 
     if (conversations.length === 0) {
-      return res.status(404).json({ error: 'Conversation not found' });
+      return res.status(404).json({ error: 'Conversation not found', code: 'AI_CONVERSATION_NOT_FOUND' });
     }
 
     await db.delete(aiConversations).where(eq(aiConversations.id, conversationId));
@@ -289,6 +290,6 @@ export async function deleteConversation(req: Request, res: Response) {
     res.json({ message: 'Conversation deleted' });
   } catch (error: any) {
     console.error('Failed to delete conversation:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }

@@ -1,0 +1,35 @@
+import type zh from '../zh-CN/networkSettings';
+import type { TranslationShape } from '../types';
+
+export default {
+  "requestFailed": "Request failed. Please try again later.",
+  "saved": "Network settings saved",
+  "savedHint": "GitHub requests use the new configuration immediately; no restart needed.",
+  "saveFailed": "Unable to save",
+  "loading": "Loading network settings…",
+  "loadFailed": "Unable to load network settings.",
+  "title": "Network settings",
+  "github": "GitHub connection",
+  "hint": "Used for the store catalog, previews, download counts, template downloads and version checks.",
+  "separateConnections": "Media servers and AI services use their own connection configurations.",
+  "mode": "Connection mode",
+  "modeLabel": "GitHub connection mode",
+  "environment": "Server environment variables (default)",
+  "direct": "Direct connection",
+  "proxy": "Custom proxy",
+  "proxyUrl": "Proxy URL",
+  "proxyHint": "Supports http://, https://, socks5:// and socks5h://. For authentication, use username:password@host. Saved credentials are hidden.",
+  "credentialsSaved": "Saved proxy credentials are retained if the URL is unchanged.",
+  "dockerHint": "In Docker, 127.0.0.1 refers to the container itself. Use the proxy device's LAN address, or host.docker.internal with Docker Desktop. Allow connections from the container.",
+  "environmentHint": "Uses the backend process's HTTPS_PROXY, HTTP_PROXY and NO_PROXY environment variables. Connects directly if none are configured.",
+  "test": "Test connection",
+  "saving": "Saving…",
+  "save": "Save settings",
+  "ready": "Connected to the store catalog and GitHub releases",
+  "partial": "Some connections failed. Check the proxy or server network.",
+  "catalog": "Store catalog",
+  "releases": "GitHub releases",
+  "api": "GitHub API",
+  "connected": "Connected",
+  "failed": "Connection failed. Check the network and proxy settings."
+} as const satisfies TranslationShape<typeof zh>;

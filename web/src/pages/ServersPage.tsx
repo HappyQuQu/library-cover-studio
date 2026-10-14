@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import {
   Plus,
@@ -22,14 +23,16 @@ import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogTrigger
 } from '@/components/ui/dialog';
 import { useServers, useCreateServer, useDeleteServer, useServerLibraries, useServerConnection, MediaServer } from '@/api';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
-
-const apiError = (error: any) => error?.response?.data?.error?.message || error?.message || '无法读取媒体服务器';
+import { getLocalizedApiError } from '@/lib/apiError';
+import { ErrorDetails } from '@/components/ErrorDetails';
 
 // 获取媒体库类型图标
 function getLibraryIcon(type: string) {
@@ -45,6 +48,7 @@ function getLibraryIcon(type: string) {
 
 // 服务器卡片组件
 function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: string) => void }) {
+  const { t, i18n } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const librariesQuery = useServerLibraries(isExpanded ? server.id : '');
@@ -55,11 +59,11 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
     const results = await Promise.all([connectionQuery.refetch(), ...(isExpanded ? [librariesQuery.refetch()] : [])]);
     const error = results.find(result => result.error)?.error;
     if (error || !results[0].data || !('connected' in results[0].data) || !results[0].data.connected) {
-      toast({ title: '刷新失败', description: error ? apiError(error) : (results[0].data && 'error' in results[0].data ? results[0].data.error : '') || '无法连接媒体服务器', variant: 'destructive' });
+      toast({ title: i18n.t('servers.refreshFailed'), description: getLocalizedApiError(error || results[0].data, 'connection'), variant: 'destructive' });
       return;
     }
     setRefreshKey(value => value + 1);
-    toast({ title: '刷新成功', description: isExpanded ? '连接状态和媒体库已更新' : '连接状态已更新' });
+    toast({ title: i18n.t('servers.refreshSuccess'), description: isExpanded ? i18n.t('servers.refreshedAll') : i18n.t('servers.refreshedConnection') });
   };
 
   return (
@@ -87,30 +91,33 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
                   {server.type}{connection?.version ? ` ${connection.version}` : ''}
                 </span>
                 {connectionQuery.isFetching ? (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}><Loader2 size={14} className="animate-spin" />检测中</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-tertiary)' }}><Loader2 size={14} className="animate-spin" />{t('servers.checking')}</span>
                 ) : connection?.connected ? (
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--success)' }}>
                     <CheckCircle2 style={{ width: 14, height: 14 }} />
-                    在线
+                    {t('servers.online')}
                   </span>
                 ) : (
                   <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--danger)' }}>
                     <XCircle style={{ width: 14, height: 14 }} />
-                    离线
+                    {t('servers.offline')}
                   </span>
                 )}
               </div>
             </div>
           </div>
           <div className="server-card-actions" style={{ display: 'flex', gap: '8px' }}>
-            <button className="btn-ghost btn-icon" aria-label="检测连接并刷新" onClick={refresh} disabled={connectionQuery.isFetching || librariesQuery.isFetching}><RefreshCw style={{ width: 16, height: 16 }} /></button>
-            <button className="btn-ghost btn-icon" onClick={() => onDelete(server.id)} style={{ color: 'var(--danger)' }}>
+            <button className="btn-ghost btn-icon" aria-label={t('servers.refreshConnection')} onClick={refresh} disabled={connectionQuery.isFetching || librariesQuery.isFetching}><RefreshCw style={{ width: 16, height: 16 }} /></button>
+            <button className="btn-ghost btn-icon" aria-label={t('servers.deleteLabel', { name: server.name })} onClick={() => onDelete(server.id)} style={{ color: 'var(--danger)' }}>
               <Trash2 style={{ width: 16, height: 16 }} />
             </button>
           </div>
         </div>
 
-        {(connection?.error || connectionQuery.error) && <p role="alert" style={{ marginTop: 12, fontSize: 13, color: 'var(--danger)' }}>{connection?.error || apiError(connectionQuery.error)}</p>}
+        {(connection?.error || connectionQuery.error) && <div role="alert" style={{ marginTop: 12, fontSize: 13, color: 'var(--danger)' }}>
+          <p>{getLocalizedApiError(connectionQuery.error || connection, 'connection')}</p>
+          <ErrorDetails error={connectionQuery.error || connection} />
+        </div>}
         {/* URL */}
         <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border-color)' }}>
           <div className="server-card-address" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -134,7 +141,7 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
                 transition: 'all 0.15s ease'
               }}
             >
-              媒体库
+              {t('servers.libraries')}
               {isExpanded ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
             </button>
           </div>
@@ -149,7 +156,7 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
           padding: '16px 20px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>检测到的媒体库</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('servers.discoveredLibraries')}</span>
             <button
               className="btn-ghost"
               style={{ fontSize: 12, padding: '4px 8px', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4 }}
@@ -157,21 +164,24 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
               onClick={refresh}
             >
               <RefreshCw style={{ width: 12, height: 12 }} />
-              刷新列表
+              {t('servers.refreshLibraries')}
             </button>
           </div>
 
           {loadingLibraries ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+            <div role="status" aria-label={t('common.loading')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
               <Loader2 style={{ width: 20, height: 20, color: 'var(--text-tertiary)', animation: 'spin 1s linear infinite' }} />
             </div>
           ) : librariesQuery.isError ? (
-            <div role="alert" style={{ padding: 20, color: 'var(--danger)', fontSize: 14 }}>媒体库读取失败：{apiError(librariesQuery.error)}</div>
+            <div role="alert" style={{ padding: 20, color: 'var(--danger)', fontSize: 14 }}>
+              <p>{t('servers.libraryReadFailed', { reason: getLocalizedApiError(librariesQuery.error, 'connection') })}</p>
+              <ErrorDetails error={librariesQuery.error} />
+            </div>
           ) : libraries.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-tertiary)', fontSize: 14, background: 'var(--bg-secondary)', borderRadius: 12, border: '1px dashed var(--border-color)' }}>
               <Folder style={{ width: 24, height: 24, margin: '0 auto 8px', opacity: 0.5 }} />
-              <div>服务器尚未创建媒体库</div>
-              <div style={{ fontSize: 12, marginTop: 4 }}>请在媒体服务器中添加媒体库后刷新</div>
+              <div>{t('servers.noLibraries')}</div>
+              <div style={{ fontSize: 12, marginTop: 4 }}>{t('servers.noLibrariesHint')}</div>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '20px' }}>
@@ -244,7 +254,7 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
                           background: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)',
                           opacity: 0.8
                         }} />
-                        {lib.itemCount !== undefined ? `${lib.itemCount} 项` : lib.type}
+                        {lib.itemCount !== undefined ? t('servers.itemCount', { count: lib.itemCount }) : lib.type}
                       </div>
                     </div>
                   </div>
@@ -259,6 +269,7 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
 }
 
 export function ServersPage() {
+  const { t, i18n } = useTranslation();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -267,7 +278,8 @@ export function ServersPage() {
     apiKey: ''
   });
 
-  const { data: servers = [], isLoading } = useServers();
+  const serversQuery = useServers();
+  const { data: servers = [], isLoading } = serversQuery;
   const createMutation = useCreateServer();
   const deleteMutation = useDeleteServer();
 
@@ -275,25 +287,25 @@ export function ServersPage() {
     e.preventDefault();
     try {
       await createMutation.mutateAsync(formData);
-      toast({ title: '连接成功 🎉', description: '媒体服务器已添加' });
+      toast({ title: i18n.t('servers.created'), description: i18n.t('servers.createdHint') });
       setIsDialogOpen(false);
       setFormData({ name: '', type: 'jellyfin', url: '', apiKey: '' });
     } catch (error: any) {
       toast({
-        title: '连接失败',
-        description: error.response?.data?.error?.message || '无法连接到服务器',
+        title: i18n.t('servers.createFailed'),
+        description: getLocalizedApiError(error, 'connection'),
         variant: 'destructive'
       });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除此服务器吗?')) return;
+    if (!confirm(t('servers.deleteConfirm'))) return;
     try {
       await deleteMutation.mutateAsync(id);
-      toast({ title: '已删除', description: '服务器已移除' });
+      toast({ title: i18n.t('servers.deleted'), description: i18n.t('servers.deletedHint') });
     } catch (error) {
-      toast({ title: '删除失败', variant: 'destructive' });
+      toast({ title: i18n.t('servers.deleteFailed'), variant: 'destructive' });
     }
   };
 
@@ -302,16 +314,16 @@ export function ServersPage() {
       {/* Header */}
       <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>媒体源</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{t('servers.title')}</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
-            管理您的 Jellyfin / Emby 服务器连接
+            {t('servers.description')}
           </p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button className="btn btn-primary">
               <Plus style={{ width: 16, height: 16 }} />
-              添加服务器
+              {t('servers.addServer')}
             </Button>
           </DialogTrigger>
           <DialogContent>
@@ -332,20 +344,21 @@ export function ServersPage() {
                 <Server style={{ width: 24, height: 24, color: 'white' }} />
               </div>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
-                  添加媒体服务器
-                </h2>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                  连接您的 Jellyfin 或 Emby
-                </p>
+                <DialogTitle style={{ fontSize: 18, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+                  {t('servers.addTitle')}
+                </DialogTitle>
+                <DialogDescription style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                  {t('servers.addHint')}
+                </DialogDescription>
               </div>
             </div>
 
             <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>服务器名称</label>
+                <label htmlFor="server-name" style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('servers.serverName')}</label>
                 <Input
-                  placeholder="例如：家庭影院"
+                  id="server-name"
+                  placeholder={t('servers.namePlaceholder')}
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
@@ -354,7 +367,7 @@ export function ServersPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>服务器类型</label>
+                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('servers.serverType')}</label>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   {['jellyfin', 'emby'].map((type) => (
                     <button
@@ -389,8 +402,9 @@ export function ServersPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>服务器地址</label>
+                <label htmlFor="server-url" style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('servers.serverUrl')}</label>
                 <Input
+                  id="server-url"
                   placeholder="http://192.168.1.10:8096"
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
@@ -401,9 +415,10 @@ export function ServersPage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>API 密钥</label>
+                <label htmlFor="server-api-key" style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>{t('servers.apiKey')}</label>
                 <Input
-                  placeholder="从服务器控制台获取"
+                  id="server-api-key"
+                  placeholder={t('servers.keyPlaceholder')}
                   value={formData.apiKey}
                   onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                   required
@@ -414,11 +429,11 @@ export function ServersPage() {
 
               <DialogFooter>
                 <Button type="button" className="btn btn-secondary" onClick={() => setIsDialogOpen(false)}>
-                  取消
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" className="btn btn-primary" disabled={createMutation.isPending}>
                   {createMutation.isPending && <Loader2 style={{ width: 16, height: 16, animation: 'spin 1s linear infinite' }} />}
-                  连接
+                  {t('servers.connect')}
                 </Button>
               </DialogFooter>
             </form>
@@ -428,22 +443,24 @@ export function ServersPage() {
 
       {/* Server List */}
       {isLoading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
+        <div role="status" aria-label={t('common.loading')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
           <Loader2 style={{ width: 32, height: 32, color: 'var(--text-tertiary)', animation: 'spin 1s linear infinite' }} />
         </div>
-      ) : servers.length === 0 ? (
+      ) : serversQuery.isError ? <div className="card card-body" role="alert">
+        <p>{t('servers.loadFailed')}</p><Button variant="outline" onClick={() => void serversQuery.refetch()}>{t('common.retry')}</Button>
+      </div> : servers.length === 0 ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon">
               <Server style={{ width: 32, height: 32 }} />
             </div>
-            <div className="empty-state-title">尚未添加服务器</div>
+            <div className="empty-state-title">{t('servers.empty')}</div>
             <div className="empty-state-description" style={{ marginBottom: '20px' }}>
-              添加您的第一个媒体服务器
+              {t('servers.emptyHint')}
             </div>
             <Button className="btn btn-primary" onClick={() => setIsDialogOpen(true)}>
               <Plus style={{ width: 16, height: 16 }} />
-              添加服务器
+              {t('servers.addServer')}
             </Button>
           </div>
         </div>

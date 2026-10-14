@@ -1,5 +1,11 @@
+import { modelCatalogWarning } from '@/lib/modelCatalogDisplay';
+import i18n from '@/lib/i18n';
+import { getLocalizedApiError } from '@/lib/apiError';
+import { ErrorDetails } from '@/components/ErrorDetails';
+import { LanguageSelect } from '@/components/LanguageSelect';
+import { useTranslation } from 'react-i18next';
 import { useAuthStore } from '@/stores/authStore';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Check, ChevronDown, ChevronUp, FileText, Save, RotateCcw, Edit2, Zap, Star, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,19 +23,19 @@ import {
 import { apiClient } from '@/api/client';
 
 
-const PROVIDER_OPTIONS = [
-  { value: 'claude', label: 'Claude (Anthropic)', apiUrl: 'https://api.anthropic.com', model: 'claude-3-5-sonnet-20241022', group: '国际服务' },
-  { value: 'openai', label: 'OpenAI', apiUrl: 'https://api.openai.com/v1', model: 'gpt-4o', group: '国际服务' },
-  { value: 'ollama', label: 'Ollama (本地)', apiUrl: 'http://localhost:11434', model: '', group: '本地部署' },
-  { value: 'mimo', label: '小米 MiMo', apiUrl: 'https://api.xiaomimimo.com/v1', model: '', group: '国产模型' },
-  { value: 'deepseek', label: '🐋 DeepSeek', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', group: '国产模型' },
-  { value: 'qwen', label: '🌐 通义千问 (Qwen)', apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max', group: '国产模型' },
-  { value: 'ernie', label: '🌊 文心一言 (ERNIE)', apiUrl: 'https://qianfan.baidubce.com/v2', model: 'ernie-4.5-8k', group: '国产模型' },
-  { value: 'zhipu', label: '🧠 智谱 GLM', apiUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', group: '国产模型' },
-  { value: 'moonshot', label: '🌙 Moonshot (Kimi)', apiUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', group: '国产模型' },
-  { value: 'stepfun', label: '⭐ 阶跃星辰 (Step)', apiUrl: 'https://api.stepfun.com/v1', model: 'step-1-8k', group: '国产模型' },
-  { value: 'custom', label: '自定义', apiUrl: '', model: '', group: '自定义' },
-] as const;
+function getProviderOptions() { return [
+  { value: 'claude', label: 'Claude (Anthropic)', apiUrl: 'https://api.anthropic.com', model: 'claude-3-5-sonnet-20241022', group: i18n.t('aiSettings.international') },
+  { value: 'openai', label: 'OpenAI', apiUrl: 'https://api.openai.com/v1', model: 'gpt-4o', group: i18n.t('aiSettings.international') },
+  { value: 'ollama', label: i18n.t('aiSettings.ollama'), apiUrl: 'http://localhost:11434', model: '', group: i18n.t('aiSettings.local') },
+  { value: 'mimo', label: i18n.t('aiSettings.mimo'), apiUrl: 'https://api.xiaomimimo.com/v1', model: '', group: i18n.t('aiSettings.china') },
+  { value: 'deepseek', label: '🐋 DeepSeek', apiUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat', group: i18n.t('aiSettings.china') },
+  { value: 'qwen', label: i18n.t('aiSettings.qwen'), apiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-max', group: i18n.t('aiSettings.china') },
+  { value: 'ernie', label: i18n.t('aiSettings.ernie'), apiUrl: 'https://qianfan.baidubce.com/v2', model: 'ernie-4.5-8k', group: i18n.t('aiSettings.china') },
+  { value: 'zhipu', label: i18n.t('aiSettings.glm'), apiUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash', group: i18n.t('aiSettings.china') },
+  { value: 'moonshot', label: '🌙 Moonshot (Kimi)', apiUrl: 'https://api.moonshot.cn/v1', model: 'moonshot-v1-8k', group: i18n.t('aiSettings.china') },
+  { value: 'stepfun', label: i18n.t('aiSettings.step'), apiUrl: 'https://api.stepfun.com/v1', model: 'step-1-8k', group: i18n.t('aiSettings.china') },
+  { value: 'custom', label: i18n.t('aiSettings.custom'), apiUrl: '', model: '', group: i18n.t('aiSettings.custom') },
+] as const; }
 
 function toBackendType(value: string): 'claude' | 'openai' | 'ollama' | 'custom' {
   if (value === 'claude') return 'claude';
@@ -39,17 +45,20 @@ function toBackendType(value: string): 'claude' | 'openai' | 'ollama' | 'custom'
 }
 
 function getProviderLabel(apiUrl: string, type: string): string {
-  const match = PROVIDER_OPTIONS.find(o => o.apiUrl && apiUrl?.includes(
+  const match = getProviderOptions().find(o => o.apiUrl && apiUrl?.includes(
     new URL(o.apiUrl.startsWith('http') ? o.apiUrl : 'http://' + o.apiUrl).hostname
   ));
   if (match && match.value !== 'custom') return match.label;
-  return type === 'ollama' ? 'Ollama' : type === 'claude' ? 'Claude' : type === 'openai' ? 'OpenAI' : '自定义';
+  return type === 'ollama' ? 'Ollama' : type === 'claude' ? 'Claude' : type === 'openai' ? 'OpenAI' : i18n.t('aiSettings.custom');
 }
 
 export function AIProviderSettings() {
+  const { t } = useTranslation();
+  const [failure, setFailure] = useState<unknown>(null);
+  const promptLoaded = useRef(false);
   const isAdmin = useAuthStore(s => s.user?.role === 'admin');
   const { toast } = useToast();
-  const { data: providers = [], isLoading } = useAIProviders();
+  const { data: providers = [], isLoading, isError, error, refetch } = useAIProviders();
   const createMutation = useCreateAIProvider();
   const updateMutation = useUpdateAIProvider();
   const deleteMutation = useDeleteAIProvider();
@@ -86,13 +95,15 @@ export function AIProviderSettings() {
   const primaryModel = formData.model.split(',')[0].trim();
   const selectedModelInfo = modelOptions.find(model => model.id === primaryModel);
   const fetchModels = async () => {
+    setFailure(null);
     try {
       const result = await discoverMutation.mutateAsync({ ...formData, providerId: editingId || undefined, apiKey: formData.apiKey || undefined });
       setDiscovered({ fingerprint, result });
       if (!formData.model && result.models.length) setFormData(previous =>
         JSON.stringify([editingId, previous.type, previous.apiUrl, previous.apiKey]) === fingerprint ? { ...previous, model: result.models[0].id } : previous);
     } catch (error: any) {
-      toast({ title: '获取模型失败', description: error.response?.data?.error || error.message, variant: 'destructive' });
+      setFailure(error);
+      toast({ title: i18n.t('aiSettings.modelsFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
     }
   };
 
@@ -104,11 +115,11 @@ export function AIProviderSettings() {
   const [promptSaving, setPromptSaving] = useState(false);
 
   useEffect(() => {
-    if (promptExpanded && !systemPrompt && !promptLoading) {
+    if (promptExpanded && !promptLoaded.current && !promptLoading) {
       loadSystemPrompt();
     }
     if (promptExpanded && !builtInPrompt) {
-      apiClient.get('/settings/default-prompt').then(r => setBuiltInPrompt(r.data?.defaultPrompt || ''));
+      apiClient.get('/settings/default-prompt').then(r => setBuiltInPrompt(r.data?.defaultPrompt || '')).catch(error => setFailure(error));
     }
   }, [promptExpanded]);
 
@@ -117,47 +128,49 @@ export function AIProviderSettings() {
     try {
       const res = await apiClient.get('/settings');
       setSystemPrompt(res.data?.['ai.systemPrompt'] || '');
-    } catch {
-      // 忽略
+      promptLoaded.current = true;
+    } catch (error) {
+      setFailure(error);
     } finally {
       setPromptLoading(false);
     }
   };
 
   const saveSystemPrompt = async () => {
+    setFailure(null);
     setPromptSaving(true);
     try {
       await apiClient.post('/settings', { 'ai.systemPrompt': systemPrompt });
-      toast({ title: '提示词已保存' });
+      toast({ title: i18n.t('aiSettings.promptSaved') });
     } catch {
-      toast({ title: '保存失败', variant: 'destructive' });
+      toast({ title: i18n.t('aiSettings.saveFailed'), variant: 'destructive' });
     } finally {
       setPromptSaving(false);
     }
   };
 
   const resetSystemPrompt = async () => {
-    if (!confirm('确定要清空自定义提示词，恢复系统默认吗？')) return;
-    setSystemPrompt('');
+    if (!confirm(t('aiSettings.resetConfirm'))) return;
     try {
       await apiClient.post('/settings', { 'ai.systemPrompt': '' });
-      toast({ title: '已清空并恢复默认' });
+      setSystemPrompt('');
+      toast({ title: i18n.t('aiSettings.resetDone') });
     } catch {
-      toast({ title: '重置失败', variant: 'destructive' });
+      toast({ title: i18n.t('aiSettings.resetFailed'), variant: 'destructive' });
     }
   };
 
   const copyBuiltInToEdit = () => {
     if (builtInPrompt) {
       setSystemPrompt(builtInPrompt);
-      toast({ title: '已将默认模版填入编辑框' });
+      toast({ title: i18n.t('aiSettings.copiedPrompt') });
     }
   };
 
   const handleProviderSelect = (value: string) => {
     setSelectedValue(value);
     setModelSearch('');
-    const opt = PROVIDER_OPTIONS.find(o => o.value === value);
+    const opt = getProviderOptions().find(o => o.value === value);
     if (opt) {
       setFormData(prev => ({
         ...prev,
@@ -175,7 +188,7 @@ export function AIProviderSettings() {
     setModelSearch('');
     setEditingId(provider.id);
     // 尝试推断 selectedValue
-    const match = PROVIDER_OPTIONS.find(o => o.apiUrl && provider.apiUrl?.includes(
+    const match = getProviderOptions().find(o => o.apiUrl && provider.apiUrl?.includes(
       new URL(o.apiUrl.startsWith('http') ? o.apiUrl : 'http://' + o.apiUrl).hostname
     ));
     setSelectedValue(match ? match.value : provider.type);
@@ -191,16 +204,17 @@ export function AIProviderSettings() {
   };
 
   const handleSave = async () => {
+    setFailure(null);
     if (!formData.name || !formData.apiUrl) {
-      toast({ title: '请填写配置名称和 API URL', variant: 'destructive' });
+      toast({ title: i18n.t('aiSettings.nameUrlRequired'), variant: 'destructive' });
       return;
     }
     if (!formData.model.trim()) {
-      toast({ title: '请获取并选择模型，或手动填写模型名称', variant: 'destructive' });
+      toast({ title: i18n.t('aiSettings.modelRequired'), variant: 'destructive' });
       return;
     }
     if (formMode === 'add' && formData.type !== 'ollama' && !formData.apiKey) {
-      toast({ title: '请填写 API Key', variant: 'destructive' });
+      toast({ title: i18n.t('aiSettings.keyRequired'), variant: 'destructive' });
       return;
     }
 
@@ -210,10 +224,10 @@ export function AIProviderSettings() {
         const payload: any = { id: editingId, ...formData };
         if (!formData.apiKey) delete payload.apiKey;
         await updateMutation.mutateAsync(payload);
-        toast({ title: 'AI 配置已更新' });
+        toast({ title: i18n.t('aiSettings.updated') });
       } else {
         await createMutation.mutateAsync({ ...formData, isDefault: providers.length === 0 });
-        toast({ title: 'AI 配置已添加' });
+        toast({ title: i18n.t('aiSettings.added') });
       }
 
       setFormMode('list');
@@ -221,56 +235,65 @@ export function AIProviderSettings() {
       setFormData(defaultForm);
       setSelectedValue('deepseek');
     } catch (error: any) {
-      toast({ title: '保存失败', description: error.message, variant: 'destructive' });
+      setFailure(error);
+      toast({ title: i18n.t('aiSettings.saveFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('确定要删除此 AI 配置吗？')) return;
+    if (!confirm(t('aiSettings.deleteConfirm'))) return;
     try {
       await deleteMutation.mutateAsync(id);
-      toast({ title: 'AI 配置已删除' });
+      toast({ title: i18n.t('aiSettings.deleted') });
     } catch (error: any) {
-      toast({ title: '删除失败', description: error.message, variant: 'destructive' });
+      setFailure(error);
+      toast({ title: i18n.t('aiSettings.deleteFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
     }
   };
 
   const handleTest = async (id: string) => {
+    setFailure(null);
     try {
       const result = await testMutation.mutateAsync(id);
-      toast({ title: result.success ? '连接成功 ✓' : '连接失败', variant: result.success ? 'default' : 'destructive' });
+      toast({ title: result.success ? i18n.t('aiSettings.connectionSuccess') : i18n.t('aiSettings.connectionFailed'), variant: result.success ? 'default' : 'destructive' });
     } catch (error: any) {
-      toast({ title: '测试失败', description: error.message, variant: 'destructive' });
+      setFailure(error);
+      toast({ title: i18n.t('aiSettings.testFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
     }
   };
 
   const handleSetDefault = async (id: string) => {
+    setFailure(null);
     try {
       await updateMutation.mutateAsync({ id, isDefault: true });
-      toast({ title: '已设为默认' });
+      toast({ title: i18n.t('aiSettings.defaultSet') });
     } catch (error: any) {
-      toast({ title: '设置失败', description: error.message, variant: 'destructive' });
+      setFailure(error);
+      toast({ title: i18n.t('aiSettings.defaultFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
     }
   };
 
-  if (isLoading) return <div className="p-4 text-sm text-(--text-secondary)">加载中...</div>;
+  if (isError) return <div className="card card-body" role="alert"><p>{t('aiSettings.loadFailed')}</p><ErrorDetails error={error} /><Button onClick={() => void refetch()}>{t('common.retry')}</Button></div>;
+  if (isLoading) return <div className="p-4 text-sm text-(--text-secondary)">{t('aiSettings.loading')}</div>;
 
-  const groups = ['国际服务', '本地部署', '国产模型', '自定义'];
+  const groups = [t('aiSettings.international'), t('aiSettings.local'), t('aiSettings.china'), t('aiSettings.custom')];
 
   return (
     <div className="space-y-6">
+      <LanguageSelect compact />
+      {Boolean(failure) && <div className="card card-body" role="alert"><p>{getLocalizedApiError(failure, 'ai')}</p><ErrorDetails error={failure} /></div>}
       {/* ── 已配置的 Provider 列表 ── */}
       {providers.length > 0 && formMode === 'list' && (
         <div className="space-y-3">
           {providers.map((provider) => (
             <div key={provider.id} className="p-4 bg-(--bg-primary) border border-(--border-color) rounded-xl shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-center justify-between">
+              <div className="ai-provider-row flex items-center justify-between">
                 <div className="min-w-0 pr-4">
                   <div className="flex items-center gap-2 mb-1">
                     <h3 className="text-sm font-bold text-(--text-primary) truncate">{provider.name}</h3>
                     {provider.isDefault && (
                       <span className="text-[10px] bg-(--primary) text-white px-2 py-0.5 rounded-full font-medium inline-block shrink-0 shadow-sm opacity-90">
-                        当前默认
+                        {t('aiSettings.currentDefault')}
                       </span>
                     )}
                   </div>
@@ -287,7 +310,7 @@ export function AIProviderSettings() {
                       variant="ghost"
                       className="h-8 w-8 text-(--text-secondary) hover:text-(--primary) hover:bg-(--primary)/10"
                       onClick={() => handleSetDefault(provider.id)}
-                      title="设为默认"
+                      title={t('aiSettings.setDefault')}
                     >
                       <Star className="w-4 h-4" />
                     </Button>
@@ -298,7 +321,7 @@ export function AIProviderSettings() {
                     className="h-8 w-8 text-(--text-secondary) hover:text-green-600 hover:bg-green-50"
                     onClick={() => handleTest(provider.id)}
                     disabled={testMutation.isPending}
-                    title="测试连接"
+                    title={t('aiSettings.test')}
                   >
                     <Zap className="w-4 h-4" />
                   </Button>
@@ -307,7 +330,7 @@ export function AIProviderSettings() {
                     variant="ghost"
                     className="h-8 w-8 text-(--text-secondary) hover:text-blue-600 hover:bg-blue-50"
                     onClick={() => handleEdit(provider)}
-                    title="编辑"
+                    title={t('aiSettings.edit')}
                   >
                     <Edit2 className="w-4 h-4" />
                   </Button>
@@ -316,7 +339,7 @@ export function AIProviderSettings() {
                     variant="ghost"
                     className="h-8 w-8 text-(--text-secondary) hover:text-red-600 hover:bg-red-50"
                     onClick={() => handleDelete(provider.id)}
-                    title="删除"
+                    title={t('aiSettings.delete')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -332,21 +355,21 @@ export function AIProviderSettings() {
         <div className="p-5 bg-(--bg-primary) border border-(--border-color) rounded-xl shadow-sm space-y-4">
           <h3 className="text-sm font-bold text-(--text-primary) border-b border-(--border-color) pb-3 flex items-center gap-2">
             {formMode === 'add' ? <Plus className="w-4 h-4 text-(--primary)" /> : <Edit2 className="w-4 h-4 text-(--primary)" />}
-            {formMode === 'add' ? '新增 AI 配置' : '编辑 AI 配置'}
+            {formMode === 'add' ? t('aiSettings.addTitle') : t('aiSettings.editTitle')}
           </h3>
 
           <div className="space-y-4 pt-1 text-(--text-primary)">
             <div>
-              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">服务商架构 *</label>
+              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">{t('aiSettings.provider')}</label>
               <select
                 className="w-full px-3 py-2 text-sm bg-(--bg-primary) border border-(--border-color) rounded-lg focus:outline-none focus:ring-2 focus:ring-(--primary) focus:border-transparent transition-all"
-                value={selectedValue}
+                aria-label={t('aiSettings.provider')} value={selectedValue}
                 onChange={(e) => handleProviderSelect(e.target.value)}
               >
-                {groups.map(group => {
-                  const opts = PROVIDER_OPTIONS.filter(o => o.group === group);
+                {groups.map((group, index) => {
+                  const opts = getProviderOptions().filter(o => o.group === group);
                   return (
-                    <optgroup key={group} label={group} className="font-semibold text-(--text-primary)">
+                    <optgroup key={index} label={group} className="font-semibold text-(--text-primary)">
                       {opts.map(opt => (
                         <option key={opt.value} value={opt.value} className="font-normal">{opt.label}</option>
                       ))}
@@ -357,20 +380,20 @@ export function AIProviderSettings() {
             </div>
 
             <div>
-              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">自定义配置名称 *</label>
+              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">{t('aiSettings.name')}</label>
               <Input
-                placeholder="如：DeepSeek-主账号"
-                value={formData.name}
+                placeholder={t('aiSettings.namePlaceholder')}
+                aria-label={t('aiSettings.name')} value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className="bg-(--bg-primary) border-(--border-color) text-sm focus-visible:ring-(--primary)"
               />
             </div>
 
             <div>
-              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">API 基础路径 (Base URL) *</label>
+              <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">{t('aiSettings.baseUrl')}</label>
               <Input
-                placeholder="API 地址"
-                value={formData.apiUrl}
+                placeholder={t('aiSettings.urlPlaceholder')}
+                aria-label={t('aiSettings.baseUrl')} value={formData.apiUrl}
                 onChange={(e) => setFormData({ ...formData, apiUrl: e.target.value })}
                 className="bg-(--bg-primary) border-(--border-color) text-sm font-mono focus-visible:ring-(--primary)"
               />
@@ -378,11 +401,11 @@ export function AIProviderSettings() {
 
             {formData.type !== 'ollama' && (
               <div>
-                <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">接口密钥 (API Key) {formMode === 'edit' ? '(留空不修改)' : '*'}</label>
+                <label className="text-xs font-medium text-(--text-secondary) mb-1.5 block">{t('aiSettings.key')} {formMode === 'edit' ? t('aiSettings.keepKey') : '*'}</label>
                 <Input
                   placeholder="sk-..."
                   type="password"
-                  value={formData.apiKey}
+                  aria-label={t('aiSettings.key')} value={formData.apiKey}
                   onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
                   className="bg-(--bg-primary) border-(--border-color) text-sm font-mono focus-visible:ring-(--primary)"
                 />
@@ -391,38 +414,39 @@ export function AIProviderSettings() {
 
             <div>
               <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <label htmlFor="provider-model" className="text-xs font-medium text-(--text-secondary)">默认模型</label>
+                <label htmlFor="provider-model" className="text-xs font-medium text-(--text-secondary)">{t('aiSettings.defaultModel')}</label>
                 <Button variant="outline" size="sm" onClick={() => void fetchModels()} disabled={discoverMutation.isPending || !formData.apiUrl}>
                   {discoverMutation.isPending ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5 mr-1.5" />}
-                  {catalog?.source === 'api' ? '刷新模型列表' : '获取模型列表'}
+                  {catalog?.source === 'api' ? t('aiSettings.refreshModels') : t('aiSettings.fetchModels')}
                 </Button>
               </div>
-              {modelOptions.length > 8 && <Input aria-label="搜索模型" placeholder="搜索模型…" value={modelSearch} onChange={event => setModelSearch(event.target.value)} className="mb-2" />}
+              {modelOptions.length > 8 && <Input aria-label={t('aiSettings.searchModels')} placeholder={t('aiSettings.searchPlaceholder')} value={modelSearch} onChange={event => setModelSearch(event.target.value)} className="mb-2" />}
               <select id="provider-model" className="studio-input w-full" value={primaryModel} onChange={event => setFormData({ ...formData, model: event.target.value })} disabled={discoverMutation.isPending}>
-                {!primaryModel && <option value="">请获取并选择模型</option>}
+                {!primaryModel && <option value="">{t('aiSettings.selectModel')}</option>}
                 {modelOptions.filter(model => model.id === primaryModel || model.id.toLowerCase().includes(modelSearch.toLowerCase())).map(model =>
                   <option key={model.id} value={model.id}>{model.id} · {modelImageLabel(model)}</option>)}
               </select>
               <p className="text-xs text-(--text-secondary) mt-2" role="status">
-                {discoverMutation.isPending || savedModels.isFetching ? '正在从接口获取模型…' : catalog?.warning || (catalog?.source === 'api' ? `已从接口获取模型；${modelOptions.length} 个可选。设计助手会同步显示。` : '填写地址和密钥后，点击获取模型列表。')}
+                {discoverMutation.isPending || savedModels.isFetching ? t('aiSettings.fetchingModels') : (catalog?.warning ? modelCatalogWarning(catalog) : '') || (catalog?.source === 'api' ? t('aiSettings.modelsReady', { count: modelOptions.length }) : t('aiSettings.fetchModelsHint'))}
               </p>
-              {savedModels.isError && !catalog && <p className="text-xs text-red-500 mt-1">获取失败，请刷新列表或手动填写模型。</p>}
+              {catalog?.warning && <ErrorDetails error={{ message: catalog.warning }} />}
+              {savedModels.isError && !catalog && <p className="text-xs text-red-500 mt-1">{t('aiSettings.modelsFallback')}</p>}
               <details className="mt-3 text-xs text-(--text-secondary)">
-                <summary className="cursor-pointer">手动模型与图片能力</summary>
+                <summary className="cursor-pointer">{t('aiSettings.manual')}</summary>
                 <div className="space-y-2 mt-2">
-                  <label htmlFor="manual-model" className="block">接口不提供列表时可手动填写，多个模型用英文逗号分隔</label>
-                  <Input id="manual-model" placeholder="模型 ID" value={formData.model} onChange={event => setFormData({ ...formData, model: event.target.value })} />
-                  <label htmlFor="model-vision" className="block">当前默认模型的图片输入能力</label>
+                  <label htmlFor="manual-model" className="block">{t('aiSettings.manualHint')}</label>
+                  <Input id="manual-model" placeholder={t('aiSettings.modelId')} value={formData.model} onChange={event => setFormData({ ...formData, model: event.target.value })} />
+                  <label htmlFor="model-vision" className="block">{t('aiSettings.imageCapability')}</label>
                   <select id="model-vision" className="studio-input w-full" disabled={!primaryModel} value={Object.hasOwn(formData.modelCapabilities, primaryModel) ? String(formData.modelCapabilities[primaryModel]) : 'auto'}
                     onChange={event => {
                       const capabilities = { ...formData.modelCapabilities };
                       if (event.target.value === 'auto') delete capabilities[primaryModel]; else capabilities[primaryModel] = event.target.value === 'true';
                       setFormData({ ...formData, modelCapabilities: capabilities });
                     }}>
-                    <option value="auto">自动识别 · {modelImageLabel(selectedModelInfo)}</option>
-                    <option value="true">确认支持图片理解</option><option value="false">不支持图片理解</option>
+                    <option value="auto">{t('aiSettings.autoCapability', { capability: modelImageLabel(selectedModelInfo) })}</option>
+                    <option value="true">{t('aiSettings.confirmVision')}</option><option value="false">{t('aiSettings.noVision')}</option>
                   </select>
-                  <p>优先使用接口能力信息。未知模型请查阅服务商文档后确认；支持图片理解的模型才可上传参考图。</p>
+                  <p>{t('aiSettings.visionHint')}</p>
                 </div>
               </details>
             </div>
@@ -430,13 +454,14 @@ export function AIProviderSettings() {
             <div className="flex flex-wrap gap-2 pt-4 border-t border-(--border-color)">
               <Button onClick={handleSave} disabled={createMutation.isPending || updateMutation.isPending} className="h-9 px-5 bg-(--primary) hover:opacity-90 text-white font-medium">
                 <Check className="w-4 h-4 mr-2" />
-                {formMode === 'add' ? '新增并保存' : '保存修改'}
+                {formMode === 'add' ? t('aiSettings.addSave') : t('aiSettings.saveChanges')}
               </Button>
               <Button
                 variant="outline"
                 className="h-9 px-5 border-(--border-color) text-green-600 hover:text-green-700 hover:bg-green-50 hover:border-green-300"
                 disabled={testConfigMutation.isPending || !formData.apiUrl}
                 onClick={async () => {
+                  setFailure(null);
                   try {
                     const result = await testConfigMutation.mutateAsync({
                       providerId: editingId || undefined,
@@ -445,26 +470,27 @@ export function AIProviderSettings() {
                       apiKey: formData.apiKey || undefined,
                       model: formData.model || undefined
                     });
-                    toast({ title: result.success ? '连接成功 ✓' : '连接失败', variant: result.success ? 'default' : 'destructive' });
+                    toast({ title: result.success ? i18n.t('aiSettings.connectionSuccess') : i18n.t('aiSettings.connectionFailed'), variant: result.success ? 'default' : 'destructive' });
                   } catch (error: any) {
-                    toast({ title: '测试失败', description: error.message, variant: 'destructive' });
+                    setFailure(error);
+                    toast({ title: i18n.t('aiSettings.testFailed'), description: getLocalizedApiError(error, 'ai'), variant: 'destructive' });
                   }
                 }}
               >
                 {testConfigMutation.isPending
                   ? <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                   : <Zap className="w-4 h-4 mr-2" />}
-                测试连接
+                {t('aiSettings.test')}
               </Button>
               <Button variant="outline" className="h-9 px-5 border-(--border-color) text-(--text-primary) hover:bg-(--bg-secondary)" onClick={() => { setFormMode('list'); setEditingId(null); }}>
-                取消
+                {t('common.cancel')}
               </Button>
             </div>
           </div>
         </div>
       ) : (
         <Button onClick={() => { setFormMode('add'); setFormData(defaultForm); setSelectedValue('deepseek'); }} className="h-10 w-full sm:w-auto bg-(--primary) hover:opacity-90 text-white font-medium shadow-sm">
-          <Plus className="w-4 h-4 mr-2" />新增 AI 服务提供商
+          <Plus className="w-4 h-4 mr-2" />{t('aiSettings.addProvider')}
         </Button>
       )}
 
@@ -476,7 +502,7 @@ export function AIProviderSettings() {
         >
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-(--primary)" />
-            自定义默认系统指令 (System Prompt)
+            {t('aiSettings.systemPrompt')}
           </div>
           {promptExpanded ? <ChevronUp className="w-5 h-5 text-(--text-secondary)" /> : <ChevronDown className="w-5 h-5 text-(--text-secondary)" />}
         </button>
@@ -484,19 +510,19 @@ export function AIProviderSettings() {
         {promptExpanded && (
           <div className="p-5 border-t border-(--border-color) space-y-4 bg-(--bg-secondary)/30">
             <p className="text-xs text-(--text-secondary) leading-relaxed">
-              全局系统指令仅管理员可修改。这是发送给 AI 画布助手的系统指令约束。当你留空时，AI 生成将自动使用系统的内置最佳实践长文本模板；如果你想微调生成风格（例如指定某种语言、指定避免的主题等），可以在下方进行补充或覆写。
+              {t('aiSettings.systemPromptHint')}
             </p>
             {promptLoading ? (
               <div className="text-xs text-(--text-tertiary) py-6 flex justify-center items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> 加载中...
+                <Loader2 className="w-4 h-4 animate-spin" /> {t('aiSettings.loading')}
               </div>
             ) : (
               <div className="relative group">
                 <textarea
                   readOnly={!isAdmin}
-                  value={systemPrompt}
+                  aria-label={t('aiSettings.systemPrompt')} value={systemPrompt}
                   onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder={builtInPrompt || '加载默认提示文案中...'}
+                  placeholder={builtInPrompt || t('aiSettings.promptLoading')}
                   className="w-full h-64 px-4 py-3 text-[13px] bg-(--bg-primary) border border-(--border-color) rounded-lg focus:outline-none focus:ring-2 focus:ring-(--primary) font-mono resize-y text-(--text-primary) shadow-inner placeholder:text-(--text-tertiary)"
                 />
               </div>
@@ -508,27 +534,27 @@ export function AIProviderSettings() {
                 className="h-9 px-4 bg-(--primary) hover:opacity-90 text-white font-medium shadow-sm"
               >
                 <Save className="w-4 h-4 mr-2" />
-                {promptSaving ? '保存中...' : '保存自定义指令'}
+                {promptSaving ? t('aiSettings.saving') : t('aiSettings.savePrompt')}
               </Button>
               <Button
                 variant="outline"
                 disabled={!isAdmin || promptSaving}
                 onClick={copyBuiltInToEdit}
                 className="h-9 px-4 border-(--border-color) text-(--text-secondary) hover:text-(--text-primary) hover:bg-(--bg-secondary)"
-                title="将系统目前后台自带的版本完整的带入编辑框，方便在其基础上做小修改"
+                title={t('aiSettings.copyPromptHint')}
               >
                 <FileText className="w-4 h-4 mr-2" />
-                基于系统模板衍生
+                {t('aiSettings.copyPrompt')}
               </Button>
               <Button
                 variant="outline"
                 disabled={!isAdmin || promptSaving}
                 onClick={resetSystemPrompt}
                 className="h-9 px-4 border-red-200 text-red-500 hover:text-red-600 hover:bg-red-50 ml-auto"
-                title="清除输入框内容并恢复由系统控制指令"
+                title={t('aiSettings.clearPromptHint')}
               >
                 <RotateCcw className="w-4 h-4 mr-2" />
-                清空并恢复默认
+                {t('aiSettings.clearPrompt')}
               </Button>
             </div>
           </div>

@@ -7,12 +7,14 @@ import {
   ToastViewport
 } from './toast';
 import { useToast } from './use-toast';
+import { useTranslation } from 'react-i18next';
 
 export function Toaster() {
+  const { t } = useTranslation();
   const { toasts } = useToast();
 
   return (
-    <ToastProvider>
+    <ToastProvider label={t('common.notifications')}>
       {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
@@ -27,7 +29,7 @@ export function Toaster() {
           </Toast>
         );
       })}
-      <ToastViewport />
+      <ToastViewport label={t('common.notificationRegion')} />
     </ToastProvider>
   );
 }

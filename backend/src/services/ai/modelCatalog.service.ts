@@ -1,10 +1,11 @@
+import { aiFailureCode } from './utils/feedback.js';
 import axios from 'axios';
 import { createHash } from 'node:crypto';
 import type { AIProviderConfig } from './aiClient.service.js';
 
 export interface AIModel { id: string; name: string; imageInput: boolean | null; capabilitySource: 'api' | 'official' | 'manual' | 'unknown'; }
 export type ModelCapabilities = Record<string, boolean>;
-export interface ModelCatalog { models: AIModel[]; source: 'api' | 'configured'; warning?: string; }
+export interface ModelCatalog { models: AIModel[]; source: 'api' | 'configured'; warning?: string; warningCode?: string; }
 type CatalogConfig = AIProviderConfig & { modelCapabilities?: ModelCapabilities };
 const cache = new Map<string, { expires: number; models: AIModel[] }>();
 
@@ -80,6 +81,7 @@ export async function listProviderModels(config: CatalogConfig, refresh = false)
   const cached = cache.get(key);
   let models = !refresh && cached && cached.expires > Date.now() ? cached.models : undefined;
   let warning: string | undefined;
+  let warningCode: string | undefined;
   if (!models) {
     try {
       const signal = AbortSignal.timeout(20000);
@@ -119,25 +121,25 @@ export async function listProviderModels(config: CatalogConfig, refresh = false)
 
       if (cache.size >= 100) cache.delete(cache.keys().next().value!);
       cache.set(key, { expires: Date.now() + 5 * 60 * 1000, models });
-    } catch (error) { warning = discoveryError(error); models = undefined; }
+    } catch (error) { warning = discoveryError(error); warningCode = [404, 405].includes((error as any).response?.status) ? 'AI_CATALOG_UNSUPPORTED' : aiFailureCode(error); models = undefined; }
   }
-  if (models && !models.length) warning = '接口没有返回可用于海报设计的模型，可手动填写模型';
+  if (models && !models.length) { warning = '接口没有返回可用于海报设计的模型，可手动填写模型'; warningCode = 'AI_CATALOG_EMPTY'; }
   const source = models ? 'api' : 'configured';
   const merged = new Map<string, AIModel>();
   for (const id of (config.model || '').split(',').map(id => id.trim()).filter(Boolean)) merged.set(id, describeModel(config, { id }));
   for (const model of models || []) merged.set(model.id, Object.hasOwn(config.modelCapabilities || {}, model.id)
     ? { ...model, imageInput: config.modelCapabilities![model.id], capabilitySource: 'manual' } : model);
-  return { models: [...merged.values()], source, ...(warning ? { warning } : {}) };
+  return { models: [...merged.values()], source, ...(warning ? { warning, warningCode: warningCode || 'AI_CATALOG_FAILED' } : {}) };
 }
 
 export async function requireImageModel(config: CatalogConfig, model?: string): Promise<void> {
   const selected = model || (config.model || '').split(',')[0].trim();
   if (selected && config.modelCapabilities && Object.hasOwn(config.modelCapabilities, selected)) {
     if (config.modelCapabilities[selected]) return;
-    throw Object.assign(new Error('所选模型不支持图片输入，请切换到支持图片理解的模型'), { statusCode: 400 });
+    throw Object.assign(new Error('所选模型不支持图片输入，请切换到支持图片理解的模型'), { statusCode: 400, code: 'AI_IMAGE_UNSUPPORTED' });
   }
   const capability = selected ? (await listProviderModels(config)).models.find(item => item.id === selected)?.imageInput ?? describeModel(config, { id: selected }).imageInput : null;
   if (capability !== true) throw Object.assign(new Error(capability === false
     ? '所选模型不支持图片输入，请切换到支持图片理解的模型'
-    : '尚未确认此模型的图片能力，请刷新模型列表或在 AI 配置中确认图片输入能力'), { statusCode: 400 });
+    : '尚未确认此模型的图片能力，请刷新模型列表或在 AI 配置中确认图片输入能力'), { statusCode: 400, code: capability === false ? 'AI_IMAGE_UNSUPPORTED' : 'AI_IMAGE_UNCONFIRMED' });
 }

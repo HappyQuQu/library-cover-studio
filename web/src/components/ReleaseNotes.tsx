@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Fragment, type ReactNode } from 'react';
 
 // Render the release-note subset without executing remote HTML or loading remote images.
@@ -12,6 +13,7 @@ function inline(text: string): ReactNode {
 }
 
 export function ReleaseNotes({ notes }: { notes: string }) {
+  const { t } = useTranslation();
   const blocks: ReactNode[] = [];
   const lines = notes.replace(/\r\n/g, '\n').split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -31,5 +33,5 @@ export function ReleaseNotes({ notes }: { notes: string }) {
       blocks.push(<p key={i}>{inline(line)}</p>);
     }
   }
-  return <div className="release-notes">{blocks.length ? blocks : <p>此版本暂无详细更新说明。</p>}</div>;
+  return <div className="release-notes">{blocks.length ? blocks : <p>{t('releases.emptyNotes')}</p>}</div>;
 }

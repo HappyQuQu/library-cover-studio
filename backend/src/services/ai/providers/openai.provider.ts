@@ -1,3 +1,4 @@
+import { aiFailureCode } from '../utils/feedback.js';
 import OpenAI from 'openai';
 import type { AIProvider, AIProviderConfig, TemplateContext, StreamChunk } from '../aiClient.service.js';
 import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/templateGenerator.js';
@@ -11,7 +12,7 @@ export class OpenAIProvider implements AIProvider {
 
   constructor(config: AIProviderConfig) {
     if (!config.apiKey) {
-      throw new Error('OpenAI API key is required');
+      throw Object.assign(new Error('OpenAI API key is required'), { code: 'AI_KEY_REQUIRED' });
     }
 
     this.client = new OpenAI({
@@ -88,7 +89,7 @@ export class OpenAIProvider implements AIProvider {
         } catch (error) {
           if (context?.signal?.aborted || attempt || !(error instanceof AIResponseError)
               || !['AI_RESPONSE_TRUNCATED', 'AI_INVALID_JSON', 'AI_INVALID_CANVAS'].includes(error.code)) throw error;
-          yield { type: 'status', content: error.code === 'AI_RESPONSE_TRUNCATED'
+          yield { type: 'status', code: error.code === 'AI_RESPONSE_TRUNCATED' ? 'AI_RETRY_TRUNCATED' : 'AI_RETRY_FORMAT', content: error.code === 'AI_RESPONSE_TRUNCATED'
             ? '设计输出被截断，正在重新生成更紧凑的完整方案…' : '正在校正设计格式并重新生成完整方案…' };
           messages.push({ role: 'user', content: '上次输出未通过画布 JSON 或图片校验。请重新输出完整且紧凑的 JSON 对象，不要续写上次内容。保留原需求、画布尺寸、锁定图层与编辑范围；必须包含完整 objects 数组、唯一图层 id 和有效 type，所有坐标和角度直接写数字，不要写计算表达式、注释或省略号。不要生成 SVG data URL；背景使用 background 纯色或 Fabric 渐变对象，装饰使用 Rect/Circle 等图层。已有图片 src 与 [original-asset] 必须保持原样。' });
         }
@@ -96,7 +97,8 @@ export class OpenAIProvider implements AIProvider {
     } catch (error: any) {
       yield {
         type: 'error',
-        error: referenceImageError(error, !!context?.referenceImages?.length)
+        error: referenceImageError(error, !!context?.referenceImages?.length),
+        code: aiFailureCode(error, !!context?.referenceImages?.length)
       };
     }
   }

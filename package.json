@@ -21,7 +21,9 @@
     "format": "pnpm -r format",
     "db:migrate": "pnpm --filter ./backend db:migrate",
     "db:seed": "pnpm --filter ./backend db:seed",
-    "test": "pnpm --filter ./backend exec node ../scripts/test.mjs"
+    "test": "pnpm --filter ./backend exec node ../scripts/test.mjs",
+    "check:i18n": "pnpm --filter ./backend exec tsx ../scripts/i18n-check.ts",
+    "dev:i18n-fixture": "node tests/fixtures/i18n-server.cjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

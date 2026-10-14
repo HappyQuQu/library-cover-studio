@@ -1,3 +1,6 @@
+import { getLocalizedApiError } from '@/lib/apiError';
+import { formatDisplayDate } from '@/lib/displayFormat';
+import { EDITOR_EFFECT_NAMES } from '@/lib/editorEffects';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Undo, Redo, Save, ArrowLeft, ZoomIn, ZoomOut, Eye, Edit, MousePointer2, Type, Image as ImageIcon, Square, Circle, Triangle, X, Sparkles, PanelLeft, PanelRight, Maximize2, Lock, Unlock, History, Copy, Loader2 } from 'lucide-react';
@@ -127,7 +130,7 @@ interface Font {
 export function EditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -246,8 +249,8 @@ export function EditorPage() {
       setTemplateName(draft.name); setCanvasWidth(draft.width); setCanvasHeight(draft.height);
       setRandomOnGeneration(Boolean((canvas as any).randomOnGeneration));
       syncLayersRef.current(); drafts.acknowledgeDraft();
-      toast({ title: '草稿已恢复', description: '请检查内容并保存。' });
-    } catch { toast({ title: '草稿恢复失败', variant: 'destructive' }); }
+      toast({ title: i18n.t('designer.draftRestored'), description: i18n.t('designer.draftRestoredHint') });
+    } catch { toast({ title: i18n.t('designer.draftRestoreFailed'), variant: 'destructive' }); }
   };
 
   useEffect(() => {
@@ -263,13 +266,13 @@ export function EditorPage() {
 
   async function unlockTemplate() {
     if (!id || !templateData?.canManage || lockMutation.isPending) return;
-    try { await lockMutation.mutateAsync({ id, isLocked: false }); toast({ title: '模板已解锁，可以编辑' }); }
-    catch (error: any) { toast({ title: '解锁失败', description: error.response?.data?.error?.message || '请稍后重试', variant: 'destructive' }); }
+    try { await lockMutation.mutateAsync({ id, isLocked: false }); toast({ title: i18n.t('designer.unlocked') }); }
+    catch (error: any) { toast({ title: i18n.t('designer.unlockFailed'), description: getLocalizedApiError(error), variant: 'destructive' }); }
   }
   async function copyTemplate() {
     if (!id) return;
     try { const { data } = await apiClient.post(`/templates/${id}/duplicate`); navigate(`/editor/${data.id}`); }
-    catch { toast({ title: '复制失败，请稍后重试', variant: 'destructive' }); }
+    catch { toast({ title: i18n.t('designer.copyFailed'), variant: 'destructive' }); }
   }
 
 
@@ -284,7 +287,7 @@ export function EditorPage() {
       return {
         id: obj.id,
         type: obj.type,
-        name: obj.name || `${obj.type}`,
+        name: obj.name,
         visible: obj.visible !== false,
         locked: !obj.selectable // Use the selectable flag as the truth for locking status since we set selectable=false when locked
       };
@@ -637,7 +640,7 @@ export function EditorPage() {
           resetHistory(jsonData);
         } catch (err) {
           console.error('Failed to load canvas JSON:', err);
-          toast({ title: '模板加载失败', description: '请检查模板数据后重新打开。', variant: 'destructive' });
+          toast({ title: i18n.t('designer.loadFailed'), description: i18n.t('designer.loadFailedHint'), variant: 'destructive' });
           return;
         } finally {
           setIsRestoring(false);
@@ -787,7 +790,7 @@ export function EditorPage() {
 
     switch (type) {
       case 'text': {
-        const text = new fabric.IText(t('designer.sampleText', '双击编辑文字'), {
+        const text = new fabric.IText(t('designer.sampleText'), {
           left: centerX, top: centerY,
           originX: 'center', originY: 'center',
           fontSize: 32, fill: '#1f2937', fontFamily: 'Inter, sans-serif'
@@ -906,7 +909,7 @@ export function EditorPage() {
             obj = fabricImg;
           } catch (err) {
             console.error('Failed to load poster:', err);
-            toast({ title: t('common.error'), description: '无法加载海报图片', variant: 'destructive' });
+            toast({ title: i18n.t('common.error'), description: i18n.t('designer.posterLoadFailed'), variant: 'destructive' });
           }
         } else {
           // Create a poster placeholder rect with pattern fill
@@ -983,7 +986,7 @@ export function EditorPage() {
         await updateMutation.mutateAsync({ id, name: templateName, ...details, canvasJson, width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl });
       } else {
         const result = await createMutation.mutateAsync({
-          name: id ? `${templateName} · 副本` : templateName || t('designer.newTemplate'), ...details, canvasJson,
+          name: id ? t('designer.copyName', { name: templateName }) : templateName || t('designer.newTemplate'), ...details, canvasJson,
           width: canvasWidth, height: canvasHeight, thumbnail: thumbnailDataUrl
         });
         drafts.markSaved(savedSnapshot);
@@ -991,9 +994,9 @@ export function EditorPage() {
       }
       drafts.markSaved(savedSnapshot);
       setDetailsSaved(JSON.stringify(details));
-      toast({ title: t('common.success'), description: '设计已保存，并记录到保存历史。' });
+      toast({ title: i18n.t('common.success'), description: i18n.t('designer.saved') });
     } catch (error: any) {
-      toast({ title: '保存失败', description: error.response?.data?.error?.message || '请检查图片素材后重试', variant: 'destructive' });
+      toast({ title: i18n.t('designer.saveFailed'), description: getLocalizedApiError(error), variant: 'destructive' });
     }
   };
 
@@ -1059,7 +1062,7 @@ export function EditorPage() {
         Object.assign(canvas, previousBackground);
         setPosterBackground(previousBackground.posterBackground);
         setRandomOnGeneration(Boolean(previousBackground.randomOnGeneration));
-        toast({ title: '背景加载失败', description: '请检查首张海报素材后重试', variant: 'destructive' });
+        toast({ title: i18n.t('designer.backgroundLoadFailed'), description: i18n.t('designer.backgroundLoadHint'), variant: 'destructive' });
         return;
       }
     } else if (bg.type === 'color') {
@@ -1161,14 +1164,14 @@ export function EditorPage() {
         left: 0, top: 0, originX: 'left', originY: 'top',
         scaleX: canvasWidth / (img.width || canvasWidth),
         scaleY: canvasHeight / (img.height || canvasHeight),
-        selectable: true, evented: true, name: '暗角效果'
+        selectable: true, evented: true, name: EDITOR_EFFECT_NAMES.vignette
       } as any);
       canvas.add(img);
       canvas.sendObjectToBack(img);
 
     } else if (bg.type === 'clear-vignette') {
       canvas.getObjects().forEach(obj => {
-        if ((obj as any).name === '暗角效果') canvas.remove(obj);
+        if ((obj as any).name === EDITOR_EFFECT_NAMES.vignette) canvas.remove(obj);
       });
 
     } else if (bg.type === 'grain') {
@@ -1188,7 +1191,7 @@ export function EditorPage() {
         opacity: bg.opacity,
         globalCompositeOperation: 'overlay',
         selectable: true, evented: true,
-        name: '噪点效果',
+        name: EDITOR_EFFECT_NAMES.noise,
         originX: 'left', originY: 'top',
       } as any);
       canvas.add(grainRect);
@@ -1196,13 +1199,13 @@ export function EditorPage() {
 
     } else if (bg.type === 'clear-grain') {
       canvas.getObjects().forEach(obj => {
-        if ((obj as any).name === '噪点效果') canvas.remove(obj);
+        if ((obj as any).name === EDITOR_EFFECT_NAMES.noise) canvas.remove(obj);
       });
     }
 
     canvas.renderAll();
     saveToHistory();
-  }, [canvas, saveToHistory, canvasWidth, canvasHeight]);
+  }, [canvas, saveToHistory, canvasWidth, canvasHeight, t]);
 
   // Handle preview - export canvas to image and show in modal
   const handlePreview = useCallback(() => {
@@ -1240,17 +1243,17 @@ export function EditorPage() {
 
   return (
     <div className="editor-shell bg-(--bg-secondary) overflow-hidden" data-compact-pane={compactPane}>
-      <div className="editor-compact-tabs" role="group" aria-label="设计器工作区">
-        <button type="button" aria-pressed={compactPane === 'canvas'} onClick={() => setCompactPane('canvas')}><MousePointer2 size={16} />画布</button>
-        <button type="button" aria-pressed={compactPane === 'tools'} onClick={() => setCompactPane('tools')}><PanelLeft size={16} />素材</button>
-        <button type="button" aria-pressed={compactPane === 'inspector'} onClick={() => setCompactPane('inspector')}><PanelRight size={16} />属性与 AI</button>
+      <div className="editor-compact-tabs" role="group" aria-label={t('designer.workspace')}>
+        <button type="button" aria-pressed={compactPane === 'canvas'} onClick={() => setCompactPane('canvas')}><MousePointer2 size={16} />{t('designer.canvas')}</button>
+        <button type="button" aria-pressed={compactPane === 'tools'} onClick={() => setCompactPane('tools')}><PanelLeft size={16} />{t('designer.assets')}</button>
+        <button type="button" aria-pressed={compactPane === 'inspector'} onClick={() => setCompactPane('inspector')}><PanelRight size={16} />{t('designer.propertiesAndAI')}</button>
       </div>
       {/* Left - Toolbox Panel */}
       <aside
         style={{ width: leftWidth, minWidth: 260, maxWidth: 540, flexShrink: 0 }}
         className="editor-toolbox bg-(--bg-primary) border-r border-(--border-color) overflow-hidden flex flex-col"
       >
-        {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>模板已锁定</strong><p>当前为只读预览，无法修改素材、背景或文字。</p><p>解锁后编辑，或复制为新模板。</p></div> : <ToolboxPanel
+        {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>{t('designer.locked')}</strong><p>{t('designer.readOnlyHint')}</p><p>{t('designer.unlockHint')}</p></div> : <ToolboxPanel
           onAddText={() => addObject('text')}
           onAddImage={() => addObject('image')}
           onAddShape={(type, payload) => addObject(type, payload)}
@@ -1285,13 +1288,13 @@ export function EditorPage() {
         {/* Top Header Bar */}
         <header className="editor-document-header h-14 px-6 flex items-center justify-between bg-(--bg-primary) border-b border-(--border-color) shrink-0">
           <div className="editor-document-name flex items-center gap-4">
-            <button aria-label="返回模板库" onClick={() => navigate('/templates')} className="p-2 rounded-lg hover:bg-(--bg-tertiary) transition-all text-(--text-secondary) hover:text-(--primary)">
+            <button aria-label={t('designer.back')} onClick={() => navigate('/templates')} className="p-2 rounded-lg hover:bg-(--bg-tertiary) transition-all text-(--text-secondary) hover:text-(--primary)">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div className="editor-name-field flex items-center gap-2">
               <input
                 type="text"
-                aria-label="模板名称"
+                aria-label={t('designer.name')}
                 readOnly={readOnly}
                 value={templateName}
                 onChange={(e) => setTemplateName(e.target.value)}
@@ -1299,17 +1302,17 @@ export function EditorPage() {
                 className="bg-transparent text-lg font-bold text-(--text-primary) focus:outline-none focus:border-b-2 focus:border-(--primary) transition-all"
               />
               <Edit className="w-4 h-4 text-(--text-tertiary)" />
-              {drafts.draftUnavailable && <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>草稿无法保存，请先保存模板</span>}
-              {(drafts.dirty || metadataDirty) && <span style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-secondary)' }}>未保存</span>}
-              {templateData?.isLocked && <span className="template-lock-badge" title="已锁定：不可编辑、保存、回退或删除"><Lock size={12} />已锁定 · 只读</span>}
+              {drafts.draftUnavailable && <span role="alert" style={{ fontSize: 12, color: 'var(--danger)' }}>{t('designer.draftUnavailable')}</span>}
+              {(drafts.dirty || metadataDirty) && <span style={{ fontSize: 12, whiteSpace: 'nowrap', flexShrink: 0, color: 'var(--text-secondary)' }}>{t('designer.unsaved')}</span>}
+              {templateData?.isLocked && <span className="template-lock-badge" title={t('designer.lockedHint')}><Lock size={12} />{t('designer.lockedBadge')}</span>}
             </div>
           </div>
           <div className="editor-document-actions flex items-center gap-2">
-            <Button variant="ghost" className="h-9 gap-2" onClick={() => setMetadataOpen(true)}>模板信息</Button>
-            {id && templateData?.canManage && <Button variant="ghost" className="h-9 gap-2" onClick={() => setSaveHistoryOpen(true)}><History size={16} />历史</Button>}
+            <Button variant="ghost" className="h-9 gap-2" onClick={() => setMetadataOpen(true)}>{t('designer.metadata')}</Button>
+            {id && templateData?.canManage && <Button variant="ghost" className="h-9 gap-2" onClick={() => setSaveHistoryOpen(true)}><History size={16} />{t('designer.history')}</Button>}
             {templateData?.isLocked && <>
-              <Button variant="ghost" className="h-9 gap-2" onClick={copyTemplate}><Copy size={16} />复制编辑</Button>
-              {templateData.canManage && <Button className="h-9 gap-2" onClick={unlockTemplate} disabled={lockMutation.isPending}>{lockMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Unlock size={16} />}解锁编辑</Button>}
+              <Button variant="ghost" className="h-9 gap-2" onClick={copyTemplate}><Copy size={16} />{t('designer.copyToEdit')}</Button>
+              {templateData.canManage && <Button className="h-9 gap-2" onClick={unlockTemplate} disabled={lockMutation.isPending}>{lockMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Unlock size={16} />}{t('designer.unlockToEdit')}</Button>}
             </>}
 
             <Button variant="ghost" className="h-9 gap-2 text-(--text-secondary) hover:text-(--text-primary)" onClick={handlePreview}>
@@ -1318,7 +1321,7 @@ export function EditorPage() {
             </Button>
             {!readOnly && <Button className="h-9 gap-2 bg-(--primary) text-white hover:opacity-90" onClick={handleSave} disabled={saving}>
               <Save className="w-4 h-4" />
-              {saving ? '保存中…' : templateData?.canManage === false ? '保存副本' : t('common.save')}
+              {saving ? t('designer.saving') : templateData?.canManage === false ? t('designer.saveCopy') : t('common.save')}
             </Button>}
           </div>
         </header>
@@ -1335,7 +1338,7 @@ export function EditorPage() {
             )}
           >
             <MousePointer2 className="w-4 h-4" />
-            {t('common.select', '选择')}
+            {t('common.select')}
           </button>
 
           <div className="w-px h-6 bg-(--border-color)" />
@@ -1351,7 +1354,7 @@ export function EditorPage() {
             )}
           >
             <Type className="w-4 h-4" />
-            文字
+            {t('designer.text')}
           </button>
 
           <button
@@ -1365,7 +1368,7 @@ export function EditorPage() {
             )}
           >
             <ImageIcon className="w-4 h-4" />
-            图片
+            {t('designer.image')}
           </button>
 
           <div className="w-px h-6 bg-(--border-color)" />
@@ -1379,7 +1382,7 @@ export function EditorPage() {
                 ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
-            title="矩形"
+            title={t('designer.rectangle')}
           >
             <Square className="w-4 h-4" />
           </button>
@@ -1393,7 +1396,7 @@ export function EditorPage() {
                 ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
-            title="圆形"
+            title={t('designer.circle')}
           >
             <Circle className="w-4 h-4" />
           </button>
@@ -1407,7 +1410,7 @@ export function EditorPage() {
                 ? "bg-(--primary) text-white shadow-md"
                 : "text-(--text-secondary) hover:bg-(--bg-tertiary) hover:text-(--text-primary)"
             )}
-            title="三角形"
+            title={t('designer.triangle')}
           >
             <Triangle className="w-4 h-4" />
           </button>
@@ -1434,15 +1437,15 @@ export function EditorPage() {
           </div>
 
           <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-(--bg-tertiary) border border-(--border-color)">
-            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label="缩小画布" onClick={() => { setAutoFit(false); setZoom(Math.max(0.01, zoom - 0.1)); }}>
+            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label={t('designer.zoomOut')} onClick={() => { setAutoFit(false); setZoom(Math.max(0.01, zoom - 0.1)); }}>
               <ZoomOut className="w-4 h-4 text-(--text-secondary)" />
             </button>
             <span className="text-xs font-bold w-10 text-center text-(--text-primary)">{Math.round(zoom * 100)}%</span>
-            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label="放大画布" onClick={() => { setAutoFit(false); setZoom(Math.min(2, zoom + 0.1)); }}>
+            <button className="p-1 rounded-md hover:bg-(--bg-secondary) transition-all" aria-label={t('designer.zoomIn')} onClick={() => { setAutoFit(false); setZoom(Math.min(2, zoom + 0.1)); }}>
               <ZoomIn className="w-4 h-4 text-(--text-secondary)" />
             </button>
           </div>
-          <button type="button" className="editor-fit-button" aria-label="适应窗口" title="适应窗口" onClick={() => { setAutoFit(true); setZoom(fitToView(canvasWidth, canvasHeight)); }}><Maximize2 size={16} /></button>
+          <button type="button" className="editor-fit-button" aria-label={t('designer.fit')} title={t('designer.fit')} onClick={() => { setAutoFit(true); setZoom(fitToView(canvasWidth, canvasHeight)); }}><Maximize2 size={16} /></button>
         </div>
 
         <main
@@ -1455,7 +1458,7 @@ export function EditorPage() {
             <div className="absolute inset-0 flex items-center justify-center bg-(--bg-tertiary) z-30">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-4 border-(--primary) border-t-transparent rounded-full animate-spin" />
-                <span className="text-sm text-(--text-secondary) font-medium animate-pulse">正在初始化画布...</span>
+                <span className="text-sm text-(--text-secondary) font-medium animate-pulse">{t('designer.initializing')}</span>
               </div>
             </div>
           )}
@@ -1529,7 +1532,7 @@ export function EditorPage() {
           </button>
         </div>
         <div className="flex-1 overflow-auto p-1">
-          {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>只读模式</strong><p>锁定后不允许编辑图层或应用 AI 设计。</p><div className="editor-readonly-layers">{layers.map(layer => <div key={layer.id}>{layer.name}</div>)}</div></div> : <>
+          {readOnly ? <div className="editor-readonly-panel"><Lock size={28} /><strong>{t('designer.readOnly')}</strong><p>{t('designer.readOnlyAIHint')}</p><div className="editor-readonly-layers">{layers.map(layer => <div key={layer.id}>{layer.name || layer.type}</div>)}</div></div> : <>
 
           {activePanel === 'properties' && (
             <PropertyPanel
@@ -1755,20 +1758,21 @@ export function EditorPage() {
 
       </aside>
 
-      {drafts.pendingDraft && !readOnly && <div role="dialog" aria-label="恢复编辑草稿" style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, padding: 20, background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 12, boxShadow: '0 8px 30px #0004' }}>
-        <p>发现本浏览器未保存的草稿（{new Date(drafts.pendingDraft.savedAt).toLocaleString()}）。恢复会替换当前画布。</p>
-        <Button onClick={restoreDraft}>恢复草稿</Button><Button variant="ghost" onClick={drafts.discardDraft}>丢弃草稿</Button>
+      {drafts.pendingDraft && !readOnly && <div role="dialog" aria-label={t('designer.restoreDraftTitle')} style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 100, padding: 20, background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 12, boxShadow: '0 8px 30px #0004' }}>
+        <p>{t('designer.restoreDraftHint', { time: formatDisplayDate(drafts.pendingDraft.savedAt, i18n.language, { dateStyle: 'medium', timeStyle: 'short' }) || t('common.unknownTime') })}</p>
+        <Button onClick={restoreDraft}>{t('designer.restoreDraft')}</Button><Button variant="ghost" onClick={drafts.discardDraft}>{t('designer.discardDraft')}</Button>
       </div>}
       <TemplateMetadata open={metadataOpen} onOpenChange={setMetadataOpen} value={details} onApply={setDetails} readOnly={readOnly} />
       {id && templateData?.canManage && <TemplateHistory id={id} open={saveHistoryOpen} onOpenChange={setSaveHistoryOpen} locked={templateData.isLocked} saving={saving} />}
 
       {/* Preview Modal */}
       {previewOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
+        <div role="dialog" aria-modal="true" aria-label={t('common.preview')} className="fixed inset-0 z-[201] flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in p-4">
           <div className="relative w-full max-w-4xl max-h-full bg-(--bg-primary) rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-(--border-color)">
             <div className="flex items-center justify-between p-4 border-b border-(--border-color) shrink-0">
               <h3 className="font-bold text-(--text-primary)">{t('common.preview')}</h3>
               <button
+                aria-label={t('common.close')}
                 onClick={() => setPreviewOpen(false)}
                 className="w-8 h-8 rounded-lg bg-(--bg-tertiary) hover:bg-(--bg-secondary) flex items-center justify-center transition-all"
               >
@@ -1779,7 +1783,7 @@ export function EditorPage() {
               {previewImage && (
                 <img
                   src={previewImage}
-                  alt="Preview"
+                  alt={t('common.preview')}
                   className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
                   style={{ width: 'auto', height: 'auto' }}
                 />

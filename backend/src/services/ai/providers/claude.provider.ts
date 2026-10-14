@@ -1,3 +1,4 @@
+import { aiFailureCode } from '../utils/feedback.js';
 import Anthropic from '@anthropic-ai/sdk';
 import type { AIProvider, AIProviderConfig, TemplateContext, StreamChunk } from '../aiClient.service.js';
 import { SYSTEM_PROMPT, buildUserPrompt } from '../prompts/templateGenerator.js';
@@ -10,7 +11,7 @@ export class ClaudeProvider implements AIProvider {
 
   constructor(config: AIProviderConfig) {
     if (!config.apiKey) {
-      throw new Error('Claude API key is required');
+      throw Object.assign(new Error('Claude API key is required'), { code: 'AI_KEY_REQUIRED' });
     }
 
     this.client = new Anthropic({
@@ -91,7 +92,8 @@ export class ClaudeProvider implements AIProvider {
     } catch (error: any) {
       yield {
         type: 'error',
-        error: referenceImageError(error, !!context?.referenceImages?.length)
+        error: referenceImageError(error, !!context?.referenceImages?.length),
+        code: aiFailureCode(error, !!context?.referenceImages?.length)
       };
     }
   }

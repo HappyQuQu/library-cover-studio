@@ -26,15 +26,15 @@ export async function testGithubNetwork(req: Request, res: Response, next: NextF
   try {
     const network = await parseConfig(req);
     const targets = [
-      { label: '商店目录', url: 'https://raw.githubusercontent.com/HappyQuQu/library-cover-store/catalog/catalog.json' },
-      { label: 'GitHub 发布页', url: 'https://github.com/HappyQuQu/library-cover-studio/releases/latest' },
-      { label: 'GitHub API', url: 'https://api.github.com/repos/HappyQuQu/library-cover-studio/releases/latest' }
+      { id: 'catalog', label: '商店目录', url: 'https://raw.githubusercontent.com/HappyQuQu/library-cover-store/catalog/catalog.json' },
+      { id: 'releases', label: 'GitHub 发布页', url: 'https://github.com/HappyQuQu/library-cover-studio/releases/latest' },
+      { id: 'api', label: 'GitHub API', url: 'https://api.github.com/repos/HappyQuQu/library-cover-studio/releases/latest' }
     ];
     const results = await Promise.all(targets.map(async target => {
       try {
         await githubGet(target.url, { timeout: 12000, maxContentLength: 5 * 1024 * 1024, maxRedirects: 5 }, network);
-        return { label: target.label, host: new URL(target.url).hostname, ok: true, message: '连接成功' };
-      } catch (error) { return { label: target.label, host: new URL(target.url).hostname, ok: false, message: githubNetworkError(error) }; }
+        return { id: target.id, code: 'CONNECTED', label: target.label, host: new URL(target.url).hostname, ok: true, message: '连接成功' };
+      } catch (error) { return { id: target.id, code: 'CONNECTION_FAILED', label: target.label, host: new URL(target.url).hostname, ok: false, message: githubNetworkError(error) }; }
     }));
     res.json({ storeReady: results[0].ok && results[1].ok, results });
   } catch (error) { next(error); }

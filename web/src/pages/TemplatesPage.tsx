@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { Plus, Palette, Loader2, Download, Upload, Lock, Unlock, Copy, Trash2, Store } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,30 +8,36 @@ import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { getLocalizedApiError } from '@/lib/apiError';
+import { ErrorDetails } from '@/components/ErrorDetails';
+
+type ImportFailure = { kind: 'format' } | { kind: 'large' } | { kind: 'empty' } | { kind: 'api'; error: unknown };
 
 export function TemplatesPage() {
-  const { data: templates = [], isLoading } = useTemplates();
+  const { t, i18n } = useTranslation();
+  const templatesQuery = useTemplates();
+  const { data: templates = [], isLoading } = templatesQuery;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
+  const [importError, setImportError] = useState<ImportFailure | null>(null);
   const [importFileName, setImportFileName] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   async function manage(template: Template, action: 'lock' | 'copy' | 'delete') {
     if (busyId) return;
-    if (action === 'delete' && (template.isLocked || !confirm(`确定删除模板「${template.name}」吗？`))) return;
+    if (action === 'delete' && (template.isLocked || !confirm(t('templates.deleteConfirm', { name: template.name })))) return;
     setBusyId(template.id);
     try {
       if (action === 'lock') await apiClient.post(`/templates/${template.id}/lock`, { isLocked: !template.isLocked });
       if (action === 'copy') await apiClient.post(`/templates/${template.id}/duplicate`);
       if (action === 'delete') await apiClient.delete(`/templates/${template.id}`);
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
-      toast({ title: action === 'copy' ? '已创建可编辑、未锁定的副本' : action === 'delete' ? '模板已删除' : template.isLocked ? '模板已解锁' : '模板已锁定，编辑和删除前需先解锁' });
+      toast({ title: action === 'copy' ? i18n.t('templates.copied') : action === 'delete' ? i18n.t('templates.deleted') : template.isLocked ? i18n.t('templates.unlocked') : i18n.t('templates.locked') });
     } catch (error: any) {
-      toast({ title: '操作失败', description: error.response?.data?.error?.message || error.response?.data?.message || '请刷新后重试', variant: 'destructive' });
+      toast({ title: i18n.t('common.error'), description: getLocalizedApiError(error), variant: 'destructive' });
     } finally { setBusyId(null); }
   }
 
@@ -62,7 +69,7 @@ export function TemplatesPage() {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Export failed:', error);
-      toast({ title: '模板导出失败', description: '请检查网络连接，然后重新导出。', variant: 'destructive' });
+      toast({ title: i18n.t('templates.exportFailed'), description: i18n.t('templates.exportFailedHint'), variant: 'destructive' });
     }
   };
 
@@ -80,11 +87,11 @@ export function TemplatesPage() {
     setImportError(null);
 
     if (!/\.zip$/i.test(file.name)) {
-      setImportError('请选择 ZIP 格式的模板包。可以在模板库导出，或从模板商店下载单套模板 ZIP。');
+      setImportError({ kind: 'format' });
       return;
     }
     if (!file.size || file.size > 64 * 1024 * 1024) {
-      setImportError(file.size ? '模板包超过 64 MB，请减少字体文件或压缩预览图后重新打包。' : '这个文件为空，请重新导出或下载模板包。');
+      setImportError({ kind: file.size ? 'large' : 'empty' });
       return;
     }
 
@@ -101,15 +108,12 @@ export function TemplatesPage() {
       });
       setImportOpen(false);
       const installed = imported.fonts?.filter(font => font.action === 'installed').length || 0;
-      toast({ title: `「${imported.name}」导入成功`, description: installed
-        ? `已自动添加 ${installed} 个字体到字体管理，模板可直接在设计器和自动化中使用。`
-        : '已添加为可编辑的新模板，现在可以在设计器和自动化中选择。', variant: 'success' });
+      toast({ title: i18n.t('templates.imported', { name: imported.name }), description: installed
+        ? i18n.t('templates.fontsInstalled', { count: installed })
+        : i18n.t('templates.importedHint'), variant: 'success' });
       await queryClient.invalidateQueries({ queryKey: ['templates'] });
     } catch (error: unknown) {
-      const response = error as { code?: string; response?: { status?: number; data?: { error?: { message?: string } } } };
-      setImportError(response.response?.status === 413 ? '模板包超过上传大小限制，请将文件压缩到 64 MB 以内后重试。'
-        : response.code === 'ECONNABORTED' ? '导入超时，请稍后刷新模板库确认是否已导入，再决定是否重试。'
-        : response.response?.data?.error?.message || (response.response ? '服务器暂时无法处理这个模板包，请重新导出后重试。' : '无法连接服务器，请检查网络连接后重试。'));
+      setImportError({ kind: 'api', error });
     } finally {
       setIsImporting(false);
     }
@@ -120,13 +124,13 @@ export function TemplatesPage() {
       {/* Header */}
       <div className="page-heading" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>模板库</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, color: 'var(--text-primary)' }}>{t('templates.title')}</h1>
           <p style={{ fontSize: '14px', marginTop: '4px', color: 'var(--text-secondary)' }}>
-            默认模板可直接用于自动化；锁定保护模板，解锁后才能编辑、回退或删除。
+            {t('templates.description')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <Link to="/template-store"><Button className="btn btn-secondary"><Store size={16} />模板商店</Button></Link>
+          <Link to="/template-store"><Button className="btn btn-secondary"><Store size={16} />{t('nav.templateStore')}</Button></Link>
           <input
             type="file"
             ref={fileInputRef}
@@ -144,12 +148,12 @@ export function TemplatesPage() {
             ) : (
               <Upload className="w-4 h-4" />
             )}
-            {isImporting ? '正在导入…' : '导入模板'}
+            {isImporting ? t('templates.importing') : t('templates.import')}
           </Button>
           <Link to="/editor">
             <Button className="btn btn-primary">
               <Plus style={{ width: 16, height: 16 }} />
-              新建模板
+              {t('templates.new')}
             </Button>
           </Link>
         </div>
@@ -157,23 +161,25 @@ export function TemplatesPage() {
 
       {/* Template Grid */}
       {isLoading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
+        <div role="status" aria-label={t('common.loading')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '80px 0' }}>
           <Loader2 style={{ width: 32, height: 32, color: 'var(--text-tertiary)', animation: 'spin 1s linear infinite' }} />
         </div>
-      ) : templates.length === 0 ? (
+      ) : templatesQuery.isError ? <div className="card card-body" role="alert">
+        <p>{t('templates.loadFailed')}</p><Button variant="outline" onClick={() => void templatesQuery.refetch()}>{t('common.retry')}</Button>
+      </div> : templates.length === 0 ? (
         <div className="card">
           <div className="empty-state">
             <div className="empty-state-icon">
               <Palette style={{ width: 32, height: 32 }} />
             </div>
-            <div className="empty-state-title">尚未创建模板</div>
+            <div className="empty-state-title">{t('templates.empty')}</div>
             <div className="empty-state-description" style={{ marginBottom: '20px' }}>
-              使用设计器创建您的第一个模板
+              {t('templates.emptyHint')}
             </div>
             <Link to="/editor">
               <Button className="btn btn-primary">
                 <Plus style={{ width: 16, height: 16 }} />
-                打开设计器
+                {t('templates.openDesigner')}
               </Button>
             </Link>
           </div>
@@ -192,7 +198,7 @@ export function TemplatesPage() {
 
             return (
               <article key={template.id} className="template-library-card">
-                <Link to={`/editor/${template.id}`} className="template-library-open" aria-label={`打开模板 ${template.name}`}>
+                <Link to={`/editor/${template.id}`} className="template-library-open" aria-label={t('templates.openLabel', { name: template.name })}>
                     <div style={{ aspectRatio, background: 'var(--bg-tertiary)', position: 'relative' }}>
                       {thumbnailUrl ? (
                         <AuthenticatedImage
@@ -211,24 +217,24 @@ export function TemplatesPage() {
                         {template.width}×{template.height}
                       </div>
 
-                      <div className="template-library-badges">{template.isDefault && <span>默认模板</span>}{template.isLocked && <span className="template-lock-badge"><Lock size={11} />已锁定</span>}</div>
+                      <div className="template-library-badges">{template.isDefault && <span>{t('templates.default')}</span>}{template.isLocked && <span className="template-lock-badge"><Lock size={11} />{t('templates.lockedBadge')}</span>}</div>
                     </div>
                     <div className="p-3">
                       <h3 className="font-medium text-sm text-(--text-primary) truncate">
                         {template.name}
                       </h3>
-                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>v{template.version || '1.0.0'} · {template.author?.name || '未标注作者'}</p>
+                      <p style={{ fontSize: 11, color: 'var(--text-tertiary)', marginTop: 4 }}>v{template.version || '1.0.0'} · {template.author?.name || t('templates.unknownAuthor')}</p>
                       <p className="template-library-description">
-                        {template.description || '自定义封面设计'}
+                        {template.description || t('templates.customDescription')}
                       </p>
                     </div>
                 </Link>
                 <div className="template-library-actions">
-                  <button onClick={() => manage(template, 'copy')} disabled={!!busyId} title={`复制模板 ${template.name}`}><Copy size={15} />复制</button>
-                  <button onClick={e => handleExport(e, template.id, template.name)} title={`导出模板 ${template.name}`}><Download size={15} />导出</button>
+                  <button onClick={() => manage(template, 'copy')} disabled={!!busyId} title={t('templates.copyLabel', { name: template.name })}><Copy size={15} />{t('common.copy')}</button>
+                  <button onClick={e => handleExport(e, template.id, template.name)} title={t('templates.exportLabel', { name: template.name })}><Download size={15} />{t('common.export')}</button>
                   {template.canManage && <>
-                    <button onClick={() => manage(template, 'lock')} disabled={!!busyId} title={template.isLocked ? `解锁模板 ${template.name}` : `锁定模板 ${template.name}`} className={template.isLocked ? 'template-action-locked' : ''}>{busyId === template.id ? <Loader2 size={15} className="animate-spin" /> : template.isLocked ? <Unlock size={15} /> : <Lock size={15} />}{template.isLocked ? '解锁' : '锁定'}</button>
-                    <button className="template-action-delete" onClick={() => manage(template, 'delete')} disabled={template.isLocked || !!busyId} title={template.isLocked ? '模板已锁定，请先解锁再删除' : `删除模板 ${template.name}`} aria-label={`删除模板 ${template.name}`}><Trash2 size={15} /></button>
+                    <button onClick={() => manage(template, 'lock')} disabled={!!busyId} title={template.isLocked ? t('templates.unlockLabel', { name: template.name }) : t('templates.lockLabel', { name: template.name })} className={template.isLocked ? 'template-action-locked' : ''}>{busyId === template.id ? <Loader2 size={15} className="animate-spin" /> : template.isLocked ? <Unlock size={15} /> : <Lock size={15} />}{template.isLocked ? t('common.unlock') : t('common.lock')}</button>
+                    <button className="template-action-delete" onClick={() => manage(template, 'delete')} disabled={template.isLocked || !!busyId} title={template.isLocked ? t('templates.unlockFirst') : t('templates.deleteLabel', { name: template.name })} aria-label={t('templates.deleteLabel', { name: template.name })}><Trash2 size={15} /></button>
                   </>}
                 </div>
               </article>
@@ -238,19 +244,22 @@ export function TemplatesPage() {
       )}
       <Dialog open={importOpen} onOpenChange={open => { if (!isImporting) setImportOpen(open); }}>
         <DialogContent style={{ maxWidth: 520 }}>
-          <DialogHeader><DialogTitle>导入模板</DialogTitle><DialogDescription>选择单套模板 ZIP，导入后会添加到模板库，原有模板会保留。</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>{t('templates.import')}</DialogTitle><DialogDescription>{t('templates.importDescription')}</DialogDescription></DialogHeader>
           <div className="template-import-guide">
-            <p>支持从应用导出的模板包，或模板商店 Releases 中的单套 ZIP，含字体时最大 <strong>64 MB</strong>，JSON 与预览图合计不超过 5 MB。</p>
-            <pre><code>模板.zip{'\n'}├── template.json{'\n'}├── preview.jpg / png / webp{'\n'}└── fonts/（使用的自定义字体）</code></pre>
-            <p>随包字体会自动加入字体管理。相同字体复用，同名不同字体保留两份，已有模板不会受影响。</p>
-            <p><code>template.json</code> 要直接放在 ZIP 根目录。GitHub 的整个仓库 Source code ZIP 需要先解压，再把单套模板的文件重新打包。</p>
+            <p>{t('templates.packageLimits')}</p>
+            <pre><code>{t('templates.packageTree')}</code></pre>
+            <p>{t('templates.fontsHint')}</p>
+            <p>{t('templates.rootHint')}</p>
           </div>
-          {importFileName && <p className="template-import-file">已选择：{importFileName}</p>}
-          {importError && <div className="template-import-error" role="alert"><strong>导入未完成</strong><p>{importError}</p><p>请修正后重新选择文件。</p></div>}
-          {isImporting && <div className="template-import-progress" role="status"><Loader2 size={18} className="animate-spin" />正在上传并校验模板，请稍候…</div>}
+          {importFileName && <p className="template-import-file">{t('templates.selectedFile', { name: importFileName })}</p>}
+          {importError && <div className="template-import-error" role="alert"><strong>{t('templates.importIncomplete')}</strong>
+            <p>{importError.kind === 'format' ? t('templates.zipRequired') : importError.kind === 'large' ? t('templates.tooLarge') : importError.kind === 'empty' ? t('templates.emptyFile') : getLocalizedApiError(importError.error, 'import')}</p>
+            {importError.kind === 'api' && <ErrorDetails error={importError.error} />}
+            <p>{t('templates.correctAndRetry')}</p></div>}
+          {isImporting && <div className="template-import-progress" role="status"><Loader2 size={18} className="animate-spin" />{t('templates.validating')}</div>}
           <DialogFooter style={{ flexWrap: 'wrap', alignItems: 'center' }}>
-            <Button className="btn btn-secondary" disabled={isImporting} onClick={() => setImportOpen(false)}>取消</Button>
-            <Button className="btn btn-primary" disabled={isImporting} onClick={() => fileInputRef.current?.click()}><Upload size={16} />{isImporting ? '正在导入…' : importError ? '重新选择 ZIP' : '选择 ZIP 文件'}</Button>
+            <Button className="btn btn-secondary" disabled={isImporting} onClick={() => setImportOpen(false)}>{t('common.cancel')}</Button>
+            <Button className="btn btn-primary" disabled={isImporting} onClick={() => fileInputRef.current?.click()}><Upload size={16} />{isImporting ? t('templates.importing') : importError ? t('templates.reselect') : t('templates.selectZip')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

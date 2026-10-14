@@ -1,3 +1,7 @@
+import { displayMessage, type DisplayMessage } from '@/lib/displayMessage';
+import { getLocalizedApiError, type ApiErrorContext } from '@/lib/apiError';
+import { formatDisplayDate, formatDisplayNumber } from '@/lib/displayFormat';
+import { ErrorDetails } from '@/components/ErrorDetails';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +19,8 @@ import { ReleasesPage } from './ReleasesPage';
 import { useAppReleases } from '@/api/system';
 import { UpdateDot } from '@/components/VersionStatus';
 import { GithubNetworkSettings } from '@/components/settings/GithubNetworkSettings';
+import { useTranslation } from 'react-i18next';
+import { LanguageSelect } from '@/components/LanguageSelect';
 
 interface Font {
   filename: string;
@@ -30,7 +36,12 @@ interface LogEntry {
   message: string;
 }
 
+// Moving focus to a language control must not commit an unfinished auto-save field.
+const switchingLanguage = (event: React.FocusEvent<HTMLInputElement>) =>
+  event.relatedTarget instanceof Element && !!event.relatedTarget.closest('[data-language-control], [data-account-menu]');
+
 export function SettingsPage() {
+  const { t, i18n } = useTranslation();
   const user = useAuthStore((state) => state.user);
   const { mode, setMode, brand, setBrand } = useThemeStore();
   const { toast } = useToast();
@@ -38,6 +49,12 @@ export function SettingsPage() {
   const [retention, setRetention] = useState({ maxRuns: '50', maxDays: '30' });
   const [maintenanceBusy, setMaintenanceBusy] = useState(false);
   const [cachePreview, setCachePreview] = useState<{ files: number; bytes: number } | null>(null);
+  const [settingsError, setSettingsFailure] = useState<{ error: unknown; context: ApiErrorContext } | null>(null);
+  const setSettingsError = (error: unknown, context: ApiErrorContext = 'operation') =>
+    setSettingsFailure(error === null ? null : { error, context });
+  const [logStreamAttempt, setLogStreamAttempt] = useState(0);
+  const [logStreamStatus, setLogStreamStatus] = useState<DisplayMessage>({ key: 'settings.streamConnecting' });
+  const [logStreamError, setLogStreamError] = useState<unknown>(null);
   const [fonts, setFonts] = useState<Font[]>([]);
   const [uploading, setUploading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -99,7 +116,18 @@ export function SettingsPage() {
       originalError.apply(console, args);
     };
 
+    return () => {
+      console.log = originalLog;
+      console.warn = originalWarn;
+      console.error = originalError;
+    };
+  }, []);
+
+  // The stream lifecycle is independent of language and unsaved settings.
+  useEffect(() => {
     // 3. Connect to Backend Log Stream (SSE) — 先取短期 ticket，再用它打开 EventSource
+    setLogStreamStatus({ key: 'settings.streamConnecting' });
+    setLogStreamError(null);
     let eventSource: EventSource | null = null;
     let cancelled = false;
     (async () => {
@@ -108,6 +136,7 @@ export function SettingsPage() {
         if (cancelled) return;
         eventSource = new EventSource(resolveApiUrl(`/api/logs/stream?ticket=${encodeURIComponent(data.ticket)}`, import.meta.env.VITE_API_URL || '/api'));
 
+        eventSource.onopen = () => { if (!cancelled) setLogStreamStatus({ key: 'settings.streamConnected' }); };
         eventSource.onmessage = (event) => {
           try {
             const payload = JSON.parse(event.data);
@@ -118,26 +147,20 @@ export function SettingsPage() {
         };
 
         eventSource.onerror = () => {
-          console.error('Log stream connection error');
+          if (!cancelled) setLogStreamStatus({ key: 'settings.streamDisconnected' });
           eventSource?.close();
         };
       } catch (e) {
-        console.error('Failed to connect to log stream', e);
+        if (!cancelled) { setLogStreamStatus({ key: 'settings.streamFailed' }); setLogStreamError(e); }
       }
     })();
 
-    return () => {
-      cancelled = true;
-      console.log = originalLog;
-      console.warn = originalWarn;
-      console.error = originalError;
-      eventSource?.close();
-    };
-  }, []);
+    return () => { cancelled = true; eventSource?.close(); };
+  }, [logStreamAttempt]);
 
   const addLog = (level: 'info' | 'warn' | 'error' | 'debug', message: string) => {
     setLogs(prev => [...prev.slice(-200), {
-      timestamp: new Date().toLocaleTimeString(),
+      timestamp: new Date().toISOString(),
       level,
       message
     }]);
@@ -155,6 +178,7 @@ export function SettingsPage() {
       setFonts(res.data.fonts || []);
     } catch (error) {
       console.error('Failed to load fonts:', error);
+      setSettingsError(error);
     }
   };
 
@@ -171,8 +195,11 @@ export function SettingsPage() {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       loadFonts();
+      setSettingsError(null);
+      toast({ title: i18n.t('settings.fontUploaded') });
     } catch (error) {
       console.error('Failed to upload font:', error);
+      setSettingsError(error, 'font');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -183,8 +210,11 @@ export function SettingsPage() {
     try {
       await apiClient.delete(`/fonts/${filename}`);
       loadFonts();
+      setSettingsError(null);
+      toast({ title: i18n.t('settings.fontDeleted') });
     } catch (error) {
       console.error('Failed to delete font:', error);
+      setSettingsError(error);
     }
   };
 
@@ -198,8 +228,8 @@ export function SettingsPage() {
       const url = URL.createObjectURL(new Blob([JSON.stringify(response.data, null, 2)], { type: 'application/json' }));
       const anchor = document.createElement('a'); anchor.href = url; anchor.download = `cover-studio-config-${new Date().toISOString().slice(0, 10)}.json`; anchor.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast({ title: '配置已导出', description: '不包含账号密码、连接密钥和图片文件。' });
-    } catch { toast({ title: '导出失败', variant: 'destructive' }); }
+      toast({ title: i18n.t('settings.exported'), description: i18n.t('settings.exportedHint') });
+    } catch { toast({ title: i18n.t('settings.exportFailed'), variant: 'destructive' }); }
     finally { setMaintenanceBusy(false); }
   };
   const handleCache = async () => {
@@ -210,14 +240,14 @@ export function SettingsPage() {
       } else {
         const { data } = await apiClient.post('/settings/cache/clear');
         setCachePreview(null);
-        toast({ title: '清理完成', description: `已清理 ${data.files} 个文件。` });
+        toast({ title: i18n.t('settings.cacheCleared'), description: i18n.t('settings.cacheClearedCount', { count: data.files }) });
       }
-    } catch { toast({ title: '缓存操作失败', variant: 'destructive' }); }
+    } catch { toast({ title: i18n.t('settings.cacheFailed'), variant: 'destructive' }); }
     finally { setMaintenanceBusy(false); }
   };
   const saveRetention = async (key: 'maxRuns' | 'maxDays', value: string) => {
-    try { await apiClient.post('/settings', { [`history.${key}`]: value }); toast({ title: '历史保留设置已保存' }); }
-    catch { toast({ title: '保存失败，请输入有效整数', variant: 'destructive' }); await loadStorageSettings(); }
+    try { await apiClient.post('/settings', { [`history.${key}`]: value }); setSettingsError(null); toast({ title: i18n.t('settings.retentionSaved') }); }
+    catch (error) { setSettingsError(error); toast({ title: i18n.t('settings.integerRequired'), variant: 'destructive' }); }
   };
 
   const loadStorageSettings = async () => {
@@ -231,6 +261,7 @@ export function SettingsPage() {
       });
     } catch (error) {
       console.error('Failed to load storage settings', error);
+      setSettingsError(error);
     }
   };
 
@@ -240,9 +271,10 @@ export function SettingsPage() {
     try {
       // Send directly as object, backend now supports it
       await apiClient.post('/settings', { [`storage.${key}`]: String(newValue) });
+      setSettingsError(null);
     } catch (error) {
       console.error('Failed to save storage setting', error);
-      // Revert on error
+      setSettingsError(error);
       setStorageSettings(prev => ({ ...prev, [key]: !newValue }));
     }
   };
@@ -258,6 +290,7 @@ export function SettingsPage() {
       });
     } catch (error) {
       console.error('Failed to load rendering settings', error);
+      setSettingsError(error);
     }
   };
 
@@ -265,11 +298,11 @@ export function SettingsPage() {
     setRenderingSettings(prev => ({ ...prev, [key]: value }));
     try {
       await apiClient.post('/settings', { [`rendering.${key}`]: value });
+      setSettingsError(null);
     } catch (error) {
       console.error('Failed to save rendering setting', error);
-      // Revert on error
-      toast({ title: '保存失败，请检查输入范围', variant: 'destructive' });
-      await loadRenderingSettings();
+      toast({ title: i18n.t('settings.rangeRequired'), variant: 'destructive' });
+      setSettingsError(error);
     }
   };
 
@@ -282,26 +315,26 @@ export function SettingsPage() {
           role: userFormData.role,
           ...(userFormData.password ? { password: userFormData.password } : {})
         });
-        toast({ title: '用户更新成功' });
+        toast({ title: i18n.t('settings.userUpdated') });
       } else {
         await createUserMutation.mutateAsync(userFormData);
-        toast({ title: '用户创建成功' });
+        toast({ title: i18n.t('settings.userCreated') });
       }
       setIsUserDialogOpen(false);
       setEditingUser(null);
       setUserFormData({ username: '', password: '', role: 'user' });
     } catch (error: any) {
-      toast({ title: '操作失败', description: error.response?.data?.error || '未知错误', variant: 'destructive' });
+      toast({ title: i18n.t('settings.operationFailed'), description: getLocalizedApiError(error), variant: 'destructive' });
     }
   };
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (pwdFormData.password !== pwdFormData.confirmPassword) {
-      return toast({ title: '错误', description: '两次输出的密码不一致', variant: 'destructive' });
+      return toast({ title: i18n.t('settings.error'), description: i18n.t('settings.passwordMismatch'), variant: 'destructive' });
     }
     if (pwdFormData.password.length < 6) {
-      return toast({ title: '错误', description: '密码长度至少为 6 位', variant: 'destructive' });
+      return toast({ title: i18n.t('settings.error'), description: i18n.t('settings.passwordLength'), variant: 'destructive' });
     }
 
     try {
@@ -309,26 +342,26 @@ export function SettingsPage() {
         id: user!.id,
         password: pwdFormData.password
       });
-      toast({ title: '密码修改成功' });
+      toast({ title: i18n.t('settings.passwordUpdated') });
       setIsChangePwdOpen(false);
       setPwdFormData({ password: '', confirmPassword: '' });
     } catch (error: any) {
-      toast({ title: '修改失败', description: error.response?.data?.error || '未知错误', variant: 'destructive' });
+      toast({ title: i18n.t('settings.passwordFailed'), description: getLocalizedApiError(error), variant: 'destructive' });
     }
   };
 
   const menuItems = [
-    { id: 'appearance', label: '外观设置', icon: Palette },
-    { id: 'rendering', label: '渲染设置', icon: Sparkles },
-    { id: 'storage', label: '存储设置', icon: Server },
-    { id: 'fonts', label: '字体管理', icon: Type },
-    { id: 'ai', label: 'AI 配置', icon: Sparkles },
-    ...(isAdmin ? [{ id: 'network', label: '网络设置', icon: Globe }] : []),
-    { id: 'data', label: '数据管理', icon: Database },
-    { id: 'logs', label: '系统日志', icon: Terminal },
-    ...(user?.role === 'admin' ? [{ id: 'users', label: '用户管理', icon: Users }] : []),
-    { id: 'releases', label: '版本记录', icon: History },
-    { id: 'about', label: '关于', icon: Info },
+    { id: 'appearance', label: t('settings.appearance'), icon: Palette },
+    { id: 'rendering', label: t('settings.rendering'), icon: Sparkles },
+    { id: 'storage', label: t('settings.storage'), icon: Server },
+    { id: 'fonts', label: t('settings.fonts'), icon: Type },
+    { id: 'ai', label: t('settings.ai'), icon: Sparkles },
+    ...(isAdmin ? [{ id: 'network', label: t('settings.network'), icon: Globe }] : []),
+    { id: 'data', label: t('settings.data'), icon: Database },
+    { id: 'logs', label: t('settings.logs'), icon: Terminal },
+    ...(user?.role === 'admin' ? [{ id: 'users', label: t('settings.users'), icon: Users }] : []),
+    { id: 'releases', label: t('releases.title'), icon: History },
+    { id: 'about', label: t('about.title'), icon: Info },
   ];
 
   const getLogColor = (level: string) => {
@@ -351,9 +384,9 @@ export function SettingsPage() {
               {user?.username?.[0]?.toUpperCase() || 'U'}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <h3 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.username || 'User'}</h3>
+              <h3 style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user?.username || t('common.user')}</h3>
               <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                {user?.role === 'admin' ? '管理员' : '普通用户'}
+                {t(user?.role === 'admin' ? 'common.administrator' : 'common.user')}
               </p>
             </div>
           </div>
@@ -363,7 +396,7 @@ export function SettingsPage() {
             style={{ width: '100%', marginTop: 12, fontSize: 11, height: 28, gap: 6, opacity: 0.8 }}
           >
             <Key style={{ width: 12, height: 12 }} />
-            修改密码
+            {t('settings.changePassword')}
           </Button>
         </div>
 
@@ -388,13 +421,14 @@ export function SettingsPage() {
                 transition: 'all 0.2s',
                 marginBottom: 2,
                 fontSize: 13,
-                fontWeight: 500
+                fontWeight: 500,
+                textAlign: 'left'
               }}
             >
-              <item.icon style={{ width: 18, height: 18 }} />
-              {item.label}
+              <item.icon style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 0 }}>{item.label}</span>
               {item.id === 'releases' && releases?.updateAvailable && <UpdateDot />}
-              {activeSection === item.id && <ChevronRight style={{ width: 16, height: 16, marginLeft: 'auto' }} />}
+              {activeSection === item.id && <ChevronRight style={{ width: 16, height: 16, flexShrink: 0, marginLeft: 'auto' }} />}
             </button>
           ))}
         </div>
@@ -407,25 +441,27 @@ export function SettingsPage() {
 
       {/* Right Content */}
       <div className="settings-content">
+        {settingsError && <div className="card card-body" role="alert"><p>{getLocalizedApiError(settingsError.error, settingsError.context)}</p><ErrorDetails error={settingsError.error} /></div>}
         {activeSection === 'about' && <AboutPage />}
         {activeSection === 'releases' && <ReleasesPage />}
-        {activeSection === 'network' && (isAdmin ? <GithubNetworkSettings /> : <div className="card card-body">网络设置由管理员管理。</div>)}
+        {activeSection === 'network' && (isAdmin ? <GithubNetworkSettings /> : <div className="card card-body">{t('settings.networkAdmin')}</div>)}
         {/* Appearance */}
         {activeSection === 'appearance' && (
           <div className="card" style={{ height: 'fit-content' }}>
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Palette style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              外观设置
+              {t('settings.appearance')}
             </div>
             <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
+              <LanguageSelect showHint />
               {/* Mode */}
               <div>
-                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>显示模式</p>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>{t('settings.displayMode')}</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, maxWidth: 400 }}>
                   {[
-                    { id: 'light' as const, label: '浅色', icon: Sun },
-                    { id: 'dark' as const, label: '深色', icon: Moon },
-                    { id: 'system' as const, label: '系统', icon: Monitor },
+                    { id: 'light' as const, label: t('settings.light'), icon: Sun },
+                    { id: 'dark' as const, label: t('settings.dark'), icon: Moon },
+                    { id: 'system' as const, label: t('settings.system'), icon: Monitor },
                   ].map((m) => (
                     <button
                       key={m.id}
@@ -454,7 +490,7 @@ export function SettingsPage() {
 
               {/* Brand */}
               <div>
-                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>品牌色彩</p>
+                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>{t('settings.brandTheme')}</p>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16, maxWidth: 280 }}>
                   {[
                     { id: 'jellyfin' as const, label: 'Jellyfin', icon: Palette, color: 'var(--jellyfin)' },
@@ -493,18 +529,19 @@ export function SettingsPage() {
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              渲染设置
+              {t('settings.rendering')}
             </div>
-            {!isAdmin && <p style={{ padding: 16 }}>全局设置仅管理员可修改。</p>}
+            {!isAdmin && <p style={{ padding: 16 }}>{t('settings.adminOnly')}</p>}
             <fieldset disabled={!isAdmin} style={{ border: 0, padding: 0, margin: 0 }}>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出格式</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>生成海报的图片格式</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.outputFormat')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.outputFormatHint')}</p>
                 </div>
                 <select
                   className="input"
                   style={{ width: 140 }}
+                  aria-label={t('settings.outputFormat')}
                   value={renderingSettings.outputFormat}
                   onChange={e => saveRenderingSetting('outputFormat', e.target.value)}
                 >
@@ -515,14 +552,15 @@ export function SettingsPage() {
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>输出质量</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>JPEG / WebP 压缩质量 (1-100)，PNG 为无损格式</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.outputQuality')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.outputQualityHint')}</p>
                 </div>
                 <Input
                   type="number"
+                  aria-label={t('settings.outputQuality')}
                   value={renderingSettings.outputQuality}
                   onChange={e => setRenderingSettings(prev => ({ ...prev, outputQuality: e.target.value }))}
-                  onBlur={e => saveRenderingSetting('outputQuality', e.target.value)}
+                  onBlur={e => { if (!switchingLanguage(e)) void saveRenderingSetting('outputQuality', e.target.value); }}
                   min="1"
                   max="100"
                   className="input"
@@ -531,14 +569,15 @@ export function SettingsPage() {
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>并发数量</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>同时渲染的图片数量</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.concurrency')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.concurrencyHint')}</p>
                 </div>
                 <Input
                   type="number"
+                  aria-label={t('settings.concurrency')}
                   value={renderingSettings.concurrency}
                   onChange={e => setRenderingSettings(prev => ({ ...prev, concurrency: e.target.value }))}
-                  onBlur={e => saveRenderingSetting('concurrency', e.target.value)}
+                  onBlur={e => { if (!switchingLanguage(e)) void saveRenderingSetting('concurrency', e.target.value); }}
                   min="1"
                   max="10"
                   className="input"
@@ -554,19 +593,19 @@ export function SettingsPage() {
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Server style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              存储设置
+              {t('settings.storage')}
             </div>
-            {!isAdmin && <p style={{ padding: 16 }}>全局设置仅管理员可修改。</p>}
+            {!isAdmin && <p style={{ padding: 16 }}>{t('settings.adminOnly')}</p>}
             <fieldset disabled={!isAdmin} style={{ border: 0, padding: 0, margin: 0 }}>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存原海报</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>将抓取到的高清海报保存到 <code>./data/posters</code></p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.savePosters')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.savePostersHint')}</p>
                 </div>
                 <label className="switch">
                   <input
                     type="checkbox"
-                    checked={storageSettings.savePosters}
+                    aria-label={t('settings.savePosters')} checked={storageSettings.savePosters}
                     onChange={() => toggleStorage('savePosters')}
                   />
                   <span className="slider round"></span>
@@ -574,23 +613,23 @@ export function SettingsPage() {
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>保存生成的封面</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>额外保存一份封面文件；执行历史中的图片由下方保留策略管理</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.saveCovers')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.saveCoversHint')}</p>
                 </div>
                 <label className="switch">
                   <input
                     type="checkbox"
-                    checked={storageSettings.saveCovers}
+                    aria-label={t('settings.saveCovers')} checked={storageSettings.saveCovers}
                     onChange={() => toggleStorage('saveCovers')}
                   />
                   <span className="slider round"></span>
                 </label>
               </div>
               <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-color)' }}>
-                <h3>执行历史保留</h3>
-                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0' }}>每个任务保留最近指定次数、指定天数内的已结束记录和图片；超出任一上限会在启动或执行结束后清理。正在执行的记录会保留。</p>
-                <label>每任务最多次数 <Input type="number" min={1} max={500} value={retention.maxRuns} onChange={e => setRetention(p => ({ ...p, maxRuns: e.target.value }))} onBlur={e => saveRetention('maxRuns', e.target.value)} /></label>
-                <label>最多保留天数 <Input type="number" min={1} max={365} value={retention.maxDays} onChange={e => setRetention(p => ({ ...p, maxDays: e.target.value }))} onBlur={e => saveRetention('maxDays', e.target.value)} /></label>
+                <h3>{t('settings.retention')}</h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0' }}>{t('settings.retentionHint')}</p>
+                <label>{t('settings.maxRuns')} <Input type="number" min={1} max={500} value={retention.maxRuns} onChange={e => setRetention(p => ({ ...p, maxRuns: e.target.value }))} onBlur={e => { if (!switchingLanguage(e)) void saveRetention('maxRuns', e.target.value); }} /></label>
+                <label>{t('settings.maxDays')} <Input type="number" min={1} max={365} value={retention.maxDays} onChange={e => setRetention(p => ({ ...p, maxDays: e.target.value }))} onBlur={e => { if (!switchingLanguage(e)) void saveRetention('maxDays', e.target.value); }} /></label>
               </div>
             </fieldset>
           </div>
@@ -602,7 +641,7 @@ export function SettingsPage() {
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Type style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-                字体管理
+                {t('settings.fonts')}
               </div>
               <input
                 ref={fileInputRef}
@@ -617,15 +656,15 @@ export function SettingsPage() {
                 disabled={uploading}
               >
                 <Upload style={{ width: 14, height: 14 }} />
-                {uploading ? '上传中...' : '上传字体'}
+                {uploading ? t('settings.uploading') : t('settings.uploadFont')}
               </Button>
             </div>
             <div>
               {fonts.length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center' }}>
                   <Type style={{ width: 48, height: 48, color: 'var(--text-tertiary)', margin: '0 auto 16px' }} />
-                  <p style={{ color: 'var(--text-tertiary)' }}>暂无自定义字体</p>
-                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>点击上方按钮上传 TTF/OTF/WOFF 字体</p>
+                  <p style={{ color: 'var(--text-tertiary)' }}>{t('settings.noFonts')}</p>
+                  <p style={{ fontSize: 13, color: 'var(--text-tertiary)', marginTop: 8 }}>{t('settings.noFontsHint')}</p>
                 </div>
               ) : (
                 fonts.map((font) => (
@@ -658,7 +697,7 @@ export function SettingsPage() {
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Sparkles style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              AI 配置
+              {t('settings.ai')}
             </div>
             <div className="card-body">
               <AIProviderSettings />
@@ -671,32 +710,32 @@ export function SettingsPage() {
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <Database style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              数据管理
+              {t('settings.data')}
             </div>
             <div>
               {isAdmin && <DefaultTemplateSettings />}
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-color)' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>导出数据</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>导出模板和配置 JSON；不包含账号密码、API 密钥、历史图片与字体文件</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.exportData')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.exportDataHint')}</p>
                 </div>
                 <Button className="btn btn-secondary" disabled={!isAdmin || maintenanceBusy} onClick={handleExport}>
                   <Download style={{ width: 16, height: 16 }} />
-                  导出
+                  {t('common.export')}
                 </Button>
               </div>
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>清理缓存</h3>
-                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>清理超过 24 小时的临时文件和未被历史引用的图片，保留模板、字体和有效历史</p>
+                  <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.clearCache')}</h3>
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>{t('settings.clearCacheHint')}</p>
                 </div>
                 <Button className="btn btn-secondary" disabled={!isAdmin || maintenanceBusy} onClick={handleCache}>
                   <Trash2 style={{ width: 16, height: 16 }} />
-                  {cachePreview ? '确认清理' : '查看可清理文件'}
+                  {cachePreview ? t('settings.confirmCleanup') : t('settings.previewCleanup')}
                 </Button>
               </div>
-              {cachePreview && <div style={{ padding: '0 24px 20px' }} role="status">可清理 {cachePreview.files} 个文件，约 {(cachePreview.bytes / 1024 / 1024).toFixed(2)} MB。<Button variant="ghost" onClick={() => setCachePreview(null)}>取消</Button></div>}
-              {!isAdmin && <p style={{ padding: 16 }}>配置导出和缓存清理仅管理员可操作。</p>}
+              {cachePreview && <div style={{ padding: '0 24px 20px' }} role="status">{t('settings.cachePreview', { count: cachePreview.files, size: formatDisplayNumber(Number((cachePreview.bytes / 1024 / 1024).toFixed(2)), i18n.language) })}<Button variant="ghost" onClick={() => setCachePreview(null)}>{t('common.cancel')}</Button></div>}
+              {!isAdmin && <p style={{ padding: 16 }}>{t('settings.maintenanceAdmin')}</p>}
             </div>
           </div>
         )}
@@ -707,9 +746,9 @@ export function SettingsPage() {
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Terminal style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-                系统日志
+                {t('settings.logs')}
                 <span style={{ fontSize: 12, color: 'var(--text-tertiary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: 10 }}>
-                  {logs.filter(l => logFilter === 'all' || l.level === logFilter).length} 条
+                  {t('settings.logCount', { count: logs.filter(l => logFilter === 'all' || l.level === logFilter).length })}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -724,25 +763,26 @@ export function SettingsPage() {
                     color: autoScroll ? 'white' : 'var(--text-secondary)',
                     transition: 'all 0.2s'
                   }}
-                  title={autoScroll ? '自动滚动已开启' : '自动滚动已关闭'}
+                  title={autoScroll ? t('settings.autoScrollOn') : t('settings.autoScrollOff')}
                 >
                   {autoScroll ? <Play style={{ width: 12, height: 12 }} /> : <Pause style={{ width: 12, height: 12 }} />}
-                  {autoScroll ? '滚动' : '暂停'}
+                  {autoScroll ? t('settings.scroll') : t('settings.pause')}
                 </button>
                 <Button className="btn btn-ghost btn-sm" onClick={() => setLogs([])}>
                   <Trash2 style={{ width: 14, height: 14 }} />
-                  清空
+                  {t('settings.clear')}
                 </Button>
               </div>
             </div>
 
+            <div className="settings-log-status" role="status"><span>{displayMessage(logStreamStatus)}</span>{logStreamStatus && 'key' in logStreamStatus && ['settings.streamFailed', 'settings.streamDisconnected'].includes(logStreamStatus.key) && <Button variant="outline" size="sm" onClick={() => setLogStreamAttempt(value => value + 1)}>{t('settings.reconnect')}</Button>}{Boolean(logStreamError) && <ErrorDetails error={logStreamError} />}<p>{t('settings.logsOriginal')}</p></div>
             {/* Log Level Filter Tabs */}
             <div style={{ display: 'flex', gap: 4, padding: '8px 16px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-secondary)' }}>
               {[
-                { id: 'all' as const, label: '全部', color: 'var(--text-primary)' },
-                { id: 'info' as const, label: 'INFO', color: '#3b82f6' },
-                { id: 'warn' as const, label: 'WARN', color: '#f59e0b' },
-                { id: 'error' as const, label: 'ERROR', color: '#ef4444' },
+                { id: 'all' as const, label: t('settings.all'), color: 'var(--text-primary)' },
+                { id: 'info' as const, label: t('settings.info'), color: '#3b82f6' },
+                { id: 'warn' as const, label: t('settings.warn'), color: '#f59e0b' },
+                { id: 'error' as const, label: t('settings.logErrors'), color: '#ef4444' },
               ].map(filter => {
                 const count = filter.id === 'all' ? logs.length : logs.filter(l => l.level === filter.id).length;
                 return (
@@ -767,14 +807,14 @@ export function SettingsPage() {
               {logs.filter(l => logFilter === 'all' || l.level === logFilter).length === 0 ? (
                 <div style={{ padding: 48, textAlign: 'center' }}>
                   <Terminal style={{ width: 48, height: 48, color: '#4a5568', margin: '0 auto 16px' }} />
-                  <p style={{ color: '#718096' }}>暂无{logFilter !== 'all' ? ` ${logFilter.toUpperCase()} ` : ''}日志</p>
-                  <p style={{ fontSize: 13, color: '#4a5568', marginTop: 8 }}>执行操作时将在此显示日志</p>
+                  <p style={{ color: '#718096' }}>{t('settings.noLogs', { level: logFilter !== 'all' ? ` ${logFilter.toUpperCase()} ` : '' })}</p>
+                  <p style={{ fontSize: 13, color: '#4a5568', marginTop: 8 }}>{t('settings.logsHint')}</p>
                 </div>
               ) : (
                 <div style={{ padding: 16, fontFamily: 'Consolas, Monaco, monospace', fontSize: 12, lineHeight: 1.8 }}>
                   {logs.filter(l => logFilter === 'all' || l.level === logFilter).map((log, i) => (
                     <div key={i} style={{ display: 'flex', gap: 12 }}>
-                      <span style={{ color: '#4a5568', flexShrink: 0 }}>{log.timestamp}</span>
+                      <span style={{ color: '#4a5568', flexShrink: 0 }}>{formatDisplayDate(log.timestamp, i18n.language, { timeStyle: 'medium' }) || log.timestamp}</span>
                       <span style={{ color: getLogColor(log.level), flexShrink: 0, width: 50 }}>[{log.level.toUpperCase()}]</span>
                       <span style={{ color: '#e2e8f0', wordBreak: 'break-all' }}>{log.message}</span>
                     </div>
@@ -792,7 +832,7 @@ export function SettingsPage() {
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Users style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-                用户管理
+                {t('settings.users')}
               </div>
               <Button
                 className="btn btn-primary btn-sm"
@@ -803,24 +843,24 @@ export function SettingsPage() {
                 }}
               >
                 <UserPlus style={{ width: 14, height: 14 }} />
-                添加用户
+                {t('settings.addUser')}
               </Button>
             </div>
 
             <div>
               {usersLoading ? (
-                <div style={{ padding: 48, textAlign: 'center' }}>加载中...</div>
+                <div style={{ padding: 48, textAlign: 'center' }}>{t('settings.loading')}</div>
               ) : userList.length === 0 ? (
-                <div style={{ padding: 48, textAlign: 'center' }}>未找到用户</div>
+                <div style={{ padding: 48, textAlign: 'center' }}>{t('settings.noUsers')}</div>
               ) : (
                 <div style={{ overflowX: 'auto' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                     <thead>
                       <tr style={{ textAlign: 'left', color: 'var(--text-tertiary)', borderBottom: '1px solid var(--border-color)' }}>
-                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>用户名</th>
-                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>角色</th>
-                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>创建日期</th>
-                        <th style={{ padding: '12px 24px', fontWeight: 500, textAlign: 'right' }}>操作</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>{t('settings.username')}</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>{t('settings.role')}</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500 }}>{t('settings.createdAt')}</th>
+                        <th style={{ padding: '12px 24px', fontWeight: 500, textAlign: 'right' }}>{t('settings.actions')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -836,7 +876,7 @@ export function SettingsPage() {
                                 {u.username[0].toUpperCase()}
                               </div>
                               <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{u.username}</span>
-                              {u.id === user.id && <span style={{ fontSize: 10, background: 'var(--primary)', color: 'white', padding: '1px 6px', borderRadius: 4 }}>我</span>}
+                              {u.id === user.id && <span style={{ fontSize: 10, background: 'var(--primary)', color: 'white', padding: '1px 6px', borderRadius: 4 }}>{t('settings.me')}</span>}
                             </div>
                           </td>
                           <td style={{ padding: '12px 24px' }}>
@@ -846,11 +886,11 @@ export function SettingsPage() {
                               color: u.role === 'admin' ? 'var(--primary)' : 'var(--text-secondary)',
                               fontWeight: 500
                             }}>
-                              {u.role === 'admin' ? '管理员' : '普通用户'}
+                              {u.role === 'admin' ? t('settings.administrator') : t('settings.regularUser')}
                             </span>
                           </td>
                           <td style={{ padding: '12px 24px', color: 'var(--text-tertiary)' }}>
-                            {new Date(u.createdAt).toLocaleDateString()}
+                            {formatDisplayDate(u.createdAt, i18n.language, { dateStyle: 'medium' }) || t('common.unknownTime')}
                           </td>
                           <td style={{ padding: '12px 24px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -862,23 +902,23 @@ export function SettingsPage() {
                                   setIsUserDialogOpen(true);
                                 }}
                               >
-                                编辑
+                                {t('settings.edit')}
                               </Button>
                               <Button
                                 className="btn btn-ghost btn-sm"
                                 style={{ color: 'var(--danger)' }}
                                 onClick={async () => {
-                                  if (u.id === user.id) return alert('不能删除自己');
-                                  if (confirm(`确定要删除用户 "${u.username}" 吗？`)) {
+                                  if (u.id === user.id) return alert(t('settings.cannotDeleteSelf'));
+                                  if (confirm(t('settings.deleteUserConfirm', { name: u.username }))) {
                                     try {
                                       await deleteUserMutation.mutateAsync(u.id);
                                     } catch (err) {
-                                      alert('删除失败');
+                                      alert(i18n.t('settings.deleteFailed'));
                                     }
                                   }
                                 }}
                               >
-                                删除
+                                {t('settings.delete')}
                               </Button>
                             </div>
                           </td>
@@ -897,45 +937,46 @@ export function SettingsPage() {
                 background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 zIndex: 1000
               }}>
-                <div className="card" style={{ width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+                <div className="card" style={{ width: 'calc(100vw - 32px)', maxWidth: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
                   <div className="card-header">
-                    {editingUser ? '编辑用户' : '新建用户'}
+                    {editingUser ? t('settings.editUser') : t('settings.newUser')}
                   </div>
+                  <div style={{ padding: '12px 24px 0' }}><LanguageSelect compact /></div>
                   <form onSubmit={handleUserAction} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>用户名</label>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('settings.username')}</label>
                       <Input
-                        value={userFormData.username}
+                        aria-label={t('settings.username')} value={userFormData.username}
                         onChange={e => setUserFormData({ ...userFormData, username: e.target.value })}
                         disabled={!!editingUser}
                         required
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{editingUser ? '新密码 (留空则不修改)' : '密码'}</label>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{editingUser ? t('settings.optionalPassword') : t('settings.password')}</label>
                       <Input
                         type="password"
-                        value={userFormData.password}
+                        aria-label={editingUser ? t('settings.optionalPassword') : t('settings.password')} value={userFormData.password}
                         onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
                         required={!editingUser}
                       />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>角色</label>
+                      <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('settings.role')}</label>
                       <select
                         className="input"
-                        value={userFormData.role}
+                        aria-label={t('settings.role')} value={userFormData.role}
                         onChange={e => setUserFormData({ ...userFormData, role: e.target.value as any })}
                       >
-                        <option value="user">普通用户</option>
-                        <option value="admin">管理员</option>
+                        <option value="user">{t('settings.regularUser')}</option>
+                        <option value="admin">{t('settings.administrator')}</option>
                       </select>
                     </div>
 
                     <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
-                      <Button type="button" className="btn btn-secondary" onClick={() => setIsUserDialogOpen(false)}>取消</Button>
+                      <Button type="button" className="btn btn-secondary" onClick={() => setIsUserDialogOpen(false)}>{t('common.cancel')}</Button>
                       <Button type="submit" className="btn btn-primary" disabled={createUserMutation.isPending || updateUserMutation.isPending}>
-                        {editingUser ? '保存修改' : '立即创建'}
+                        {editingUser ? t('settings.saveChanges') : t('settings.createNow')}
                       </Button>
                     </div>
                   </form>
@@ -953,37 +994,38 @@ export function SettingsPage() {
           background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center',
           zIndex: 1000
         }}>
-          <div className="card" style={{ width: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
+          <div className="card" style={{ width: 'calc(100vw - 32px)', maxWidth: 400, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Key style={{ width: 18, height: 18, color: 'var(--primary)' }} />
-              修改我的密码
+              {t('settings.myPassword')}
             </div>
+            <div style={{ padding: '12px 24px 0' }}><LanguageSelect compact /></div>
             <form onSubmit={handleChangePassword} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>新密码</label>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('settings.newPassword')}</label>
                 <Input
                   type="password"
-                  placeholder="请输入至少 6 位新密码"
-                  value={pwdFormData.password}
+                  placeholder={t('settings.newPasswordPlaceholder')}
+                  aria-label={t('settings.newPassword')} value={pwdFormData.password}
                   onChange={e => setPwdFormData({ ...pwdFormData, password: e.target.value })}
                   required
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>确认新密码</label>
+                <label style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{t('settings.confirmNewPassword')}</label>
                 <Input
                   type="password"
-                  placeholder="请再次输入新密码"
-                  value={pwdFormData.confirmPassword}
+                  placeholder={t('settings.confirmPasswordPlaceholder')}
+                  aria-label={t('settings.confirmNewPassword')} value={pwdFormData.confirmPassword}
                   onChange={e => setPwdFormData({ ...pwdFormData, confirmPassword: e.target.value })}
                   required
                 />
               </div>
 
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12 }}>
-                <Button type="button" className="btn btn-secondary" onClick={() => setIsChangePwdOpen(false)}>取消</Button>
+                <Button type="button" className="btn btn-secondary" onClick={() => setIsChangePwdOpen(false)}>{t('common.cancel')}</Button>
                 <Button type="submit" className="btn btn-primary" disabled={updateUserMutation.isPending}>
-                  确认修改
+                  {t('settings.confirmChange')}
                 </Button>
               </div>
             </form>

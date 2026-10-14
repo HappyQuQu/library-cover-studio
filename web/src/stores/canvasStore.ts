@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { CodedError } from '@/lib/codedError';
 import * as fabric from 'fabric';
 import { CANVAS_PROPERTIES } from '@/lib/aiDesign';
 import { applyPosterBackground } from '@/lib/posterBackground';
@@ -151,7 +152,7 @@ export const useCanvasStore = create<CanvasState>((set, get) => ({
 
   // 从 AI 生成结果等外部 JSON 应用到画布，保证历史正确且不被 object:added 覆盖
   applyCanvasJSON: async (json: any) => {
-    if (get().readOnly) throw new Error('模板已锁定，请先解锁再编辑');
+    if (get().readOnly) throw new CodedError('TEMPLATE_LOCKED');
     const { canvas } = get();
     if (!canvas) return;
     const original = canvas.toObject(CANVAS_PROPERTIES);

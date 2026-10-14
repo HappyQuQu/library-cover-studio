@@ -1,3 +1,4 @@
+import i18n from '../lib/i18n';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 
@@ -16,9 +17,9 @@ export interface AIProvider {
 }
 
 export interface AIModel { id: string; name: string; imageInput: boolean | null; capabilitySource: 'api' | 'official' | 'manual' | 'unknown'; }
-export interface ModelCatalog { models: AIModel[]; source: 'api' | 'configured'; warning?: string; }
+export interface ModelCatalog { models: AIModel[]; source: 'api' | 'configured'; warning?: string; warningCode?: string; }
 export function modelImageLabel(model?: AIModel): string {
-  return model?.imageInput === true ? '支持图片' : model?.imageInput === false ? '不支持图片' : '图片能力待确认';
+  return model?.imageInput === true ? i18n.t('aiSettings.imageSupported') : model?.imageInput === false ? i18n.t('aiSettings.imageUnsupported') : i18n.t('aiSettings.imageUnknown');
 }
 export function useAIProviderModels(providerId?: string, updatedAt?: string) {
   return useQuery({

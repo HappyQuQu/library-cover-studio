@@ -1,3 +1,7 @@
+import { CodedError } from '@/lib/codedError';
+import { getLocalizedApiError } from '@/lib/apiError';
+import { ErrorDetails } from '@/components/ErrorDetails';
+import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { StaticCanvas, Gradient } from 'fabric';
 import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
@@ -24,7 +28,7 @@ function validateSVGImages(json: CanvasJSON) {
         const xml = /;base64$/i.test(value.slice(0, comma)) ? atob(value.slice(comma + 1)) : decodeURIComponent(value.slice(comma + 1));
         const document = new DOMParser().parseFromString(xml, 'image/svg+xml');
         if (document.querySelector('parsererror') || document.documentElement.localName !== 'svg') throw new Error();
-      } catch { throw new Error('背景或图层中的 SVG 格式无效，请重新生成方案；建议使用纯色或渐变背景'); }
+      } catch { throw new CodedError('AI_PREVIEW_SVG'); }
     }
     return value;
   });
@@ -33,14 +37,15 @@ function validateSVGImages(json: CanvasJSON) {
 export function DesignPreview({ json, width, height, onReady }: {
   json: CanvasJSON; width: number; height: number; onReady?: (ready: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [image, setImage] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let disposed = false;
     const controller = new AbortController();
     const preview = new StaticCanvas(document.createElement('canvas'), { width, height, enableRetinaScaling: false });
-    setImage(''); setError(''); onReady?.(false);
+    setImage(''); setError(null); onReady?.(false);
     (async () => {
       try {
         validateSVGImages(json);
@@ -58,10 +63,8 @@ export function DesignPreview({ json, width, height, onReady }: {
       } catch (cause) {
         if (!disposed) {
           const detail = cause instanceof Error ? cause.message : '';
-          setError(detail.includes('SVG 格式无效') ? detail : /cross.origin|taint|insecure/i.test(detail)
-            ? '图片跨域限制导致预览无法导出，请使用本地上传的图片'
-            : /loading|image/i.test(detail) ? '图片加载失败，可重试预览；仍失败时请检查素材地址'
-            : '设计图层无法渲染，请重新生成方案');
+          setError(cause instanceof CodedError ? cause : Object.assign(new Error(detail), { code: /cross.origin|taint|insecure/i.test(detail)
+            ? 'AI_PREVIEW_CORS' : /loading|image/i.test(detail) ? 'AI_PREVIEW_IMAGE' : 'AI_PREVIEW_RENDER' }));
           onReady?.(false);
         }
       } finally {
@@ -71,9 +74,9 @@ export function DesignPreview({ json, width, height, onReady }: {
     return () => { disposed = true; controller.abort(); };
   }, [json, width, height, onReady, attempt]);
   return <div className="design-preview" style={{ aspectRatio: `${width} / ${height}` }}>
-    {image ? <img src={image} alt="封面设计预览" /> : error
-      ? <div className="preview-placeholder" role="alert"><AlertCircle size={18} /><span>{error}</span>
-        <button type="button" className="studio-secondary" onClick={() => setAttempt(value => value + 1)}><RefreshCw size={12} />重试预览</button></div>
-      : <div className="preview-placeholder" role="status"><Loader2 size={18} className="animate-spin" /><span>正在渲染预览</span></div>}
+    {image ? <img src={image} alt={t('aiChat.previewAlt')} /> : error
+      ? <div className="preview-placeholder" role="alert"><AlertCircle size={18} /><span>{getLocalizedApiError(error, 'ai')}</span><ErrorDetails error={error} />
+        <button type="button" className="studio-secondary" onClick={() => setAttempt(value => value + 1)}><RefreshCw size={12} />{t('aiChat.retryPreview')}</button></div>
+      : <div className="preview-placeholder" role="status"><Loader2 size={18} className="animate-spin" /><span>{t('aiChat.renderingPreview')}</span></div>}
   </div>;
 }

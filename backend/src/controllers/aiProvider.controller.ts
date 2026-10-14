@@ -1,3 +1,4 @@
+import { aiFailureCode } from '../services/ai/utils/feedback.js';
 import { Request, Response } from 'express';
 import { eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -13,7 +14,7 @@ export async function getAIProviders(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
 
     const providers = await db
@@ -37,7 +38,7 @@ export async function getAIProviders(req: Request, res: Response) {
     res.json(result);
   } catch (error: any) {
     console.error('Failed to get AI providers:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -46,13 +47,13 @@ export async function createAIProvider(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { name, type, apiUrl, apiKey, model, modelCapabilities, isDefault } = req.body;
 
     // 验证必需字段
     if (!name || !type || !apiUrl) {
-      return res.status(400).json({ error: 'Missing required fields' });
+      return res.status(400).json({ error: 'Missing required fields', code: 'AI_CONFIG_INVALID' });
     }
 
     // 如果设置为默认，取消其他默认配置
@@ -90,7 +91,7 @@ export async function createAIProvider(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error('Failed to create AI provider:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -99,7 +100,7 @@ export async function updateAIProvider(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { id } = req.params;
     const providerId = Array.isArray(id) ? id[0] : id;
@@ -113,7 +114,7 @@ export async function updateAIProvider(req: Request, res: Response) {
       .limit(1);
 
     if (existing.length === 0) {
-      return res.status(404).json({ error: 'AI provider not found' });
+      return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
     }
 
     // 如果设置为默认，取消其他默认配置
@@ -155,7 +156,7 @@ export async function updateAIProvider(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error('Failed to update AI provider:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -164,7 +165,7 @@ export async function deleteAIProvider(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { id } = req.params;
     const providerId = Array.isArray(id) ? id[0] : id;
@@ -177,7 +178,7 @@ export async function deleteAIProvider(req: Request, res: Response) {
       .limit(1);
 
     if (existing.length === 0) {
-      return res.status(404).json({ error: 'AI provider not found' });
+      return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
     }
 
     await db.delete(aiProviders).where(eq(aiProviders.id, providerId));
@@ -185,7 +186,7 @@ export async function deleteAIProvider(req: Request, res: Response) {
     res.json({ message: 'AI provider deleted' });
   } catch (error: any) {
     console.error('Failed to delete AI provider:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error) });
   }
 }
 
@@ -194,18 +195,18 @@ export async function testAIProviderConfig(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { type, apiUrl, model, providerId } = req.body;
     let apiKey = req.body.apiKey;
     if (providerId && !apiKey) {
       const [saved] = await db.select().from(aiProviders).where(and(eq(aiProviders.id, providerId), eq(aiProviders.userId, userId))).limit(1);
-      if (!saved) return res.status(404).json({ error: 'AI provider not found' });
-      if (saved.apiUrl.replace(/\/$/, '') !== apiUrl?.replace(/\/$/, '') || saved.type !== type) return res.status(400).json({ error: '修改 API 地址后需要重新输入密钥' });
+      if (!saved) return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
+      if (saved.apiUrl.replace(/\/$/, '') !== apiUrl?.replace(/\/$/, '') || saved.type !== type) return res.status(400).json({ error: '修改 API 地址后需要重新输入密钥', code: 'AI_KEY_REQUIRED' });
       apiKey = saved.apiKeyEncrypted ? decrypt(saved.apiKeyEncrypted) : undefined;
     }
     if (!type || !apiUrl) {
-      return res.status(400).json({ error: 'type 和 apiUrl 为必填项' });
+      return res.status(400).json({ error: 'type 和 apiUrl 为必填项', code: 'AI_CONFIG_INVALID' });
     }
 
     const client = await createAIClient({
@@ -219,7 +220,7 @@ export async function testAIProviderConfig(req: Request, res: Response) {
     res.json({ success });
   } catch (error: any) {
     console.error('Failed to test AI provider config:', error);
-    res.status(500).json({ error: error.message, success: false });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error), success: false });
   }
 }
 
@@ -228,7 +229,7 @@ export async function testAIProvider(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
     if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
+      return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     }
     const { id } = req.params;
     const providerId = Array.isArray(id) ? id[0] : id;
@@ -241,7 +242,7 @@ export async function testAIProvider(req: Request, res: Response) {
       .limit(1);
 
     if (providers.length === 0) {
-      return res.status(404).json({ error: 'AI provider not found' });
+      return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
     }
 
     const provider = providers[0];
@@ -252,7 +253,7 @@ export async function testAIProvider(req: Request, res: Response) {
       try {
         apiKey = decrypt(provider.apiKeyEncrypted);
       } catch {
-        return res.status(400).json({ success: false, error: 'API 密钥已损坏，请重新编辑并填写新密钥' });
+        return res.status(400).json({ success: false, error: 'API 密钥已损坏，请重新编辑并填写新密钥', code: 'AI_KEY_REQUIRED' });
       }
     }
     const client = await createAIClient({
@@ -267,7 +268,7 @@ export async function testAIProvider(req: Request, res: Response) {
     res.json({ success });
   } catch (error: any) {
     console.error('Failed to test AI provider:', error);
-    res.status(500).json({ error: error.message, success: false });
+    res.status(500).json({ error: error.message, code: aiFailureCode(error), success: false });
   }
 }
 
@@ -275,25 +276,25 @@ export async function testAIProvider(req: Request, res: Response) {
 export async function getAIProviderModels(req: Request, res: Response) {
   try {
     const userId = req.user?.userId;
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!userId) return res.status(401).json({ error: 'Unauthorized', code: 'UNAUTHORIZED' });
     const id = req.params.id || req.body.providerId;
     let saved;
     if (id) {
       [saved] = await db.select().from(aiProviders).where(and(eq(aiProviders.id, id), eq(aiProviders.userId, userId))).limit(1);
-      if (!saved) return res.status(404).json({ error: 'AI provider not found' });
+      if (!saved) return res.status(404).json({ error: 'AI provider not found', code: 'AI_PROVIDER_NOT_FOUND' });
     }
     const body = req.method === 'GET' ? {} : req.body;
     const type = body.type || saved?.type;
     const apiUrl = body.apiUrl || saved?.apiUrl;
-    if (!['claude', 'openai', 'ollama', 'custom'].includes(type) || typeof apiUrl !== 'string') return res.status(400).json({ error: '请填写服务类型和 API 基础路径' });
+    if (!['claude', 'openai', 'ollama', 'custom'].includes(type) || typeof apiUrl !== 'string') return res.status(400).json({ error: '请填写服务类型和 API 基础路径', code: 'AI_CONFIG_INVALID' });
     // Never send a stored credential to an edited endpoint. A new endpoint needs a new key.
     const sameEndpoint = saved && apiUrl.replace(/\/$/, '') === saved.apiUrl.replace(/\/$/, '') && type === saved.type;
     const apiKey = body.apiKey || (sameEndpoint && saved?.apiKeyEncrypted ? decrypt(saved.apiKeyEncrypted) : undefined);
-    if (type !== 'ollama' && !apiKey) return res.status(400).json({ error: '请填写 API Key；修改 API 地址后需要重新输入密钥' });
+    if (type !== 'ollama' && !apiKey) return res.status(400).json({ error: '请填写 API Key；修改 API 地址后需要重新输入密钥', code: 'AI_KEY_REQUIRED' });
     const result = await listProviderModels({ type, apiUrl, apiKey, model: body.model ?? saved?.model ?? undefined,
       modelCapabilities: parseModelCapabilities(body.modelCapabilities ?? saved?.modelCapabilities) }, req.method === 'POST' || req.query.refresh === '1');
     res.json(result);
   } catch {
-    res.status(400).json({ error: '获取模型列表失败，请检查 API 地址和密钥；已保存的密钥不会显示在页面上' });
+    res.status(400).json({ error: '获取模型列表失败，请检查 API 地址和密钥；已保存的密钥不会显示在页面上', code: 'AI_CATALOG_FAILED' });
   }
 }
