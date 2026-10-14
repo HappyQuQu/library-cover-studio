@@ -45,11 +45,12 @@ app.get('/api/system/releases',(req,res)=>res.json({currentVersion:'1.8.1',lates
 
 const fs=require('node:fs'),path=require('node:path');
 const root=process.cwd();
-const design=JSON.parse(fs.readFileSync('backend/src/template/community-collection/pulse-grid.json','utf8'));
-Object.assign(templates[0],{name:'网格脉冲 · 测试设计',canvasJson:JSON.stringify(design.canvas),isLocked:false,isDefault:false,isPublic:false,width:1920,height:1080,thumbnailPath:'preview.jpg',author:{name:'原始作者'},changelog:'保留原始更新说明'});
+const design=JSON.parse(fs.readFileSync(path.join(root,'backend/src/template/defaults/tilted-wall.json'),'utf8'));
+const previewPath=path.join(root,'backend/src/template/defaults',design.previewFile);
+Object.assign(templates[0],{name:design.name+' · 测试设计',canvasJson:JSON.stringify(design.canvas),isLocked:false,isDefault:false,isPublic:false,width:1920,height:1080,thumbnailPath:'preview.jpg',author:{name:'原始作者'},changelog:'保留原始更新说明'});
 Object.assign(tasks[0],{type:'scheduled',cronExpression:'7 4 * * 1',timezone:'Asia/Shanghai',nextRunAt:'2026-10-18T20:07:00.000Z',libraryConfigs:JSON.stringify([{libraryId:'movies',libraryName:'电影库 · Demo',libraryType:'movies',templateId:templates[0].id,primaryTitle:'电影精选',secondaryTitle:'MOVIES',sortBy:'DateCreated',enabled:true}])});
 app.use('/api/templates/posters',express.static(path.join(root,'backend/src/template/poster')));
-const image=(req,res)=>res.type('image/jpeg').sendFile(path.join(root,'backend/src/template/community-collection/pulse-grid.jpg'));
+const image=(req,res)=>res.type('image/jpeg').sendFile(previewPath);
 app.get('/api/templates/:id', (req,res)=>res.json(templates.find(t=>t.id===req.params.id)));
 app.get(['/api/templates/:id/thumbnail','/api/templates/:id/history/:revision/thumbnail'],image);
 app.get('/api/templates/:id/history',(req,res)=>res.json({limit:50,revisions:[{id:'rev-new',name:'保存的中文设计',width:1920,height:1080,createdAt:now,kind:'save',previewUrl:'/api/templates/template-fixture/history/rev-new/thumbnail',version:'1.0.0'},{id:'rev-old',name:'初始设计',width:1920,height:1080,createdAt:'2026-10-12T20:00:00Z',kind:'baseline',previewUrl:'/api/templates/template-fixture/history/rev-old/thumbnail',version:'1.0.0'}]}));
@@ -62,12 +63,12 @@ app.post('/api/tasks/preview-schedule',(req,res)=>{
   res.json({timezone:'Asia/Shanghai',executions:Array.from({length:3},()=>schedule.next().toISOString())});
  } catch { res.status(400).json({error:'原始 Cron 校验诊断',code:'INVALID_SCHEDULE',timezone:'Asia/Shanghai'}); }
 });
-app.post('/api/tasks/preview-cover',(req,res)=>{if(req.body.primaryTitle==='FAIL')return error(res,'NO_POSTERS','原始错误：媒体库中没有可用海报');res.json({image:'data:image/jpeg;base64,'+fs.readFileSync('backend/src/template/community-collection/pulse-grid.jpg').toString('base64'),posterCount:2,noteCode:'POSTERS_REUSED',noteParams:{count:2},note:'使用 2 张可用海报，重复填充其余位置'});});
+app.post('/api/tasks/preview-cover',(req,res)=>{if(req.body.primaryTitle==='FAIL')return error(res,'NO_POSTERS','原始错误：媒体库中没有可用海报');res.json({image:'data:image/jpeg;base64,'+fs.readFileSync(previewPath).toString('base64'),posterCount:2,noteCode:'POSTERS_REUSED',noteParams:{count:2},note:'使用 2 张可用海报，重复填充其余位置'});});
 app.post('/api/tasks',(req,res)=>{const task={...req.body,id:'task-'+Date.now(),timezone:'Asia/Shanghai',nextRunAt:nextRun(req.body.cronExpression)};tasks.push(task);res.status(201).json(task);});
 app.put('/api/tasks/:id',(req,res)=>{const task=tasks.find(t=>t.id===req.params.id);Object.assign(task,req.body,{nextRunAt:nextRun(req.body.cronExpression)});res.json(task);});
 app.post('/api/tasks/:id/run',(req,res)=>res.json({message:'started'}));
 app.post('/api/tasks/:id/toggle',(req,res)=>{const task=tasks.find(t=>t.id===req.params.id);task.isEnabled=!task.isEnabled;res.json(task);});
-app.get('/api/tasks/:id/logs',(req,res)=>res.json([{id:'run-1',taskId:req.params.id,status:'completed',itemsProcessed:1,itemsFailed:1,startedAt:now,completedAt:'2026-10-14T04:00:59.600+08:00',errorMessage:'这是保留的原始诊断',covers:[{id:'cover-1',libraryId:'movies',libraryName:'电影库 · Demo',templateName:'网格脉冲',status:'uploaded',width:1920,height:1080,imageUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image',thumbnailUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image'},{id:'cover-2',libraryId:'series',libraryName:'剧集库 · Demo',templateName:'网格脉冲',status:'failed',errorMessage:'保留的上传错误原文',imageUrl:null}]}]));
+app.get('/api/tasks/:id/logs',(req,res)=>res.json([{id:'run-1',taskId:req.params.id,status:'completed',itemsProcessed:1,itemsFailed:1,startedAt:now,completedAt:'2026-10-14T04:00:59.600+08:00',errorMessage:'这是保留的原始诊断',covers:[{id:'cover-1',libraryId:'movies',libraryName:'电影库 · Demo',templateName:design.name,status:'uploaded',width:1920,height:1080,imageUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image',thumbnailUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image'},{id:'cover-2',libraryId:'series',libraryName:'剧集库 · Demo',templateName:design.name,status:'failed',errorMessage:'保留的上传错误原文',imageUrl:null}]}]));
 app.get('/api/tasks/:task/logs/:log/covers/:cover/image',image);
 app.get('/api/template-store',(req,res)=>{const count=13,pageSize=Number(req.query.pageSize)||24,page=Number(req.query.page)||1;let rows=Array.from({length:count},(_,index)=>({id:'store-'+index,revision:'rev-fixture',name:'社区设计 '+(index+1),description:'保留社区模板说明原文',width:1920,height:1080,downloadCount:index+1,installedTemplateId:null,version:'2.0.0',author:{name:'作者原名'},changelog:'社区更新记录原文',compatible:true,updateAvailable:index===0,previousTemplateId:index===0?'template-fixture':null,installedVersion:'1.0.0',updateMode:'replace',localMatch:false,localLocked:false,localModified:true,countPending:false,countLive:true}));if(req.query.q)rows=rows.filter(t=>t.name.includes(String(req.query.q)));res.json({repositoryUrl:'https://github.com/HappyQuQu/library-cover-store',generatedAt:now,stale:false,setupRequired:false,pendingCount:1,total:rows.length,page,pageSize,totalPages:Math.max(1,Math.ceil(rows.length/pageSize)),templates:rows.slice((page-1)*pageSize,page*pageSize)});});
 app.get('/api/template-store/:id/preview',image);

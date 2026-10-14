@@ -245,7 +245,8 @@ pnpm build  # 构建前后端
 - [自动化使用指南](doc/Automation_Guide.md)：任务配置、变量、定时执行与历史记录。
 - [发布流程](doc/Publishing.md)：GitHub Actions、Docker Hub 镜像与版本发布。
 - [Docker Hub 说明](README.dockerhub.md)：镜像页面的部署与使用教程。
-- [用户手册](doc/Product_Manual.md) · [技术架构](doc/Technical_Architecture.md)。
+- [技术架构](doc/Technical_Architecture.md)：源码结构、封面生成流程与模板维护边界。
+- [模板商店仓库](https://github.com/HappyQuQu/library-cover-store)：社区模板源文件、预览图、贡献与发布。
 - [更新日志](CHANGELOG.md) · [问题反馈](https://github.com/HappyQuQu/library-cover-studio/issues)。
 
 ## 📄 许可证

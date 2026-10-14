@@ -257,7 +257,8 @@ The deployment guides, QA checklist and changelog are in Chinese. The contributi
 - [Automation guide](doc/Automation_Guide.md): task configuration, variables, schedules, and execution history.
 - [Publishing workflow](doc/Publishing.md): GitHub Actions, Docker Hub images, and version releases.
 - [Docker Hub overview](README.dockerhub.md): deployment and usage instructions for the image page.
-- [User manual](doc/Product_Manual.md) · [Technical architecture](doc/Technical_Architecture.md).
+- [Technical architecture](doc/Technical_Architecture.md): source structure, cover generation and template ownership.
+- [Template store repository](https://github.com/HappyQuQu/library-cover-store): community template sources, previews, contributions and publishing.
 - [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/HappyQuQu/library-cover-studio/issues).
 
 ## 📄 License
