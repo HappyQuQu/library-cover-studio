@@ -15,6 +15,7 @@ import urllib.request
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--image', required=True)
+parser.add_argument('--expected-version', help='Require the final image to serve the checked source version')
 args = parser.parse_args()
 name = 'lcs-smoke-' + secrets.token_hex(4)
 key = secrets.token_hex(32)
@@ -40,7 +41,10 @@ with tempfile.TemporaryDirectory(prefix='lcs-smoke-', dir=Path.cwd().parent) as 
         deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             try:
-                if json.loads(request('/api/health')[1])['status'] == 'ok':
+                health = json.loads(request('/api/health')[1])
+                if health['status'] == 'ok':
+                    if args.expected_version and health.get('version') != args.expected_version:
+                        raise RuntimeError('Container version does not match the verified source')
                     return
             except (OSError, ValueError):
                 time.sleep(0.5)

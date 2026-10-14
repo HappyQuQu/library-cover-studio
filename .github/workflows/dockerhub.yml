@@ -28,6 +28,8 @@ jobs:
   verify:
     name: Verify source before release
     uses: ./.github/workflows/ci.yml
+    with:
+      build_images: false
 
   credentials:
     name: Check publishing configuration
@@ -168,19 +170,23 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ needs.release.outputs.build_sha }}
+      build_images: false
 
-  publish:
-    name: Build and push unified image
+  prepare-images:
+    name: Prepare final image metadata
     needs: [verify, credentials, release, release-verify]
     if: >-
       always() &&
+      !cancelled() &&
       needs.verify.result == 'success' &&
       needs.credentials.result == 'success' &&
       (needs.release.result == 'success' || needs.release.result == 'skipped') &&
       (needs.release-verify.result == 'success' || needs.release-verify.result == 'skipped') &&
       (github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.release.outputs.eligible == 'true')
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 5
+    outputs:
+      source: ${{ needs.release.outputs.build_sha || github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -215,18 +221,6 @@ jobs:
             echo "short_sha=${BUILD_SHA:0:7}"
           } >> "${GITHUB_OUTPUT}"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v5
@@ -244,19 +238,76 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=sha-${{ steps.version.outputs.short_sha }}
 
-      - name: Build and push image
-        uses: docker/build-push-action@v6
+      - name: Record final image metadata
+        env:
+          METADATA: ${{ steps.meta.outputs.json }}
+        run: |
+          python3 - <<'PY'
+          import os, pathlib
+          (pathlib.Path(os.environ['RUNNER_TEMP']) / 'final-image-metadata.json').write_text(os.environ['METADATA'])
+          PY
+
+      - name: Upload final image metadata
+        uses: actions/upload-artifact@v4
         with:
-          context: .
-          file: Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=unified
-          cache-to: type=gha,scope=unified,mode=max
-          sbom: true
-          provenance: true
+          name: final-image-metadata
+          path: ${{ runner.temp }}/final-image-metadata.json
+          if-no-files-found: error
+          retention-days: 1
+
+  images:
+    name: Build and verify final images
+    needs: prepare-images
+    uses: ./.github/workflows/native-images.yml
+    with:
+      ref: ${{ needs.prepare-images.outputs.source }}
+      publish: true
+      image: ${{ format('{0}/library-cover-studio', vars.DOCKERHUB_NAMESPACE || 'evanqu') }}
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  publish:
+    name: Publish verified multi-platform image
+    needs: [prepare-images, images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout verified source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-images.outputs.source }}
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Download both verified digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: verified-digest-*
+          path: ${{ runner.temp }}/verified-digests
+          merge-multiple: true
+
+      - name: Download final image metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: final-image-metadata
+          path: ${{ runner.temp }}/image-metadata
+
+      - name: Publish tags from the verified digests without rebuilding
+        env:
+          SOURCE: ${{ needs.prepare-images.outputs.source }}
+        run: |
+          python3 scripts/publish-manifest.py --image "${IMAGE_NAMESPACE}/library-cover-studio" --source "${SOURCE}" \
+            --digests "${RUNNER_TEMP}/verified-digests" \
+            --metadata "${RUNNER_TEMP}/image-metadata/final-image-metadata.json"
 
       - name: Update Docker Hub overview
         uses: peter-evans/dockerhub-description@e98e4d1628a5f3be2be7c231e50981aee98723ae

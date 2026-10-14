@@ -6,13 +6,16 @@
 
 ## 发布顺序
 
-1. Pull request 运行隔离测试、前后端构建、单容器运行与备份恢复验收，以及 amd64 / arm64 两个平台的统一镜像构建。
-2. 合入 `main` 后运行相同检查，通过后由 Release Please 创建版本 PR。
+1. Pull request 并行运行隔离测试、前后端构建，以及 amd64 / arm64 原生镜像构建；每个架构均检查容器启动、渲染、版本号和备份恢复。同一 PR 有新提交时取消旧检查。
+2. 合入 `main` 后运行源码测试、前后端构建与版本一致性检查，通过后由 Release Please 创建版本 PR。这一步不重复构建 Docker。
 3. 工作流自动 squash merge 版本 PR，更新 `CHANGELOG.md`、三个 `package.json` 和版本清单，并创建 GitHub Release。
-4. 检查生成的版本提交，再构建并推送镜像，附带 SBOM 和 provenance。
-5. 将根目录 `README.dockerhub.md` 同步到镜像仓库的 Overview。
+4. 对生成的版本提交再次运行完整源码检查，然后分别在 `ubuntu-24.04` 和 `ubuntu-24.04-arm` 原生 runner 上并行构建最终镜像。每个架构只构建一次，分别缓存到 `unified-amd64` / `unified-arm64`，附带 SBOM 和 provenance。
+5. 镜像先以不可变摘要上传，逐架构拉取同一摘要进行容器运行及数据持久化检查。只有两个架构都通过，并且摘要记录、版本和源码提交一致，才合并镜像索引并更新正式标签；该步骤不重新构建镜像。失败时不更新部署使用的标签，但可能留下没有标签的构建镜像。
+6. 将根目录 `README.dockerhub.md` 同步到镜像仓库的 Overview。
 
 如果提交不需要新版本，会按当前主分支发布 `latest` 与提交标签。被新提交取代的旧 `main` 发布运行会跳过发布，避免过期代码覆盖新镜像。
+
+正式发布仍然串行执行，且不会因新提交直接取消正在进行的发布。PR 检查只读、不使用 Docker Hub 凭据；原生镜像构建与运行检查由同一个可复用工作流执行。首次使用新的架构缓存仍需完整构建，后续耗时取决于缓存命中和 runner 排队情况。
 
 ## 仓库配置
 
@@ -74,6 +77,7 @@ GitHub 首页使用 `README.md`，通过相对路径引用 `doc/images/screensho
 
 - [CI 检查](../.github/workflows/ci.yml)
 - [Docker Hub 发布](../.github/workflows/dockerhub.yml)
+- [原生镜像构建与验证](../.github/workflows/native-images.yml)
 - [Release Please 配置](../release-please-config.json)
 - [新安装 Compose 示例](compose.yaml) · [已有命名卷部署配置](../docker-compose.release.yml)
 
