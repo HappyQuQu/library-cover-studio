@@ -328,4 +328,4 @@ jobs:
           password: ${{ secrets.DOCKERHUB_DESCRIPTION_TOKEN || secrets.DOCKERHUB_TOKEN }}
           repository: ${{ env.IMAGE_NAMESPACE }}/library-cover-studio
           readme-filepath: README.dockerhub.md
-          short-description: Visual cover designer and automation for Jellyfin and Emby libraries.
+          short-description: Jellyfin/Emby 媒体库封面设计与自动化 | Cover design & automation
