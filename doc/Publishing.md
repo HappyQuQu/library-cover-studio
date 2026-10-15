@@ -56,7 +56,9 @@ PR 标题和提交使用 Conventional Commits，例如 `fix: 修复封面生成�
 
 ## Overview 和截图维护
 
-GitHub 首页使用 `README.md`，通过相对路径引用 `doc/images/screenshots/*.jpg`。Docker Hub 使用 `README.dockerhub.md`，所有图片和教程链接都是完整 HTTPS 地址，以便在镜像页面渲染。
+GitHub 首页使用中文优先的 `README.md` 和独立英文版 `README.en.md`，通过相对路径引用截图。Docker Hub Overview 使用独立的 `README.dockerhub.md`，同一页先中文后英文，并提供语言跳转；所有图片和教程链接使用完整 HTTPS 地址，以便在镜像页面渲染。更新功能和部署说明时同时维护两种语言，并同步工作流中的双语短描述。
+
+同步 Action 对 Overview 有 25,000 字节、短描述有 100 字节的上限，超过时会截断；提交前按 UTF-8 字节数检查，中文字符不能只按字符个数计算。参见 [Action 内容限制](https://github.com/peter-evans/dockerhub-description/tree/e98e4d1628a5f3be2be7c231e50981aee98723ae#content-limits)。合入 `main` 后由发布流程自动同步，单独修改 GitHub 首页不会更新 Docker Hub 的专用文档。
 
 **Docker Hub 的截图外链需要 GitHub 仓库和对应文件可以匿名访问。** 私有仓库或尚未合入 `main` 的新截图无法通过这些公开地址加载；应在仓库公开且图片进入 `main` 后执行 Overview 同步。不要把个人服务器、API 密钥或生产账号截入图片。
 
