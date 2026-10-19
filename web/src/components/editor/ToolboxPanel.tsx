@@ -32,6 +32,8 @@ interface ToolboxPanelProps {
   onAddImage: () => void;
   onAddShape: (type: string, payload?: any) => void;
   onChangeBackground: (bg: any) => void;
+  posterSource?: 'poster' | 'backdrop';
+  onChangePosterSource: (source: 'poster' | 'backdrop') => void;
   initialRandomOnGeneration?: boolean;
   initialPosterBackground?: PosterBackground;
 }
@@ -80,10 +82,11 @@ const stripeAngles = [
 // Reusable slider style
 const sliderCls = "w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-(--primary) [&::-webkit-slider-thumb]:shadow-md";
 
-export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
+export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, posterSource = 'poster', onChangePosterSource, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
   const { t } = useTranslation();
   const canvas = useCanvasStore(state => state.canvas);
-  const landscapePosters = (canvas as any)?.posterSource === 'backdrop';
+  const isRestoring = useCanvasStore(state => state.isRestoring);
+  const landscapePosters = posterSource === 'backdrop';
 const directions = [
   { id: 'leftToRight', label: t('designer.leftToRight'), icon: ArrowRightIcon },
   { id: 'topToBottom', label: t('designer.topToBottom'), icon: ArrowDown },
@@ -102,13 +105,13 @@ const shapes = [
 
   const [activeTab, setActiveTab] = useState<'elements' | 'background'>('elements');
   const [bgType, setBgType] = useState<'color' | 'gradient' | 'random' | 'pattern' | 'poster-blur'>(initialPosterBackground ? 'poster-blur' : 'gradient');
-  const [posterSource, setPosterSource] = useState<'poster' | 'backdrop'>(initialPosterBackground?.source ?? 'poster');
+  const [backgroundSource, setBackgroundSource] = useState<'poster' | 'backdrop'>(initialPosterBackground?.source ?? 'poster');
   const [posterBlur, setPosterBlur] = useState(initialPosterBackground?.blur ?? DEFAULT_POSTER_BACKGROUND.blur);
   const [posterDim, setPosterDim] = useState(initialPosterBackground?.dim ?? DEFAULT_POSTER_BACKGROUND.dim);
   useEffect(() => {
     if (initialPosterBackground) {
       setBgType('poster-blur');
-      setPosterSource(initialPosterBackground.source ?? 'poster');
+      setBackgroundSource(initialPosterBackground.source ?? 'poster');
       setPosterBlur(initialPosterBackground.blur);
       setPosterDim(initialPosterBackground.dim);
     } else {
@@ -232,6 +235,17 @@ const shapes = [
                 <span className="text-xs font-semibold text-(--text-primary)">{t('designer.posterTemplates')}</span>
                 <div className="flex-1 h-px bg-(--border-color)" />
               </div>
+              <label className="block space-y-2 mb-2 text-xs text-(--text-secondary)">
+                <span>{t('designer.posterSource')}</span>
+                <select value={posterSource} disabled={!canvas || isRestoring}
+                  onChange={event => onChangePosterSource(event.target.value as 'poster' | 'backdrop')}
+                  aria-describedby="poster-source-hint"
+                  className="w-full rounded-lg border border-(--border-color) bg-(--bg-secondary) p-2 disabled:opacity-50">
+                  <option value="poster">{t('designer.posterSourcePortrait')}</option>
+                  <option value="backdrop">{t('designer.posterSourceLandscape')}</option>
+                </select>
+              </label>
+              <p id="poster-source-hint" className="mb-3 text-xs text-(--text-tertiary) leading-relaxed">{t('designer.posterSourceHint')}</p>
               <div className="grid grid-cols-3 gap-2">
                 {Array.from({ length: 9 }).map((_, i) => (
                   <button
@@ -336,7 +350,7 @@ const shapes = [
               <div className="space-y-4">
                 <label className="block space-y-2 text-xs text-(--text-secondary)">
                   <span>{t('designer.backgroundSource')}</span>
-                  <select aria-label={t('designer.movieBackgroundSource')} value={posterSource} onChange={e => setPosterSource(e.target.value as 'poster' | 'backdrop')}
+                  <select aria-label={t('designer.movieBackgroundSource')} value={backgroundSource} onChange={e => setBackgroundSource(e.target.value as 'poster' | 'backdrop')}
                     className="w-full rounded-lg border border-(--border-default) bg-(--bg-secondary) p-2">
                     <option value="poster">{t('designer.firstPoster')}</option><option value="backdrop">{t('designer.firstBackdrop')}</option>
                   </select>
@@ -352,7 +366,7 @@ const shapes = [
                   <input type="range" aria-label={t('designer.posterBackgroundDim')} min="0" max="80" step="5" value={Math.round(posterDim * 100)}
                     onChange={e => setPosterDim(Number(e.target.value) / 100)} className={sliderCls} />
                 </label>
-                <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim, source: posterSource })}
+                <button type="button" onClick={() => onChangeBackground({ type: 'poster-blur', blur: posterBlur, dim: posterDim, source: backgroundSource })}
                   className="w-full rounded-lg bg-(--primary) text-white py-2.5 text-xs font-medium hover:opacity-90 transition-opacity">
                   {t('designer.applyMovieBackground')}
                 </button>
