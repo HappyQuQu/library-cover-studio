@@ -9,6 +9,7 @@ import { templates, templateRevisions } from '../config/schema.js';
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import { createError } from '../middleware/index.js';
 import { renderLibraryCover } from './renderer.service.js';
+import { resolveArtworkSource, type ArtworkBuffers, type ArtworkSource } from './artworkSource.service.js';
 
 export const TEMPLATE_HISTORY_LIMIT = 50;
 type Template = typeof templates.$inferSelect;
@@ -40,24 +41,25 @@ async function previewBuffer(template: Template, thumbnail?: string) {
   const canvas = JSON.parse(template.canvasJson);
   // A version preview represents the saved palette, rather than a new randomized generation.
   canvas.randomOnGeneration = false;
-  const buffers = await Promise.all(Array.from({ length: 9 }, (_, index) => fs.readFile(path.join(postersDirectory, `${index + 1}.jpg`))));
+  const artworkBuffers: ArtworkBuffers = {};
+  for (const source of ['poster', 'backdrop'] as ArtworkSource[]) {
+    artworkBuffers[source] = await Promise.all(Array.from({ length: 9 }, async (_, index) => {
+      const sample = canvas.objects?.find((object: any) => object.posterVar === `post${index + 1}` && resolveArtworkSource(object, canvas) === source)?.src;
+      const embedded = typeof sample === 'string' && sample.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=\s]+)$/);
+      return embedded ? Buffer.from(embedded[1], 'base64')
+        : fs.readFile(path.join(postersDirectory, ...(source === 'backdrop' ? ['backdrops'] : []), `${index + 1}.jpg`));
+    }));
+  }
   const backdropBuffer = canvas.posterBackground?.source === 'backdrop'
     ? await fs.readFile(path.join(postersDirectory, 'backdrop.jpg')) : undefined;
   if (canvas.objects?.some((object: any) => object.posterVar === 'post1' && object.src === '/api/templates/posters/backdrop-poster.jpg')) {
-    buffers[0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
+    artworkBuffers.poster![0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
   }
-  if (canvas.posterSource === 'backdrop') {
-    for (let index = 0; index < buffers.length; index++) {
-      const sample = canvas.objects?.find((object: any) => object.posterVar === `post${index + 1}`)?.src;
-      const embedded = typeof sample === 'string' && sample.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=\s]+)$/);
-      buffers[index] = embedded ? Buffer.from(embedded[1], 'base64')
-        : await fs.readFile(path.join(postersDirectory, 'backdrops', `${index + 1}.jpg`));
-    }
-  }
+  const buffers = artworkBuffers[resolveArtworkSource({}, canvas)]!;
   const title = (variable: string, fallback: string) => canvas.objects?.find((object: any) => object.textVar === variable)?.text || fallback;
   const rendered = await renderLibraryCover(JSON.stringify(canvas), {
     title: template.name, primaryTitle: title('{{primary_title}}', template.name), secondaryTitle: title('{{secondary_title}}', '')
-  }, buffers, { width: template.width || 1920, height: template.height || 1080, backdropBuffer });
+  }, buffers, { width: template.width || 1920, height: template.height || 1080, backdropBuffer, artworkBuffers });
   return sharp(rendered).resize(480, 270, { fit: 'inside' }).jpeg({ quality: 88 }).toBuffer();
 }
 

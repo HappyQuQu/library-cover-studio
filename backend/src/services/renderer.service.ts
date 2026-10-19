@@ -9,6 +9,7 @@ import path from 'path';
 import { GlobalFonts, createCanvas } from '@napi-rs/canvas';
 import { customFonts } from './templateFonts.service.js';
 import { FONTS_DIR } from '../config/paths.js';
+import { resolveArtworkSource, type ArtworkBuffers } from './artworkSource.service.js';
 
 interface RenderOptions {
   width: number;
@@ -16,9 +17,11 @@ interface RenderOptions {
   quality?: number;
   format?: 'png' | 'jpeg' | 'webp';
   backdropBuffer?: Buffer;
+  artworkBuffers?: ArtworkBuffers;
 }
 
 interface CanvasObject {
+  artworkSource?: string;
   type: string;
   left?: number;
   top?: number;
@@ -43,6 +46,7 @@ interface CanvasObject {
 }
 
 interface TemplateData {
+  posterSource?: string;
   version: string;
   objects: CanvasObject[];
   background?: string | Record<string, any>;
@@ -224,14 +228,17 @@ export async function renderLibraryCover(
 
       // 收集所有图层
       const layers: sharp.OverlayOptions[] = [];
-      const backgroundBuffer = processedTemplate.posterBackground?.source === 'backdrop' ? options.backdropBuffer || posterBuffers[0] : posterBuffers[0];
+      const backgroundBuffer = processedTemplate.posterBackground?.source === 'backdrop'
+        ? options.backdropBuffer || options.artworkBuffers?.backdrop?.[0] || posterBuffers[0]
+        : options.artworkBuffers?.poster?.[0] || posterBuffers[0];
       const backgroundLayer = processedTemplate.posterBackground && backgroundBuffer
         ? await renderPosterBackground(backgroundBuffer, width, height, processedTemplate.posterBackground)
         : await renderBackgroundImage(processedTemplate.backgroundImage, width, height);
       if (backgroundLayer) layers.push(backgroundLayer);
 
       for (const obj of processedTemplate.objects) {
-        const layer = await renderObjectWithPosters(obj, posterBuffers);
+        const source = resolveArtworkSource(obj, processedTemplate);
+        const layer = await renderObjectWithPosters(obj, options.artworkBuffers?.[source] || posterBuffers);
         if (layer) {
           const clipped = await clipLayerToCanvas(layer, width, height, (obj as any).clipPath);
           if (clipped) layers.push(clipped);
@@ -334,7 +341,7 @@ async function renderObjectWithPosters(
         }
 
         // 检查 URL 模式 /posters/X.jpg 或 /api/templates/posters/X.jpg
-        const urlMatch = obj.src.match(/\/posters\/(\d+)\.(jpg|png|jpeg)/i);
+        const urlMatch = obj.src.match(/\/posters\/(?:backdrops\/)?(\d+)\.(jpg|png|jpeg)/i);
         if (urlMatch) {
           const posterIndex = parseInt(urlMatch[1]) - 1;
           if (posterIndex >= 0 && posterIndex < posterBuffers.length && posterBuffers[posterIndex]) {

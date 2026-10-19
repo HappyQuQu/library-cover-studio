@@ -6,7 +6,7 @@ import { mediaServers, templates } from '../config/schema.js';
 import { getSchedulerTimezone } from '../services/scheduler.service.js';
 import { getUpcomingExecutions } from '../utils/schedulePreview.js';
 import { getLibraries, getCollections } from '../services/mediaClient.service.js';
-import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground, getPosterSource } from '../services/libraryCover.service.js';
+import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground, getPosterSource, requiredArtworkSources } from '../services/libraryCover.service.js';
 import { renderLibraryCover } from '../services/renderer.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { createError } from '../middleware/index.js';
@@ -45,14 +45,14 @@ export async function previewCover(req: Request, res: Response, next: NextFuncti
       || (await getCollections(server.type, server.url, apiKey)).find(item => item.id === input.libraryId);
     if (!library) throw createError('无法读取所选媒体库或合集，请检查服务器连接', 400, 'LIBRARY_UNAVAILABLE');
     const requiredCount = requiredPosterCount(template.canvasJson);
-    const { posters, uniqueCount, backdrop } = requiredCount ? await fetchLibraryPosters(server, apiKey, input.libraryId, input.sortBy, 10, undefined, library.type, requiredCount, usesBackdropBackground(template.canvasJson), getPosterSource(template.canvasJson))
-      : { posters: [], uniqueCount: 0, backdrop: undefined };
+    const { posters, uniqueCount, backdrop, artworkBuffers } = requiredCount ? await fetchLibraryPosters(server, apiKey, input.libraryId, input.sortBy, 10, undefined, library.type, requiredCount, usesBackdropBackground(template.canvasJson), getPosterSource(template.canvasJson), requiredArtworkSources(template.canvasJson))
+      : { posters: [], uniqueCount: 0, backdrop: undefined, artworkBuffers: undefined };
     if (requiredCount && !posters.length) throw createError('所选媒体库或合集中没有可用海报，无法生成样张', 400, 'NO_POSTERS');
     const json = JSON.parse(template.canvasJson);
     const settings = getRenderSettings();
     const buffer = await renderLibraryCover(JSON.stringify(json), {
       title: library.name, primaryTitle: input.primaryTitle || library.name, secondaryTitle: input.secondaryTitle
-    }, posters, { width: template.width || 1920, height: template.height || 1080, ...settings, backdropBuffer: backdrop });
+    }, posters, { width: template.width || 1920, height: template.height || 1080, ...settings, backdropBuffer: backdrop, artworkBuffers });
     res.setHeader('Cache-Control', 'no-store');
     res.json({ image: `data:image/${settings.format};base64,${buffer.toString('base64')}`, posterCount: uniqueCount,
       noteCode: !requiredCount ? 'NO_POSTERS_REQUIRED' : uniqueCount < requiredCount ? 'POSTERS_REUSED' : 'LIBRARY_POSTERS',

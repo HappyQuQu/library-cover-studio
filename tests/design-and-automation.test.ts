@@ -21,6 +21,15 @@ test('landscape material selection survives serialization and AI canvas edits', 
   assert.equal(constrainDesign(generated, original, 'selection', ['title']).posterSource, 'backdrop');
   assert.equal(constrainDesign({ ...generated, posterSource: 'poster' }, original, 'canvas', []).posterSource, 'backdrop');
 });
+test('per-slot artwork sources survive AI edits, including an inherited source', () => {
+  assert.ok(CANVAS_PROPERTIES.includes('artworkSource'));
+  const original = { ...baseline, objects: baseline.objects.map(object => object.id === 'poster' ? { ...object, artworkSource: 'poster' } : object) };
+  const changed = { ...generated, objects: generated.objects.map(object => ({ ...object, artworkSource: 'backdrop' })) };
+  for (const scope of ['canvas', 'selection'] as const) {
+    assert.equal(constrainDesign(changed, original, scope, ['poster']).objects.find(object => object.id === 'poster')?.artworkSource, 'poster');
+    assert.equal(constrainDesign(changed, baseline, scope, ['poster']).objects.find(object => object.id === 'poster')?.artworkSource, undefined);
+  }
+});
 test('selected edits preserve background, other layers, asset and variable bindings', () => {
   const result = constrainDesign(generated, baseline, 'selection', ['title']);
   assert.equal(result.background, '#111');

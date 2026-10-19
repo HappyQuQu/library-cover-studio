@@ -3,7 +3,7 @@ import { CodedError } from './codedError';
 export type DesignScope = 'new' | 'canvas' | 'selection';
 export type CanvasJSON = Record<string, any> & { objects: Record<string, any>[] };
 
-export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle', 'posterBackground', 'posterSource',
+export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'artworkSource', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle', 'posterBackground', 'posterSource',
   'lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'selectable', 'evented'];
 
 export function isLocked(object: Record<string, any>): boolean {
@@ -20,9 +20,10 @@ function restoreAsset(object: Record<string, any>, original?: Record<string, any
   const next = { ...original, ...object };
   if (original?.src) next.src = original.src;
   // Template variable bindings are metadata, not a design choice.
-  for (const key of ['posterVar', 'textVar', 'isPoster', 'fitText', 'wrapText']) {
+  for (const key of ['posterVar', 'artworkSource', 'textVar', 'isPoster', 'fitText', 'wrapText']) {
     if (original?.[key] !== undefined) next[key] = original[key];
   }
+  if (original && original.artworkSource === undefined) delete next.artworkSource;
   return next;
 }
 

@@ -160,6 +160,7 @@ export function EditorPage() {
   const [saveHistoryOpen, setSaveHistoryOpen] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [customFonts, setCustomFonts] = useState<Font[]>([]);
+  const artworkRequestRef = useRef(0);
 
   const [randomOnGeneration, setRandomOnGeneration] = useState(false);
   const [posterBackground, setPosterBackground] = useState<PosterBackground>();
@@ -621,6 +622,7 @@ export function EditorPage() {
                 if (objData.id) obj.id = objData.id;
                 if (objData.name) obj.name = objData.name;
                 if (objData.posterVar) obj.posterVar = objData.posterVar;
+                if (objData.artworkSource) obj.artworkSource = objData.artworkSource;
                 if (objData.isPoster) obj.isPoster = objData.isPoster;
                 if (objData.textVar) obj.textVar = objData.textVar;
                 if (objData.fitText !== undefined) obj.fitText = objData.fitText;
@@ -700,14 +702,14 @@ export function EditorPage() {
       // Ctrl+C - Copy
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
         if (activeObject) {
-          clipboard = await activeObject.clone();
+          clipboard = await activeObject.clone(CANVAS_PROPERTIES);
         }
       }
 
       // Ctrl+V - Paste
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
         if (clipboard) {
-          const cloned = await clipboard.clone();
+          const cloned = await clipboard.clone(CANVAS_PROPERTIES);
           cloned.set({
             left: (cloned.left || 0) + 20,
             top: (cloned.top || 0) + 20,
@@ -736,7 +738,7 @@ export function EditorPage() {
       if ((e.ctrlKey || e.metaKey) && e.key === 'd') {
         e.preventDefault();
         if (activeObject) {
-          const cloned = await activeObject.clone();
+          const cloned = await activeObject.clone(CANVAS_PROPERTIES);
           cloned.set({
             left: (cloned.left || 0) + 20,
             top: (cloned.top || 0) + 20,
@@ -1562,12 +1564,15 @@ export function EditorPage() {
                 // Allow if it is marked as poster OR if it is an image/rect that we are turning into a poster
                 const canBePoster = (selectedObject as any).isPoster || selectedObject.type === 'image' || selectedObject.type === 'rect';
 
-                if (prop === 'posterVar' && canBePoster) {
+                if ((prop === 'posterVar' || prop === 'artworkSource') && canBePoster) {
                   // val format: "postN" (e.g. "post1", "post5")
-                  const match = val.match(/post(\d+)/);
+                  const nextVar = prop === 'posterVar' ? val : (selectedObject as any).posterVar || 'post1';
+                  const nextSource = prop === 'artworkSource' ? (val === 'inherit' ? undefined : val) : (selectedObject as any).artworkSource;
+                  const match = nextVar.match(/^post([1-9])$/);
                   if (match) {
+                    const request = ++artworkRequestRef.current;
                     const posterIndex = match[1];
-                    const sampleUrl = getSamplePosterUrl(posterIndex, canvas);
+                    const sampleUrl = getSamplePosterUrl(posterIndex, canvas, nextSource);
 
                     try {
                       // CAPTURE STATE BEFORE LOADING
@@ -1584,21 +1589,28 @@ export function EditorPage() {
                       });
 
                       // RACE CONDITION CHECK
-                      if (readOnlyRef.current || !canvas || !canvas.getObjects().includes(selectedObject as any)) return;
+                      if (request !== artworkRequestRef.current || readOnlyRef.current || useCanvasStore.getState().isRestoring
+                        || !canvas || !canvas.getObjects().includes(selectedObject as any) || canvas.getActiveObject() !== selectedObject) return;
 
                       // CREATE NEW TARGET OBJECT
                       const fabricImg = new fabric.FabricImage(imgEl, {
                         left, top, angle, opacity, originX, originY,
+                        flipX: selectedObject.flipX, flipY: selectedObject.flipY, shadow: selectedObject.shadow,
+                        skewX: selectedObject.skewX, skewY: selectedObject.skewY, visible: selectedObject.visible,
                         // Scale to match EXACTLY the previous visual dimensions
                         scaleX: currentWidth / (imgEl.naturalWidth || 1),
                         scaleY: currentHeight / (imgEl.naturalHeight || 1)
                       });
 
                       // MIGRATE PROPERTIES
+                      for (const property of CANVAS_PROPERTIES) {
+                        if ((selectedObject as any)[property] !== undefined) (fabricImg as any)[property] = (selectedObject as any)[property];
+                      }
                       (fabricImg as any).id = (selectedObject as any).id;
                       (fabricImg as any).name = (selectedObject as any).name || 'Poster';
                       (fabricImg as any).isPoster = true;
-                      (fabricImg as any).posterVar = val;
+                      (fabricImg as any).posterVar = nextVar;
+                      (fabricImg as any).artworkSource = nextSource;
 
                       // HANDLE CLIPPATH (Rounded Corners)
                       // logic: Preserving the VALID visual radius
@@ -1690,7 +1702,7 @@ export function EditorPage() {
               }}
               onClone={async () => {
                 if (readOnlyRef.current || !selectedObject || !canvas) return;
-                const cloned = await selectedObject.clone();
+                const cloned = await selectedObject.clone(CANVAS_PROPERTIES);
                 cloned.set({ left: (selectedObject.left || 0) + 20, top: (selectedObject.top || 0) + 20 });
                 (cloned as any).id = Math.random().toString(36).substr(2, 9);
                 canvas.add(cloned);
