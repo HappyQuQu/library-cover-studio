@@ -81,6 +81,17 @@ test('template saves keep immutable previews, restore safely, enforce locks and 
   const generatedPreview = Buffer.from(await (await request(`/${id}/thumbnail`)).arrayBuffer());
   const pixel = await sharp(generatedPreview).resize(1,1).raw().toBuffer();
   assert.ok(pixel[1] > 240 && pixel[0] < 20 && pixel[2] < 20);
+  // Horizontal templates retain their embedded landscape sample when an API caller omits a thumbnail.
+  const wideSample = await sharp({ create: { width: 320, height: 180, channels: 3, background: '#00ff00' } }).png().toBuffer();
+  const wideCanvas = JSON.stringify({ width: 320, height: 180, posterSource: 'backdrop', background: '#0000ff', objects: [
+    { type: 'Image', posterVar: 'post1', left: 0, top: 0, width: 320, height: 180, src: `data:image/png;base64,${wideSample.toString('base64')}` }
+  ] });
+  const wideResponse = await request('', 'POST', { name: '横图样张', width: 320, height: 180, canvasJson: wideCanvas });
+  assert.equal(wideResponse.status, 201);
+  const wide = await wideResponse.json() as any;
+  assert.equal(JSON.parse((await (await request(`/${wide.id}`)).json() as any).canvasJson).posterSource, 'backdrop');
+  const widePixel = await sharp(Buffer.from(await (await request(`/${wide.id}/thumbnail`)).arrayBuffer())).resize(1,1).raw().toBuffer();
+  assert.ok(widePixel[1] > 240 && widePixel[0] < 20 && widePixel[2] < 20, 'history uses the embedded horizontal sample instead of a bundled portrait');
   for (let i=0; i<51; i++) assert.equal((await request(`/${id}`,'PUT',{name:`保存 ${i}`})).status,200);
   const recent = await revisions(); assert.equal(recent.length,50); assert.equal(recent[0].name,'保存 50'); assert.equal(recent[49].name,'保存 1');
   assert.equal((await request(`/${id}/history/${initial.id}/thumbnail`)).status,404);

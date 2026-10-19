@@ -13,6 +13,7 @@ async function reapplyBackground(canvas: fabric.Canvas, json: any) {
   (canvas as any).randomOnGeneration = Boolean(json.randomOnGeneration);
   (canvas as any).randomBackgroundStyle = json.randomBackgroundStyle;
   (canvas as any).posterBackground = json.posterBackground;
+  (canvas as any).posterSource = json.posterSource;
   // 修复 gradient backgroundColor
   const bg = (canvas as any).backgroundColor;
   if (bg && typeof bg === 'object' && !(bg instanceof fabric.Gradient)) {

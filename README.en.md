@@ -44,6 +44,7 @@ select three libraries to generate three covers. No media directory mount is req
 | Seven built-in templates | Start with 1920 × 1080 designs; duplicate and edit, import or export ZIP packages, and restore saved revisions. |
 | Community template store | Search and download designs, check authors, versions, and total downloads, and add templates to your library. |
 | Jellyfin / Emby | Connect media servers and set a template, titles, and artwork order for each library or collection. |
+| Landscape artwork | Landscape templates select each member’s backdrop or thumbnail for landscape or portrait covers, consistently across previews and scheduled runs. |
 | Automated updates | Generate and upload covers manually or on daily, weekly, monthly, or custom Cron schedules. |
 | Real previews and history | Preview using actual library posters before uploading, then inspect per-library results and download the generated images. |
 | Optional AI assistant | Connect your own AI service to create editable designs from text or reference images. |

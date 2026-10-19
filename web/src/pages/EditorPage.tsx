@@ -609,6 +609,7 @@ export function EditorPage() {
           (canvas as any).randomOnGeneration = Boolean(jsonData.randomOnGeneration);
           (canvas as any).randomBackgroundStyle = jsonData.randomBackgroundStyle;
           (canvas as any).posterBackground = jsonData.posterBackground;
+          (canvas as any).posterSource = jsonData.posterSource;
           setPosterBackground(jsonData.posterBackground);
 
           // Restore custom properties from JSON data
@@ -1550,7 +1551,7 @@ export function EditorPage() {
                   const match = val.match(/post(\d+)/);
                   if (match) {
                     const posterIndex = match[1];
-                    const sampleUrl = getSamplePosterUrl(posterIndex);
+                    const sampleUrl = getSamplePosterUrl(posterIndex, canvas);
 
                     try {
                       // CAPTURE STATE BEFORE LOADING

@@ -411,14 +411,15 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 {Array.from({ length: 9 }).map((_, i) => {
                   const varName = `post${i + 1}`;
                   const isActive = selectedObject.posterVar === varName;
-                  const imgUrl = getSamplePosterUrl(i + 1);
+                  const imgUrl = getSamplePosterUrl(i + 1, selectedObject.canvas);
 
                   return (
                     <button
                       key={varName}
                       onClick={() => onPropertyChange('posterVar', varName)}
                       className={cn(
-                        "relative aspect-[2/3] rounded-lg border overflow-hidden transition-all group",
+                        'relative rounded-lg border overflow-hidden transition-all group',
+                        selectedObject.canvas?.posterSource === 'backdrop' ? 'aspect-video' : 'aspect-[2/3]',
                         isActive
                           ? "ring-2 ring-(--primary) border-transparent"
                           : "border-(--border-color) hover:border-(--primary) hover:shadow-sm"

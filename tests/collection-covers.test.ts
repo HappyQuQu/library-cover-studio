@@ -39,6 +39,8 @@ test('collection cover APIs read existing artwork, preview safely and update onl
   for (const serverType of ['emby', 'jellyfin']) await t.test(serverType, async t => {
     const prefix = serverType === 'emby' ? '/emby' : '';
     const poster = readFileSync(new URL('../backend/src/template/poster/1.jpg', import.meta.url));
+    const landscape = readFileSync(new URL('../backend/src/template/poster/backdrop.jpg', import.meta.url));
+    let memberPrimaryRequests = 0;
     const uploads: { id: string; buffer: Buffer }[] = [];
     let failUploads = false, hasCollectionCover = true;
     const collectionImage = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64');
@@ -56,9 +58,10 @@ test('collection cover APIs read existing artwork, preview safely and update onl
       assert.equal(req.query[serverType === 'jellyfin' ? 'CollapseBoxSetItems' : 'GroupItemsIntoCollections'], 'false');
       assert.equal(req.query[serverType === 'jellyfin' ? 'GroupItemsIntoCollections' : 'CollapseBoxSetItems'], undefined);
       assert.ok(req.query.IncludeItemTypes.split(',').includes('Movie'));
-      res.json({ Items: [{ Id: 'member', Name: '合集成员', Type: 'Movie', ImageTags: { Primary: 'fixture' } }], TotalRecordCount: 1 });
+      res.json({ Items: [{ Id: 'member', Name: '合集成员', Type: 'Movie', ImageTags: { Primary: 'fixture' }, BackdropImageTags: ['wide-fixture'] }], TotalRecordCount: 1 });
     });
-    media.get(`${prefix}/Items/member/Images/Primary`, (_: any, res: any) => res.type('image/jpeg').send(poster));
+    media.get(`${prefix}/Items/member/Images/Primary`, (_: any, res: any) => { memberPrimaryRequests++; res.type('image/jpeg').send(poster); });
+    media.get(`${prefix}/Items/member/Images/Backdrop/0`, (_: any, res: any) => res.type('image/jpeg').send(landscape));
     media.get(`${prefix}/Items/sci-fi/Images/Primary`, (_: any, res: any) => hasCollectionCover ? res.type('image/png').send(collectionImage) : res.sendStatus(404));
     media.post(`${prefix}/Items/:id/Images/Primary`, express.text({ type: '*/*', limit: '10mb' }), (req: any, res: any) => {
       if (failUploads) return res.sendStatus(403);
@@ -75,7 +78,7 @@ test('collection cover APIs read existing artwork, preview safely and update onl
     for (const id of [userId, otherId]) sqlite.prepare('INSERT INTO users (id,username,password_hash) VALUES (?,?,?)').run(id, id, 'fixture');
     sqlite.prepare('INSERT INTO media_servers (id,name,type,url,api_key_encrypted,user_id) VALUES (?,?,?,?,?,?)')
       .run(serverId, `${serverType} fixture`, serverType, mediaUrl, encrypt('fixture-key'), userId);
-    const canvas = JSON.stringify({ width: 320, height: 180, background: '#18356b', objects: [
+    const canvas = JSON.stringify({ width: 320, height: 180, posterSource: 'backdrop', background: '#18356b', objects: [
       { type: 'image', posterVar: 'post1', left: 20, top: 20, width: 80, height: 120 }
     ] });
     sqlite.prepare('INSERT INTO templates (id,name,canvas_json,width,height,user_id) VALUES (?,?,?,?,?,?)')
@@ -115,6 +118,7 @@ test('collection cover APIs read existing artwork, preview safely and update onl
     const preview = await request('/tasks/preview-cover', previewBody);
     assert.match(preview.image, /^data:image\/png;base64,/);
     assert.equal(preview.posterCount, 1);
+    assert.equal(memberPrimaryRequests, 0, 'preview uses the landscape member image');
     assert.equal(uploads.length, 0);
     assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM task_logs').get().count, logCountBeforePreview);
     const unavailable = await fetch(base + '/api/tasks/preview-cover', { method: 'POST', headers: headers(), body: JSON.stringify({ ...previewBody, libraryId: 'deleted-collection' }) });
@@ -156,5 +160,6 @@ test('collection cover APIs read existing artwork, preview safely and update onl
     const failedHistory = await request(`/tasks/${failed.id}/logs`);
     assert.equal(failedHistory[0].covers[0].status, 'failed');
     assert.match(failedHistory[0].covers[0].errorMessage, /权限不足/);
+    assert.equal(memberPrimaryRequests, 0, 'manual and scheduled runs retain the landscape source');
   });
 });

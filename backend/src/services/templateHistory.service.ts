@@ -46,6 +46,14 @@ async function previewBuffer(template: Template, thumbnail?: string) {
   if (canvas.objects?.some((object: any) => object.posterVar === 'post1' && object.src === '/api/templates/posters/backdrop-poster.jpg')) {
     buffers[0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
   }
+  if (canvas.posterSource === 'backdrop') {
+    const fallback = await fs.readFile(path.join(postersDirectory, 'backdrop.jpg'));
+    for (let index = 0; index < buffers.length; index++) {
+      const sample = canvas.objects?.find((object: any) => object.posterVar === `post${index + 1}`)?.src;
+      const embedded = typeof sample === 'string' && sample.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=\s]+)$/);
+      buffers[index] = embedded ? Buffer.from(embedded[1], 'base64') : fallback;
+    }
+  }
   const title = (variable: string, fallback: string) => canvas.objects?.find((object: any) => object.textVar === variable)?.text || fallback;
   const rendered = await renderLibraryCover(JSON.stringify(canvas), {
     title: template.name, primaryTitle: title('{{primary_title}}', template.name), secondaryTitle: title('{{secondary_title}}', '')

@@ -3,7 +3,7 @@ import { tasks, mediaServers, templates, taskLogs, taskLogCovers, systemSettings
 import { eq, inArray } from 'drizzle-orm';
 import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
-import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground } from './libraryCover.service.js';
+import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground, getPosterSource } from './libraryCover.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { logger } from '../utils/logger.js';
 import { getLocalISOString, getLocalTimestampForFile } from '../utils/time.js';
@@ -153,7 +153,7 @@ export async function runTask(taskId: string, logId?: string) {
           serverDetail, apiKey, config.libraryId, config.sortBy || 'DateCreated',
           Number.POSITIVE_INFINITY, savePosters ? async (poster, name, imageType) => {
             await saveFile('posters', `${libraryName}_${name}_${imageType}_${getLocalTimestampForFile()}.jpg`, poster);
-          } : undefined, config.libraryType, requiredCount, usesBackdropBackground(templateDetail.canvasJson)
+          } : undefined, config.libraryType, requiredCount, usesBackdropBackground(templateDetail.canvasJson), getPosterSource(templateDetail.canvasJson)
         ) : { posters: [], backdrop: undefined };
         if (requiredCount && !posterBuffers.length) {
           throw new Error('媒体库没有可用海报，无法生成封面');
