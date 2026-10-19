@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.11.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.10.0...v1.11.0) (2026-10-19)
+
+
+### ✨ 新功能
+
+* 支持横向剧照素材与横竖版封面 ([#18](https://github.com/HappyQuQu/library-cover-studio/issues/18)) ([3c41843](https://github.com/HappyQuQu/library-cover-studio/commit/3c4184343e4aee88923a8033ce99f482e92f2276))
+
 ## [1.10.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.9.0...v1.10.0) (2026-10-19)
 
 
