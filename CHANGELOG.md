@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.13.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.13.0...v1.13.1) (2026-10-20)
+
+### 🐛 修复
+
+* 补齐九张不同的横版示例图，统一添加、切换和历史预览的图位编号对应关系。 ([#24](https://github.com/HappyQuQu/library-cover-studio/pull/24)) ([e875925](https://github.com/HappyQuQu/library-cover-studio/commit/e8759259f4f8e73a3d30984fa5bcce96a71ac3bb))
+
 ## [1.13.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.12.0...v1.13.0) (2026-10-19)
 
 
