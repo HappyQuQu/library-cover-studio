@@ -965,6 +965,14 @@ export function EditorPage() {
     }
   }, [canvas, t]);
 
+  const changePosterSource = useCallback((source: 'poster' | 'backdrop') => {
+    if (!canvas || readOnlyRef.current || useCanvasStore.getState().isRestoring) return;
+    if (((canvas as any).posterSource === 'backdrop' ? 'backdrop' : 'poster') === source) return;
+    saveToHistory();
+    (canvas as any).posterSource = source;
+    saveToHistory();
+  }, [canvas, saveToHistory]);
+
   const handleSave = async () => {
     if (!canvas || readOnlyRef.current || saving) return;
     try {
@@ -1259,6 +1267,8 @@ export function EditorPage() {
           onAddImage={() => addObject('image')}
           onAddShape={(type, payload) => addObject(type, payload)}
           onChangeBackground={changeBackground}
+          posterSource={(canvas as any)?.posterSource === 'backdrop' ? 'backdrop' : 'poster'}
+          onChangePosterSource={changePosterSource}
           initialRandomOnGeneration={randomOnGeneration}
           initialPosterBackground={posterBackground}
         />}
