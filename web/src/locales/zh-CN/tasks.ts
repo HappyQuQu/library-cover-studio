@@ -14,7 +14,7 @@ export default {
   "statusUpdated": "状态已更新",
   "operationFailed": "操作失败",
   "pageTitle": "自动化任务",
-  "pageDescription": "通过定时任务或手动触发，自动批量更新媒体库封面",
+  "pageDescription": "通过定时任务或手动触发，自动批量更新媒体库和合集封面",
   "newTask": "新建任务",
   "loadFailed": "任务列表加载失败，请检查连接。",
   "empty": "尚未创建任何任务",
@@ -33,12 +33,12 @@ export default {
   "edit": "编辑配置",
   "deleteTask": "删除任务",
   "nextExecution": "下次执行：{{time}} · {{timezone}}",
-  "onePerLibrary": "每个已选媒体库生成一张封面",
+  "onePerLibrary": "每个已选媒体库或合集生成一张封面",
   "viewHistory": "查看执行历史",
   "fallbackName": "任务",
   "resourceHint": "提示：封面生成是资源密集型操作",
   "resourceDescription": "自动化任务会在后台为您渲染海报并上传到您的媒体服务器。如果您有大量的媒体资源，请考虑将定时任务设置在访问量较低的时段（如凌晨）。",
   "previewHint": "可先在配置界面生成真实样张，确认效果后再启用定时计划。",
-  "librarySummary_other": "{{name}} 等 {{count}} 个媒体库",
-  "librarySummary_one": "{{name}} 等 {{count}} 个媒体库"
+  "librarySummary_other": "{{name}} 等 {{count}} 项",
+  "librarySummary_one": "{{name}} 等 {{count}} 项"
 } as const;

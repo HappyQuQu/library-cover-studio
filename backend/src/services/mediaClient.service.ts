@@ -107,6 +107,39 @@ export async function getLibraries(serverType: string, url: string, apiKey: stri
     imageItemId: lib.PrimaryImageItemId ? String(lib.PrimaryImageItemId) : undefined
   }));
 }
+
+/** Collections are BoxSet items, not virtual folders. Keep their IDs as cover upload targets. */
+export async function getCollections(serverType: string, url: string, apiKey: string): Promise<MediaLibrary[]> {
+  const collections = new Map<string, MediaLibrary>();
+  const limit = 200;
+  for (let startIndex = 0; ; ) {
+    const data = await getJSON(serverType, url, apiKey, '/Items', '读取合集', {
+      IncludeItemTypes: 'BoxSet', Recursive: true, SortBy: 'SortName', SortOrder: 'Ascending',
+      StartIndex: startIndex, Limit: limit, EnableImages: false, EnableUserData: false, EnableTotalRecordCount: true
+    });
+    if (!data || !Array.isArray(data.Items)) throw new MediaServerError('合集接口返回格式无效', 'MEDIA_INVALID_RESPONSE');
+    for (const item of data.Items) {
+      if (!item?.Id || item.Type !== 'BoxSet') continue;
+      const id = String(item.Id);
+      collections.set(id, { id, name: item.Name || '未命名合集', type: 'collection',
+        itemCount: typeof item.ChildCount === 'number' ? item.ChildCount : undefined });
+    }
+    startIndex += data.Items.length;
+    if (!data.Items.length || (typeof data.TotalRecordCount === 'number'
+      ? startIndex >= data.TotalRecordCount : data.Items.length < limit)) break;
+  }
+  return [...collections.values()];
+}
+
+/** Discovery for cover tasks includes both library roots and individual collections. */
+export async function getCoverTargets(serverType: string, url: string, apiKey: string): Promise<MediaLibrary[]> {
+  const [libraries, collections] = await Promise.all([
+    getLibraries(serverType, url, apiKey), getCollections(serverType, url, apiKey)
+  ]);
+  const targets = new Map(libraries.map(library => [library.id, library]));
+  for (const collection of collections) targets.set(collection.id, collection);
+  return [...targets.values()];
+}
 export function normalizeSortBy(sort = 'DateCreated'): string {
   return sort === 'Name' ? 'SortName' : sort === 'DateLastPlayed' ? 'DatePlayed' : sort;
 }
@@ -133,7 +166,7 @@ export async function getLibraryItems(serverType: string, url: string, apiKey: s
     SortBy: sortBy, SortOrder: options.sortOrder || 'Descending',
     Fields: 'Genres', Recursive: true, IncludeItemTypes: itemTypesForLibrary(options.libraryType),
     EnableImages: true, EnableImageTypes: 'Primary,Art,Backdrop,Thumb,Banner,Logo', ImageTypeLimit: 1,
-    EnableUserData: false, EnableTotalRecordCount: true
+    EnableUserData: false, EnableTotalRecordCount: true, GroupItemsIntoCollections: false
   };
   if (options.filter) params.Filters = options.filter;
   const data = await getJSON(serverType, url, apiKey, '/Items', '读取媒体项目', params);

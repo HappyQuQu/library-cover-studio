@@ -28,6 +28,9 @@ router.post('/:id/test', server.testServerConnection);
 // 获取服务器的媒体库列表
 router.get('/:id/libraries', server.listLibraries);
 
+// 可更新封面的媒体库与合集
+router.get('/:id/cover-targets', server.listCoverTargets);
+
 // 代理获取媒体项目图片
 router.get('/:id/items/:itemId/image', server.proxyItemImage);
 

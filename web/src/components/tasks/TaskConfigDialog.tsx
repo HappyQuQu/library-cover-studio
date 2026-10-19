@@ -6,9 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Film, Folder, Loader2, Palette, Search, Server, Tv, Zap, Eye, AlertCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Clock, Film, Folder, Library, Loader2, Palette, Search, Server, Tv, Zap, Eye, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { useServers, useTemplates, useServerLibraries, useCreateTask, useUpdateTask } from '@/api';
+import { useServers, useTemplates, useServerCoverTargets, useCreateTask, useUpdateTask } from '@/api';
 import type { Task } from '@/api';
 import { apiClient } from '@/api/client';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
@@ -58,7 +58,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   const saving = createMutation.isPending || updateMutation.isPending;
   const serversQuery = useServers();
   const templatesQuery = useTemplates();
-  const librariesQuery = useServerLibraries(serverId);
+  const librariesQuery = useServerCoverTargets(serverId);
   const servers = serversQuery.data || [];
   const templates = templatesQuery.data || [];
   const selected = configs.filter(config => config.enabled);
@@ -179,10 +179,10 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
                 : librariesQuery.isError ? <div className="studio-empty" role="alert">{t('taskWizard.readFailed')}<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>{t('taskWizard.reload')}</button></div>
                 : !librariesQuery.data?.length ? <div className="studio-empty">{t('taskWizard.noLibraries')}<button className="studio-secondary" onClick={() => void librariesQuery.refetch()}>{t('taskWizard.refreshLibraries')}</button></div>
                 : !visible.length ? <div className="studio-empty">{t('taskWizard.noMatches')}</div>
-                : <div className="task-library-list">{visible.map(config => { const Icon = config.libraryType === 'movies' ? Film : config.libraryType === 'tvshows' ? Tv : Folder;
+                : <div className="task-library-list">{visible.map(config => { const Icon = config.libraryType === 'movies' ? Film : config.libraryType === 'tvshows' ? Tv : config.libraryType === 'collection' ? Library : Folder;
                   return <label key={config.libraryId} className={`task-library-choice ${config.enabled ? 'selected' : ''}`}>
                     <input type="checkbox" checked={config.enabled} onChange={event => updateConfig(config.libraryId, { enabled: event.target.checked })} /><Icon size={19} />
-                    <span><strong>{config.libraryName}</strong><small>{config.libraryType === 'movies' ? t('taskWizard.movies') : config.libraryType === 'tvshows' ? t('taskWizard.series') : t('taskWizard.library')}</small></span>
+                    <span><strong>{config.libraryName}</strong><small>{config.libraryType === 'movies' ? t('taskWizard.movies') : config.libraryType === 'tvshows' ? t('taskWizard.series') : config.libraryType === 'collection' ? t('taskWizard.collection') : t('taskWizard.library')}</small></span>
                     <small>{t('taskWizard.oneCover')}</small></label>;
                 })}</div>}
             </>}

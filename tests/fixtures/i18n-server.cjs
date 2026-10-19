@@ -26,6 +26,7 @@ app.post('/api/servers',(req,res)=>{if(req.body.name.includes('fail'))return err
 app.delete('/api/servers/:id',(req,res)=>{servers=servers.filter(s=>s.id!==req.params.id);res.json({});});
 app.post('/api/servers/:id/test',(req,res)=>res.json({connected:true,version:'10.11.0',serverName:'Demo'}));
 app.get('/api/servers/:id/libraries',(req,res)=>res.json([{id:'movies',name:'电影库 · Demo',type:'movies',itemCount:1000},{id:'series',name:'剧集库 · Demo',type:'tvshows',itemCount:1}]));
+app.get('/api/servers/:id/cover-targets',(req,res)=>res.json([{id:'movies',name:'电影库 · Demo',type:'movies',itemCount:1000},{id:'series',name:'剧集库 · Demo',type:'tvshows',itemCount:1},{id:'collection',name:'科幻合集 · Demo',type:'collection',itemCount:3}]));
 app.get('/api/templates',(req,res)=>res.json(templates));
 app.post('/api/templates/:id/duplicate',(req,res)=>{const base=templates.find(t=>t.id===req.params.id);const copy={...base,id:'copy-'+Date.now(),name:base.name+' · 副本',isLocked:false,isDefault:false};templates.push(copy);res.json(copy);});
 app.post('/api/templates/:id/lock',(req,res)=>{Object.assign(templates.find(t=>t.id===req.params.id),req.body);res.json({});});

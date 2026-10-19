@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer, type IncomingHttpHeaders } from 'node:http';
 import { readFileSync } from 'node:fs';
 import {
-  getServerInfo, getLibraries, getLibraryItems, downloadCover, uploadCover,
+  getServerInfo, getLibraries, getCollections, getCoverTargets, getLibraryItems, downloadCover, uploadCover,
   normalizeServerUrl, MediaServerError
 } from '../backend/src/services/mediaClient.service.ts';
 import { fetchLibraryPosters } from '../backend/src/services/libraryCover.service.ts';
@@ -39,6 +39,58 @@ async function mock(t: TestContext, handler: (request: Request) => Response | Pr
 const info = { Version: '12.2.0', ServerName: 'Local fixture', ProductName: 'Jellyfin Server' };
 const empty = { Items: [], TotalRecordCount: 0 };
 const isInfo = (req: Request) => req.url.pathname.endsWith('/System/Info');
+
+for (const type of ['emby', 'jellyfin']) test(`${type} discovers paginated collections separately from the boxsets library`, async t => {
+  const collections = Array.from({ length: 205 }, (_, index) => ({ Id: `set-${index}`, Name: `Collection ${index}`, Type: 'BoxSet', ChildCount: index }));
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname.endsWith('/Library/VirtualFolders')) return { body: [{ ItemId: 'sets-library', Name: 'Collections', CollectionType: 'boxsets' }] };
+    const start = Number(req.url.searchParams.get('StartIndex'));
+    return { body: { Items: collections.slice(start, start + 200), TotalRecordCount: collections.length } };
+  });
+  const targets = await getCoverTargets(type, fixture.url, key);
+  assert.equal(targets.length, 206);
+  assert.equal(targets[0].type, 'boxsets');
+  assert.deepEqual(targets[1], { id: 'set-0', name: 'Collection 0', type: 'collection', itemCount: 0 });
+  assert.equal(targets.at(-1)?.id, 'set-204');
+  const pages = fixture.requests.filter(req => req.url.pathname.endsWith('/Items'));
+  assert.deepEqual(pages.map(req => req.url.searchParams.get('StartIndex')), ['0', '200']);
+  for (const page of pages) {
+    assert.equal(page.url.searchParams.get('IncludeItemTypes'), 'BoxSet');
+    assert.equal(page.url.searchParams.get('Recursive'), 'true');
+    assert.equal(page.url.searchParams.get('ParentId'), null, 'discover across all library roots');
+    assert.equal(page.url.searchParams.get('EnableTotalRecordCount'), 'true');
+  }
+});
+
+test('collection discovery distinguishes empty, malformed and forbidden responses', async t => {
+  let mode = 'empty';
+  const fixture = await mock(t, req => isInfo(req) ? { body: info }
+    : mode === 'empty' ? { body: empty } : mode === 'invalid' ? { body: {} } : { status: 403 });
+  assert.deepEqual(await getCollections('emby', fixture.url, key), []);
+  mode = 'invalid';
+  await assert.rejects(getCollections('emby', fixture.url, key), { code: 'MEDIA_INVALID_RESPONSE' });
+  mode = 'forbidden';
+  await assert.rejects(getCollections('emby', fixture.url, key), { code: 'MEDIA_FORBIDDEN' });
+});
+
+test('collection artwork comes from its members rather than BoxSet items or unrelated libraries', async t => {
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname.endsWith('/Items')) return { body: { Items: [{ Id: 'member', Name: 'Member movie', Type: 'Movie', ImageTags: { Primary: 'member-tag' } }], TotalRecordCount: 1 } };
+    return { image: poster };
+  });
+  const result = await fetchLibraryPosters({ type: 'emby', url: fixture.url }, key, 'collection-id', 'SortName', 1, undefined, 'collection', 3);
+  assert.equal(result.uniqueCount, 1);
+  assert.equal(result.posters.length, 3);
+  const params = fixture.requests.find(req => req.url.pathname.endsWith('/Items'))!.url.searchParams;
+  assert.equal(params.get('ParentId'), 'collection-id');
+  assert.ok(params.get('IncludeItemTypes')!.split(',').includes('Movie'));
+  assert.ok(!params.get('IncludeItemTypes')!.split(',').includes('BoxSet'));
+  assert.equal(params.get('GroupItemsIntoCollections'), 'false');
+  assert.equal(params.get('SortOrder'), 'Ascending');
+  assert.ok(fixture.requests.at(-1)!.url.pathname.endsWith('/Items/member/Images/Primary'));
+});
 
 // Requests go only to local mock servers; no live library artwork is modified.
 test('Jellyfin modern authentication, valid fields, sort aliases and artwork tags', async t => {

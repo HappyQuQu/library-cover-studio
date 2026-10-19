@@ -50,7 +50,7 @@ test('open validation messages and cached previews retranslate from identity whi
   assert.match(displayMessage(error), /Cron fields/);
   assert.equal(getPreviewNote(preview), 'Using 1 available poster, repeated to fill remaining positions.');
   assert.equal(getPreviewNote({ image: preview.image, noteCode: 'NO_POSTERS_REQUIRED' }), 'Text-only template; no posters needed.');
-  assert.equal(getPreviewNote({ image: preview.image, noteCode: 'LIBRARY_POSTERS' }), 'Uses real posters from the media library.');
+  assert.equal(getPreviewNote({ image: preview.image, noteCode: 'LIBRARY_POSTERS' }), 'Uses real posters from the library or collection.');
   assert.equal(getPreviewNote({ image: preview.image, note: '旧 API 未升级' }), 'Real cover preview generated.');
   assert.equal(getPreviewNoteDetails({ image: preview.image, note: '旧 API 未升级' }), '旧 API 未升级');
   assert.equal(getPreviewNoteDetails(preview), null);
@@ -92,7 +92,7 @@ test('history labels translate independently of original names, errors, dates an
   assert.equal(duration({ ...log, completedAt: '2026-10-14T03:59:00+08:00' }), '0 sec');
   assert.equal(i18n.t('templateStore.downloads', { count: 0 }), '0 downloads');
   assert.equal(i18n.t('templateStore.downloads', { count: 1 }), '1 download');
-  assert.equal(i18n.t('taskWizard.scopeSummary', { count: 1 }), '1 library · 1 cover');
+  assert.equal(i18n.t('taskWizard.scopeSummary', { count: 1 }), '1 target · 1 cover');
   await i18n.changeLanguage('zh-CN');
   assert.equal(coverStatus(cover), '上传失败 · 图片已保留');
   assert.equal(duration(log), '1 分 0 秒');

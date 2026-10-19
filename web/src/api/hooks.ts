@@ -75,6 +75,17 @@ export function useServerLibraries(id: string): UseQueryResult<MediaLibrary[], E
   });
 }
 
+export function useServerCoverTargets(id: string): UseQueryResult<MediaLibrary[], Error> {
+  return useQuery({
+    queryKey: ['servers', id, 'cover-targets'],
+    queryFn: () => apiClient.get<MediaLibrary[]>(`/servers/${id}/cover-targets`).then(response => response.data),
+    enabled: !!id,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false
+  });
+}
+
 export interface ServerConnection { connected: boolean; version?: string; serverName?: string; product?: string; error?: string; }
 export function useServerConnection(id: string) {
   return useQuery({
