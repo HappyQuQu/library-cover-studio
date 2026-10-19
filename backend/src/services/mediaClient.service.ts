@@ -166,8 +166,10 @@ export async function getLibraryItems(serverType: string, url: string, apiKey: s
     SortBy: sortBy, SortOrder: options.sortOrder || 'Descending',
     Fields: 'Genres', Recursive: true, IncludeItemTypes: itemTypesForLibrary(options.libraryType),
     EnableImages: true, EnableImageTypes: 'Primary,Art,Backdrop,Thumb,Banner,Logo', ImageTypeLimit: 1,
-    EnableUserData: false, EnableTotalRecordCount: true, GroupItemsIntoCollections: false
+    EnableUserData: false, EnableTotalRecordCount: true
   };
+  // The servers use different parameter names for expanding collection members.
+  params[serverType === 'jellyfin' ? 'CollapseBoxSetItems' : 'GroupItemsIntoCollections'] = false;
   if (options.filter) params.Filters = options.filter;
   const data = await getJSON(serverType, url, apiKey, '/Items', '读取媒体项目', params);
   if (!data || !Array.isArray(data.Items)) throw new MediaServerError('媒体项目接口返回格式无效', 'MEDIA_INVALID_RESPONSE');

@@ -74,20 +74,21 @@ test('collection discovery distinguishes empty, malformed and forbidden response
   await assert.rejects(getCollections('emby', fixture.url, key), { code: 'MEDIA_FORBIDDEN' });
 });
 
-test('collection artwork comes from its members rather than BoxSet items or unrelated libraries', async t => {
+for (const serverType of ['emby', 'jellyfin']) test(`${serverType} collection artwork comes from members rather than BoxSet items or unrelated libraries`, async t => {
   const fixture = await mock(t, req => {
     if (isInfo(req)) return { body: info };
     if (req.url.pathname.endsWith('/Items')) return { body: { Items: [{ Id: 'member', Name: 'Member movie', Type: 'Movie', ImageTags: { Primary: 'member-tag' } }], TotalRecordCount: 1 } };
     return { image: poster };
   });
-  const result = await fetchLibraryPosters({ type: 'emby', url: fixture.url }, key, 'collection-id', 'SortName', 1, undefined, 'collection', 3);
+  const result = await fetchLibraryPosters({ type: serverType, url: fixture.url }, key, 'collection-id', 'SortName', 1, undefined, 'collection', 3);
   assert.equal(result.uniqueCount, 1);
   assert.equal(result.posters.length, 3);
   const params = fixture.requests.find(req => req.url.pathname.endsWith('/Items'))!.url.searchParams;
   assert.equal(params.get('ParentId'), 'collection-id');
   assert.ok(params.get('IncludeItemTypes')!.split(',').includes('Movie'));
   assert.ok(!params.get('IncludeItemTypes')!.split(',').includes('BoxSet'));
-  assert.equal(params.get('GroupItemsIntoCollections'), 'false');
+  assert.equal(params.get(serverType === 'jellyfin' ? 'CollapseBoxSetItems' : 'GroupItemsIntoCollections'), 'false');
+  assert.equal(params.get(serverType === 'jellyfin' ? 'GroupItemsIntoCollections' : 'CollapseBoxSetItems'), null);
   assert.equal(params.get('SortOrder'), 'Ascending');
   assert.ok(fixture.requests.at(-1)!.url.pathname.endsWith('/Items/member/Images/Primary'));
 });
