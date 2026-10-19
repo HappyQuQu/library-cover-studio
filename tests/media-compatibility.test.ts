@@ -6,7 +6,7 @@ import {
   getServerInfo, getLibraries, getCollections, getCoverTargets, getLibraryItems, downloadCover, uploadCover,
   normalizeServerUrl, MediaServerError
 } from '../backend/src/services/mediaClient.service.ts';
-import { fetchLibraryPosters } from '../backend/src/services/libraryCover.service.ts';
+import { fetchLibraryPosters, getPosterSource } from '../backend/src/services/libraryCover.service.ts';
 import { parseLibraryConfigs } from '../web/src/lib/taskConfig.ts';
 
 const poster = readFileSync(new URL('../backend/src/template/poster/1.jpg', import.meta.url));
@@ -287,4 +287,35 @@ test('missing/corrupt backdrop falls back to its poster; other templates skip ba
   const requestsBefore = fixture.requests.filter(req => req.url.pathname.includes('/Backdrop/')).length;
   assert.equal((await fetch(false)).backdrop, undefined);
   assert.equal(fixture.requests.filter(req => req.url.pathname.includes('/Backdrop/')).length, requestsBefore);
+});
+
+for (const type of ['jellyfin', 'emby']) test(`${type} landscape slots use each member backdrop, then Thumb and Primary as fallbacks`, async t => {
+  const landscape = readFileSync(new URL('../backend/src/template/poster/backdrop.jpg', import.meta.url));
+  let blocked = false;
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname.endsWith('/Items')) return { body: { Items: [
+      { Id: 'first', ImageTags: { Primary: 'p1' }, BackdropImageTags: ['b1'] },
+      { Id: 'second', ImageTags: { Primary: 'p2', Thumb: 't2' }, BackdropImageTags: ['b2'] },
+      { Id: 'third', ImageTags: { Primary: 'p3' } }
+    ], TotalRecordCount: 3 } };
+    if (req.url.pathname.includes('/Images/Backdrop/')) {
+      if (blocked) return { status: 403 };
+      return req.url.pathname.includes('/second/') ? { status: 404 } : { image: landscape };
+    }
+    if (req.url.pathname.endsWith('/Images/Thumb')) return { image: landscape };
+    return { image: poster };
+  });
+  const source = getPosterSource(JSON.stringify({ posterSource: 'backdrop' }));
+  const result = await fetchLibraryPosters({ type, url: fixture.url }, key, 'set', 'DateCreated', 1, undefined, 'collection', 5, true, source);
+  assert.equal(result.uniqueCount, 3); assert.equal(result.posters.length, 5);
+  assert.deepEqual(result.posters, [landscape, landscape, poster, landscape, landscape]);
+  assert.deepEqual(result.backdrop, landscape);
+  const imagePaths = fixture.requests.filter(req => req.url.pathname.includes('/Images/')).map(req => req.url.pathname);
+  assert.equal(imagePaths.filter(path => path.includes('/first/Images/Backdrop/')).length, 1);
+  assert.ok(!imagePaths.some(path => /\/(first|second)\/Images\/Primary$/.test(path)));
+  blocked = true;
+  await assert.rejects(fetchLibraryPosters({ type, url: fixture.url }, key, 'set', 'DateCreated', 1, undefined, 'collection', 3, false, source), { code: 'MEDIA_FORBIDDEN' });
+  assert.equal(getPosterSource('{}'), 'poster');
+  assert.equal(getPosterSource('{"posterSource":"unsupported"}'), 'poster');
 });

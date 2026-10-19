@@ -16,9 +16,13 @@ export function usesBackdropBackground(canvasJson: string): boolean {
   return JSON.parse(canvasJson).posterBackground?.source === 'backdrop';
 }
 
+export function getPosterSource(canvasJson: string): 'poster' | 'backdrop' {
+  return JSON.parse(canvasJson).posterSource === 'backdrop' ? 'backdrop' : 'poster';
+}
+
 /** Shared asset selection keeps preview and task execution consistent. */
 export async function fetchLibraryPosters(server: { type: string; url: string }, apiKey: string, libraryId: string,
-  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = 9, includeBackdrop = false) {
+  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = 9, includeBackdrop = false, posterSource: 'poster' | 'backdrop' = 'poster') {
   const posters: Buffer[] = [];
   let backdrop: Buffer | undefined;
   for (let batch = 0; posters.length < requiredCount && batch < maxBatches; batch++) {
@@ -27,7 +31,10 @@ export async function fetchLibraryPosters(server: { type: string; url: string },
     });
     for (const item of result.items) {
       if (posters.length === requiredCount) break;
-      for (const type of ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile']) {
+      const imageTypes = posterSource === 'backdrop'
+        ? ['Backdrop', 'Thumb', 'Primary', 'Art', 'Banner', 'Screenshot']
+        : ['Primary', 'Art', 'Backdrop', 'Banner', 'Logo', 'Thumb', 'Disc', 'Box', 'Screenshot', 'Menu', 'Chapter', 'BoxRear', 'Profile'];
+      for (const type of imageTypes) {
         try {
           if (!item.imageTags?.[type]) continue;
           const poster = await mediaClient.downloadCover(server.type, server.url, apiKey, item.id, type, { tag: item.imageTags[type] });

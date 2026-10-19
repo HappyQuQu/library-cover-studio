@@ -3,7 +3,7 @@ import { CodedError } from './codedError';
 export type DesignScope = 'new' | 'canvas' | 'selection';
 export type CanvasJSON = Record<string, any> & { objects: Record<string, any>[] };
 
-export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle', 'posterBackground',
+export const CANVAS_PROPERTIES = ['id', 'name', 'posterVar', 'isPoster', 'textVar', 'fitText', 'wrapText', 'randomOnGeneration', 'randomBackgroundStyle', 'posterBackground', 'posterSource',
   'lockMovementX', 'lockMovementY', 'lockScalingX', 'lockScalingY', 'lockRotation', 'selectable', 'evented'];
 
 export function isLocked(object: Record<string, any>): boolean {
@@ -53,6 +53,7 @@ export function constrainDesign(result: CanvasJSON, baseline: CanvasJSON, scope:
     if (isLocked(object) && !objects.some(next => next.id === object.id)) objects.splice(Math.min(index, objects.length), 0, object);
   });
   const next: CanvasJSON = { ...(scope === 'canvas' ? baseline : {}), ...result, objects };
+  if (scope === 'canvas' && baseline.posterSource !== undefined) next.posterSource = baseline.posterSource;
   if (scope === 'canvas' && result.backgroundImage) {
     next.backgroundImage = restoreAsset(result.backgroundImage, baseline.backgroundImage);
   }

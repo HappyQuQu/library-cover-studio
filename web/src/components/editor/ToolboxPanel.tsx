@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSamplePosterUrl } from '@/lib/posters';
+import { useCanvasStore } from '@/stores/canvasStore';
 import { DEFAULT_POSTER_BACKGROUND, type PosterBackground } from '@/lib/posterBackground';
 
 interface ToolboxPanelProps {
@@ -81,6 +82,8 @@ const sliderCls = "w-full h-1.5 bg-(--bg-tertiary) rounded-full appearance-none 
 
 export function ToolboxPanel({ onAddText, onAddImage, onAddShape, onChangeBackground, initialRandomOnGeneration = false, initialPosterBackground }: ToolboxPanelProps) {
   const { t } = useTranslation();
+  const canvas = useCanvasStore(state => state.canvas);
+  const landscapePosters = (canvas as any)?.posterSource === 'backdrop';
 const directions = [
   { id: 'leftToRight', label: t('designer.leftToRight'), icon: ArrowRightIcon },
   { id: 'topToBottom', label: t('designer.topToBottom'), icon: ArrowDown },
@@ -233,12 +236,12 @@ const shapes = [
                 {Array.from({ length: 9 }).map((_, i) => (
                   <button
                     key={`poster-${i + 1}`}
-                    onClick={() => onAddShape('poster', getSamplePosterUrl(i + 1))}
-                    className="aspect-[2/3] relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group"
+                    onClick={() => onAddShape('poster', getSamplePosterUrl(i + 1, canvas))}
+                    className={cn(landscapePosters ? 'aspect-video' : 'aspect-[2/3]', 'relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group')}
                     title={t('designer.posterNumber', { number: i + 1 })}
                   >
                     <img
-                      src={getSamplePosterUrl(i + 1)}
+                      src={getSamplePosterUrl(i + 1, canvas)}
                       alt={t('designer.posterNumber', { number: i + 1 })}
                       className="w-full h-full object-cover"
                       loading="lazy"

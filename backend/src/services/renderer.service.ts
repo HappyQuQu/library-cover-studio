@@ -218,7 +218,7 @@ export async function renderLibraryCover(
       console.log(`  🖼️ Received ${posterBuffers.length} poster buffers`);
       if (processedTemplate.objects?.length > 0) {
         for (const obj of processedTemplate.objects) {
-          console.log(`    - Object type: ${obj.type}, src: ${obj.src || 'N/A'}`);
+          console.log(`    - Object type: ${obj.type}, src: ${obj.src?.startsWith('data:') ? '[embedded image]' : obj.src || 'N/A'}`);
         }
       }
 

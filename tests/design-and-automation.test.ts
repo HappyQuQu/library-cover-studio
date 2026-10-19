@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { constrainDesign, summarizeCanvas, describeChanges } from '../web/src/lib/aiDesign.ts';
+import { constrainDesign, summarizeCanvas, describeChanges, CANVAS_PROPERTIES } from '../web/src/lib/aiDesign.ts';
 import { readSSE } from '../web/src/lib/sse.ts';
 import { reconcileLibraries, buildSchedule, readSchedule } from '../web/src/lib/taskConfig.ts';
 import { getUpcomingExecutions } from '../backend/src/utils/schedulePreview.ts';
@@ -15,6 +15,12 @@ const generated = { background: '#fff', objects: [
   { id: 'locked', fill: '#fff', left: 800 }, { id: 'title', text: '新标题', fontSize: 70 },
   { id: 'poster', src: '[original-asset]', posterVar: 'post9', left: 400 }
 ] };
+test('landscape material selection survives serialization and AI canvas edits', () => {
+  assert.ok(CANVAS_PROPERTIES.includes('posterSource'));
+  const original = { ...baseline, posterSource: 'backdrop' };
+  assert.equal(constrainDesign(generated, original, 'selection', ['title']).posterSource, 'backdrop');
+  assert.equal(constrainDesign({ ...generated, posterSource: 'poster' }, original, 'canvas', []).posterSource, 'backdrop');
+});
 test('selected edits preserve background, other layers, asset and variable bindings', () => {
   const result = constrainDesign(generated, baseline, 'selection', ['title']);
   assert.equal(result.background, '#111');
