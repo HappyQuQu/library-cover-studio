@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.9.0...v1.10.0) (2026-10-19)
+
+
+### ✨ 新功能
+
+* 支持 Emby / Jellyfin 合集封面更新 ([#16](https://github.com/HappyQuQu/library-cover-studio/issues/16)) ([ac73a39](https://github.com/HappyQuQu/library-cover-studio/commit/ac73a399ce4a3ccdd2af466420a9f420ed43c09a))
+
 ## [1.9.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.8.1...v1.9.0) (2026-10-14)
 
 
