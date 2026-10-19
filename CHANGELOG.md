@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.13.1...v1.14.0) (2026-10-19)
+
+
+### ✨ 新功能
+
+* 支持图位独立选择横竖素材并保持同片对应 ([#27](https://github.com/HappyQuQu/library-cover-studio/issues/27)) ([5147820](https://github.com/HappyQuQu/library-cover-studio/commit/5147820f698d388d08b137c54fdbb50a8c2c515f))
+
 ## [1.13.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.13.0...v1.13.1) (2026-10-19)
 
 
