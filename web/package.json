@@ -1,6 +1,6 @@
 {
   "name": "library-cover-studio-web",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "LibraryCoverStudio 前端应用",
   "private": true,
   "type": "module",

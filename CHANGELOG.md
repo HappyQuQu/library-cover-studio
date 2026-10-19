@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.12.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.11.0...v1.12.0) (2026-10-19)
+
+
+### ✨ 新功能
+
+* 添加海报面板素材来源切换 ([#20](https://github.com/HappyQuQu/library-cover-studio/issues/20)) ([ebeea05](https://github.com/HappyQuQu/library-cover-studio/commit/ebeea05f9d4b68ca1b4817b397cd4be9b5c5ffcc))
+
 ## [1.11.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.10.0...v1.11.0) (2026-10-19)
 
 
