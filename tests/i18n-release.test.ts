@@ -43,8 +43,8 @@ test('every translated leaf renders in both languages without raw keys or unreso
       if (language === 'en-US') assert.doesNotMatch(output, /[\u4e00-\u9fff]/, key);
     }
   }
-  assert.equal(i18n.t('taskWizard.selectionCount', { count: 1, total: 1 }), '1 / 1 library selected');
-  assert.equal(i18n.t('taskWizard.selectionCount', { count: 2, total: 3 }), '2 / 3 libraries selected');
+  assert.equal(i18n.t('taskWizard.selectionCount', { count: 1, total: 1 }), '1 / 1 target selected');
+  assert.equal(i18n.t('taskWizard.selectionCount', { count: 2, total: 3 }), '2 / 3 targets selected');
   await i18n.changeLanguage('zh-CN');
 });
 
@@ -54,7 +54,7 @@ test('invalid stored library configurations have a locale-neutral code and local
   try { parseLibraryConfigs('{}'); } catch (error) { failure = error; }
   assert.equal((failure as {code: string}).code, 'INVALID_LIBRARY_CONFIG');
   await i18n.changeLanguage('en-US');
-  assert.match(getLocalizedApiError(failure), /Select the libraries again/);
+  assert.match(getLocalizedApiError(failure), /Select libraries or collections again/);
   await i18n.changeLanguage('zh-CN');
   assert.match(getLocalizedApiError(failure), /重新选择/);
 });

@@ -61,6 +61,15 @@ test('library refresh retains custom template, titles and disabled selections', 
   assert.equal(result[1].enabled, false);
   assert.equal(result[1].templateId, 'default');
 });
+test('collection selections and overrides survive discovery refresh alongside libraries', () => {
+  const config = { libraryId: 'set', libraryName: '科幻合集', libraryType: 'collection', templateId: 'custom', primaryTitle: '科幻精选', secondaryTitle: 'SCI-FI', sortBy: 'Random', enabled: true };
+  const result = reconcileLibraries([config], [{ id: 'movie', name: '电影库', type: 'movies' }, { id: 'set', name: '科幻合集', type: 'collection' }, { id: 'new-set', name: '新合集', type: 'collection' }], 'default');
+  assert.deepEqual(result[1], config);
+  assert.equal(result[0].enabled, false);
+  assert.equal(result[2].libraryType, 'collection');
+  assert.equal(result[2].enabled, false);
+  assert.equal(result[2].primaryTitle, '新合集');
+});
 test('simple schedules round-trip and custom expressions stay advanced', () => {
   for (const expression of ['0 4 * * *', '7 4 * * 1', '30 23 31 * *', '15 * * * *']) {
     assert.equal(buildSchedule(readSchedule(expression)!), expression);

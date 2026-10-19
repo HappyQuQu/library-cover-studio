@@ -17,7 +17,7 @@ export default {
   "statusUpdated": "Status updated",
   "operationFailed": "Operation failed",
   "pageTitle": "Automation tasks",
-  "pageDescription": "Update library covers in batches, on a schedule or with a manual run.",
+  "pageDescription": "Update library and collection covers in batches, on a schedule or with a manual run.",
   "newTask": "New task",
   "loadFailed": "Unable to load tasks. Check your connection.",
   "empty": "No tasks yet",
@@ -36,12 +36,12 @@ export default {
   "edit": "Edit configuration",
   "deleteTask": "Delete task",
   "nextExecution": "Next run: {{time}} · {{timezone}}",
-  "onePerLibrary": "One cover is generated for each selected library",
+  "onePerLibrary": "One cover is generated for each selected library or collection",
   "viewHistory": "View run history",
   "fallbackName": "Task",
   "resourceHint": "Cover generation uses significant server resources",
   "resourceDescription": "Tasks render covers in the background and upload them to your media server. For large libraries, schedule runs during quieter hours, such as early morning.",
   "previewHint": "Generate a real preview in the configuration dialog before enabling a schedule.",
-  "librarySummary_other": "{{name}} · {{count}} libraries",
-  "librarySummary_one": "{{name}} · {{count}} library"
+  "librarySummary_other": "{{name}} · {{count}} targets",
+  "librarySummary_one": "{{name}} · {{count}} target"
 } as const satisfies TranslationShape<typeof zh>;

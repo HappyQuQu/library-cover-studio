@@ -16,6 +16,7 @@ import {
   Tv,
   Music,
   Book,
+  Library,
   Image as ImageIcon
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,7 @@ import {
   DialogFooter,
   DialogTrigger
 } from '@/components/ui/dialog';
-import { useServers, useCreateServer, useDeleteServer, useServerLibraries, useServerConnection, MediaServer } from '@/api';
+import { useServers, useCreateServer, useDeleteServer, useServerCoverTargets, useServerConnection, MediaServer } from '@/api';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
 import { getLocalizedApiError } from '@/lib/apiError';
@@ -42,6 +43,7 @@ function getLibraryIcon(type: string) {
     case 'music': return Music;
     case 'books': return Book;
     case 'photos': return ImageIcon;
+    case 'collection': return Library;
     default: return Folder;
   }
 }
@@ -51,7 +53,7 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
   const { t, i18n } = useTranslation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const librariesQuery = useServerLibraries(isExpanded ? server.id : '');
+  const librariesQuery = useServerCoverTargets(isExpanded ? server.id : '');
   const { data: libraries = [], isLoading: loadingLibraries } = librariesQuery;
   const connectionQuery = useServerConnection(server.id);
   const connection = connectionQuery.data;
@@ -254,7 +256,8 @@ function ServerCard({ server, onDelete }: { server: MediaServer; onDelete: (id: 
                           background: server.type === 'jellyfin' ? 'var(--jellyfin)' : 'var(--emby)',
                           opacity: 0.8
                         }} />
-                        {lib.itemCount !== undefined ? t('servers.itemCount', { count: lib.itemCount }) : lib.type}
+                        {lib.type === 'collection' ? t('servers.collection') : lib.type}
+                        {lib.itemCount !== undefined && <span>{t('servers.itemCount', { count: lib.itemCount })}</span>}
                       </div>
                     </div>
                   </div>

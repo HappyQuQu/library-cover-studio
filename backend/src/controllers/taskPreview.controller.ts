@@ -5,7 +5,7 @@ import { db } from '../config/database.js';
 import { mediaServers, templates } from '../config/schema.js';
 import { getSchedulerTimezone } from '../services/scheduler.service.js';
 import { getUpcomingExecutions } from '../utils/schedulePreview.js';
-import { getLibraries } from '../services/mediaClient.service.js';
+import { getLibraries, getCollections } from '../services/mediaClient.service.js';
 import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground } from '../services/libraryCover.service.js';
 import { renderLibraryCover } from '../services/renderer.service.js';
 import { decrypt } from '../utils/crypto.js';
@@ -41,12 +41,13 @@ export async function previewCover(req: Request, res: Response, next: NextFuncti
     }
     const apiKey = decrypt(server.apiKeyEncrypted);
     const libraries = await getLibraries(server.type, server.url, apiKey);
-    const library = libraries.find(item => item.id === input.libraryId);
-    if (!library) throw createError('无法读取所选媒体库，请检查服务器连接', 400, 'LIBRARY_UNAVAILABLE');
+    const library = libraries.find(item => item.id === input.libraryId)
+      || (await getCollections(server.type, server.url, apiKey)).find(item => item.id === input.libraryId);
+    if (!library) throw createError('无法读取所选媒体库或合集，请检查服务器连接', 400, 'LIBRARY_UNAVAILABLE');
     const requiredCount = requiredPosterCount(template.canvasJson);
     const { posters, uniqueCount, backdrop } = requiredCount ? await fetchLibraryPosters(server, apiKey, input.libraryId, input.sortBy, 10, undefined, library.type, requiredCount, usesBackdropBackground(template.canvasJson))
       : { posters: [], uniqueCount: 0, backdrop: undefined };
-    if (requiredCount && !posters.length) throw createError('媒体库中没有可用海报，无法生成样张', 400, 'NO_POSTERS');
+    if (requiredCount && !posters.length) throw createError('所选媒体库或合集中没有可用海报，无法生成样张', 400, 'NO_POSTERS');
     const json = JSON.parse(template.canvasJson);
     const settings = getRenderSettings();
     const buffer = await renderLibraryCover(JSON.stringify(json), {

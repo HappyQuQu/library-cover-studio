@@ -6,7 +6,7 @@ import { mediaServers } from '../config/schema.js';
 import { eq } from 'drizzle-orm';
 import { createError } from '../middleware/index.js';
 import { encrypt, decrypt } from '../utils/crypto.js';
-import { getServerInfo, getLibraries, downloadCover, imageMimeType, normalizeServerUrl } from '../services/mediaClient.service.js';
+import { getServerInfo, getLibraries, getCoverTargets, downloadCover, imageMimeType, normalizeServerUrl } from '../services/mediaClient.service.js';
 
 function accessibleServer(req: Request) {
   const server = db.select().from(mediaServers).where(eq(mediaServers.id, req.params.id as string)).get();
@@ -190,6 +190,14 @@ export async function testServerConnection(req: Request, res: Response, next: Ne
 
 // 获取服务器的媒体库列表
 export async function listLibraries(req: Request, res: Response, next: NextFunction) {
+  return listTargets(req, res, next, false);
+}
+
+export async function listCoverTargets(req: Request, res: Response, next: NextFunction) {
+  return listTargets(req, res, next, true);
+}
+
+async function listTargets(req: Request, res: Response, next: NextFunction, includeCollections: boolean) {
   try {
     const { id } = req.params;
     console.log(`[Server] Fetching libraries for server ID: ${id}`);
@@ -198,7 +206,7 @@ export async function listLibraries(req: Request, res: Response, next: NextFunct
 
     const apiKey = decrypt(server.apiKeyEncrypted);
     console.log(`[Server] Connecting to ${server.url} (${server.type})`);
-    const libraries = await getLibraries(server.type, server.url, apiKey);
+    const libraries = await (includeCollections ? getCoverTargets : getLibraries)(server.type, server.url, apiKey);
     // Same-origin image URLs work through Docker/reverse proxies; clients authenticate in headers.
     const librariesWithProxy = libraries.map(({ imageItemId, ...lib }) => ({
       ...lib,
