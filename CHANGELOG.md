@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.12.0...v1.13.0) (2026-10-19)
+
+
+### ✨ 新功能
+
+* 完善模板商店分类搜索与筛选 ([#21](https://github.com/HappyQuQu/library-cover-studio/issues/21)) ([29ffb5b](https://github.com/HappyQuQu/library-cover-studio/commit/29ffb5b551a7c6c199d83206798b8a84e5b6f052))
+
 ## [1.12.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.11.0...v1.12.0) (2026-10-19)
 
 
