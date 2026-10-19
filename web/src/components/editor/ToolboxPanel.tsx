@@ -17,13 +17,13 @@ import {
   ArrowRightIcon,
   ArrowDownRight,
   ArrowDownLeft,
-  Plus,
   LayoutGrid,
   Layers2,
   Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSamplePosterUrl } from '@/lib/posters';
+import { ArtworkSlotButton } from './ArtworkSlotButton';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { DEFAULT_POSTER_BACKGROUND, type PosterBackground } from '@/lib/posterBackground';
 
@@ -235,37 +235,35 @@ const shapes = [
                 <span className="text-xs font-semibold text-(--text-primary)">{t('designer.posterTemplates')}</span>
                 <div className="flex-1 h-px bg-(--border-color)" />
               </div>
-              <label className="block space-y-2 mb-2 text-xs text-(--text-secondary)">
-                <span>{t('designer.posterSource')}</span>
-                <select value={posterSource} disabled={!canvas || isRestoring}
-                  onChange={event => onChangePosterSource(event.target.value as 'poster' | 'backdrop')}
-                  aria-describedby="poster-source-hint"
-                  className="w-full rounded-lg border border-(--border-color) bg-(--bg-secondary) p-2 disabled:opacity-50">
-                  <option value="poster">{t('designer.posterSourcePortrait')}</option>
-                  <option value="backdrop">{t('designer.posterSourceLandscape')}</option>
-                </select>
-              </label>
-              <p id="poster-source-hint" className="mb-3 text-xs text-(--text-tertiary) leading-relaxed">{t('designer.posterSourceHint')}</p>
+              <fieldset disabled={!canvas || isRestoring} aria-describedby="poster-source-hint" className="mb-3">
+                <legend className="mb-2 text-xs text-(--text-secondary)">{t('designer.posterSource')}</legend>
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-(--border-color) bg-(--bg-secondary) p-1">
+                  {(['poster', 'backdrop'] as const).map(source => (
+                    <label key={source} className="relative cursor-pointer">
+                      <input type="radio" name="poster-source" value={source} checked={posterSource === source}
+                        onChange={() => onChangePosterSource(source)} className="peer sr-only" />
+                      <span className="flex min-h-10 items-center justify-center gap-2 rounded-lg px-1.5 text-xs font-medium text-(--text-secondary) transition-colors peer-checked:bg-(--bg-primary) peer-checked:text-(--primary) peer-checked:shadow-sm peer-focus-visible:outline-2 peer-focus-visible:outline-(--primary) peer-disabled:cursor-not-allowed peer-disabled:opacity-50">
+                        <span aria-hidden="true" className={cn('shrink-0 rounded-xs border-[1.5px] border-current', source === 'poster' ? 'h-4 w-3' : 'h-3 w-5')} />
+                        {t(source === 'poster' ? 'designer.posterSourcePortrait' : 'designer.posterSourceLandscape')}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <p id="poster-source-hint" className="mb-3 text-[11px] text-(--text-tertiary) leading-relaxed">
+                {t(landscapePosters ? 'designer.posterSourceLandscapeHint' : 'designer.posterSourcePortraitHint')}
+              </p>
               <div className="grid grid-cols-3 gap-2">
                 {Array.from({ length: 9 }).map((_, i) => (
-                  <button
+                  <ArtworkSlotButton
                     key={`poster-${i + 1}`}
-                    onClick={() => onAddShape('poster', getSamplePosterUrl(i + 1, canvas))}
-                    className={cn(landscapePosters ? 'aspect-video' : 'aspect-[2/3]', 'relative rounded-lg overflow-hidden border border-(--border-color) hover:border-(--primary) transition-all hover:scale-105 group')}
-                    title={t('designer.posterNumber', { number: i + 1 })}
-                  >
-                    <img
-                      src={getSamplePosterUrl(i + 1, canvas)}
-                      alt={t('designer.posterNumber', { number: i + 1 })}
-                      className="w-full h-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Plus className="w-6 h-6 text-white drop-shadow-md" />
-                    </div>
-                  </button>
+                    number={i + 1} src={getSamplePosterUrl(i + 1, canvas)} landscape={landscapePosters}
+                    action="add" disabled={!canvas || isRestoring}
+                    onClick={() => onAddShape('poster', { src: getSamplePosterUrl(i + 1, canvas), posterVar: `post${i + 1}` })}
+                  />
                 ))}
               </div>
+              <p className="mt-2 text-[11px] leading-relaxed text-(--text-tertiary)">{t('designer.artworkSlotsHint')}</p>
             </div>
 
             {/* Basic Elements */}

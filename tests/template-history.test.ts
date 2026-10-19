@@ -92,6 +92,19 @@ test('template saves keep immutable previews, restore safely, enforce locks and 
   assert.equal(JSON.parse((await (await request(`/${wide.id}`)).json() as any).canvasJson).posterSource, 'backdrop');
   const widePixel = await sharp(Buffer.from(await (await request(`/${wide.id}/thumbnail`)).arrayBuffer())).resize(1,1).raw().toBuffer();
   assert.ok(widePixel[1] > 240 && widePixel[0] < 20 && widePixel[2] < 20, 'history uses the embedded horizontal sample instead of a bundled portrait');
+  // Bundled landscape slots keep their individual examples when generating history previews.
+  const landscapePreviews: Buffer[] = [];
+  for (const number of [1, 9]) {
+    const sampledCanvas = JSON.stringify({ width: 320, height: 180, posterSource: 'backdrop', objects: [
+      { type: 'Image', posterVar: `post${number}`, left: 0, top: 0, width: 320, height: 180,
+        src: `/api/templates/posters/backdrops/${number}.jpg` }
+    ] });
+    const result = await request('', 'POST', { name: `横图示例 ${number}`, width: 320, height: 180, canvasJson: sampledCanvas });
+    assert.equal(result.status, 201);
+    const saved = await result.json() as any;
+    landscapePreviews.push(Buffer.from(await (await request(`/${saved.id}/thumbnail`)).arrayBuffer()));
+  }
+  assert.notDeepEqual(landscapePreviews[0], landscapePreviews[1], 'different slots must not all render the old shared backdrop');
   for (let i=0; i<51; i++) assert.equal((await request(`/${id}`,'PUT',{name:`保存 ${i}`})).status,200);
   const recent = await revisions(); assert.equal(recent.length,50); assert.equal(recent[0].name,'保存 50'); assert.equal(recent[49].name,'保存 1');
   assert.equal((await request(`/${id}/history/${initial.id}/thumbnail`)).status,404);

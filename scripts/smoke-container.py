@@ -69,6 +69,13 @@ with tempfile.TemporaryDirectory(prefix='lcs-smoke-', dir=Path.cwd().parent) as 
         assert 'blob:' in headers['Content-Security-Policy']
         for route in ['/editor/fixture', '/tasks', '/settings']:
             assert request(route)[1] == html
+        landscape_examples = set()
+        for number in range(1, 10):
+            headers, image = request(f'/api/templates/posters/backdrops/{number}.jpg')
+            assert headers['Content-Type'].startswith('image/jpeg')
+            assert image.startswith(b'\xff\xd8') and len(image) > 1000
+            landscape_examples.add(image)
+        assert len(landscape_examples) == 9, 'Landscape examples must be nine distinct images'
         asset = re.search(rb'src="(/assets/[^"]+\.js)"', html).group(1).decode()
         assert 'immutable' in request(asset)[0]['Cache-Control']
         for route in ['/api/unknown', '/assets/missing.js', '/.env']:
