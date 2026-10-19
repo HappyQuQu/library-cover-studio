@@ -12,6 +12,12 @@ export const STORE_CATALOG_URL = `https://raw.githubusercontent.com/${STORE_REPO
 const rawPrefix = `https://raw.githubusercontent.com/${STORE_REPOSITORY}/`;
 const downloadPrefix = `${STORE_URL}/releases/download/`;
 const hex = z.string().regex(/^[a-f0-9]{64}$/);
+const classificationSchema = z.object({
+  recommendedUses: z.array(z.enum(['library', 'collection'])).min(1).max(2),
+  artworkType: z.enum(['poster', 'backdrop', 'mixed', 'none']),
+  artworkCount: z.number().int().min(0).max(9),
+  tags: z.array(z.string().trim().min(1).max(40)).max(12)
+});
 const storeEntrySchema = z.object({
   id: hex, revision: hex, name: z.string().min(1).max(100), description: z.string().max(10000).default(''),
   width: z.number().int().min(100).max(4000), height: z.number().int().min(100).max(6000),
@@ -19,6 +25,8 @@ const storeEntrySchema = z.object({
   packageUrl: z.string().url().refine(value => new URL(value).href.startsWith(downloadPrefix) && !/[?#]/.test(value)),
   packageSha256: hex, downloadCount: z.number().int().nonnegative(),
   folder: z.string().min(1).max(200),
+  // Catalog-only data: old packages and saved local templates retain their revisions.
+  classification: classificationSchema.optional(),
   downloadSources: z.array(z.object({ releaseId: z.number().int().positive(), downloadCount: z.number().int().nonnegative() })).optional()
 }).merge(templateMetadataSchema);
 const catalogSchema = z.object({

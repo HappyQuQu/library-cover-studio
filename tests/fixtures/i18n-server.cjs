@@ -71,8 +71,39 @@ app.post('/api/tasks/:id/run',(req,res)=>res.json({message:'started'}));
 app.post('/api/tasks/:id/toggle',(req,res)=>{const task=tasks.find(t=>t.id===req.params.id);task.isEnabled=!task.isEnabled;res.json(task);});
 app.get('/api/tasks/:id/logs',(req,res)=>res.json([{id:'run-1',taskId:req.params.id,status:'completed',itemsProcessed:1,itemsFailed:1,startedAt:now,completedAt:'2026-10-14T04:00:59.600+08:00',errorMessage:'这是保留的原始诊断',covers:[{id:'cover-1',libraryId:'movies',libraryName:'电影库 · Demo',templateName:design.name,status:'uploaded',width:1920,height:1080,imageUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image',thumbnailUrl:'/tasks/task-fixture/logs/run-1/covers/cover-1/image'},{id:'cover-2',libraryId:'series',libraryName:'剧集库 · Demo',templateName:design.name,status:'failed',errorMessage:'保留的上传错误原文',imageUrl:null}]}]));
 app.get('/api/tasks/:task/logs/:log/covers/:cover/image',image);
-app.get('/api/template-store',(req,res)=>{const count=13,pageSize=Number(req.query.pageSize)||24,page=Number(req.query.page)||1;let rows=Array.from({length:count},(_,index)=>({id:'store-'+index,revision:'rev-fixture',name:'社区设计 '+(index+1),description:'保留社区模板说明原文',width:1920,height:1080,downloadCount:index+1,installedTemplateId:null,version:'2.0.0',author:{name:'作者原名'},changelog:'社区更新记录原文',compatible:true,updateAvailable:index===0,previousTemplateId:index===0?'template-fixture':null,installedVersion:'1.0.0',updateMode:'replace',localMatch:false,localLocked:false,localModified:true,countPending:false,countLive:true}));if(req.query.q)rows=rows.filter(t=>t.name.includes(String(req.query.q)));res.json({repositoryUrl:'https://github.com/HappyQuQu/library-cover-store',generatedAt:now,stale:false,setupRequired:false,pendingCount:1,total:rows.length,page,pageSize,totalPages:Math.max(1,Math.ceil(rows.length/pageSize)),templates:rows.slice((page-1)*pageSize,page*pageSize)});});
-app.get('/api/template-store/:id/preview',image);
+// Optional generated catalog uses local, inspected Store previews; no remote requests.
+const localStoreCatalog=process.env.I18N_STORE_CATALOG?JSON.parse(fs.readFileSync(process.env.I18N_STORE_CATALOG,'utf8')):null;
+const storeRows=(localStoreCatalog||Array.from({length:13},(_,index)=>({
+ id:'store-'+index,revision:'rev-fixture',name:'社区设计 '+(index+1),description:'保留社区模板说明原文',
+ width:index<8?1920:1200,height:index<8?1080:index<12?1800:1200,downloadCount:index+1,
+ version:'2.0.0',author:{name:'作者原名'},changelog:'社区更新记录原文',
+ classification:{recommendedUses:index<8?['library']:['collection'],artworkType:index<8?'poster':'backdrop',artworkCount:3,tags:['电影']}
+}))).map((row,index)=>({...row,installedTemplateId:null,compatible:!row.minAppVersion||row.minAppVersion.split('.').map(Number).reduce((result,part,index)=>result||([1,10,0][index]-part),0)>=0,
+ updateAvailable:index===0,previousTemplateId:index===0?'template-fixture':null,installedVersion:'1.0.0',updateMode:'replace',
+ localMatch:false,localLocked:false,localModified:true,countPending:false,countLive:true}));
+const orientation=row=>row.width>row.height?'landscape':row.width<row.height?'portrait':'square';
+app.get('/api/template-store',(req,res)=>{
+ const facets={orientations:{landscape:0,portrait:0,square:0},artwork:{poster:0,backdrop:0,mixed:0,none:0},uses:{library:0,collection:0}};
+ for(const row of storeRows){facets.orientations[orientation(row)]++;if(row.classification){facets.artwork[row.classification.artworkType]++;for(const use of row.classification.recommendedUses)facets.uses[use]++;}}
+ const q=String(req.query.q||'').normalize('NFKC').trim().toLowerCase().split(/\s+/).filter(Boolean);
+ let rows=storeRows.filter(row=>{
+  const c=row.classification;
+  const aliases=[orientation(row)==='portrait'?'竖版 竖封 portrait':orientation(row)==='landscape'?'横版 横封 landscape':'方形 square',
+    c?.artworkType==='backdrop'?'横图 横向剧照 backdrop':c?.artworkType==='poster'?'海报 poster':c?.artworkType==='mixed'?'混合 海报 横图 mixed':'无需图片',
+    c?.recommendedUses.includes('collection')?'合集 collection':'',c?.recommendedUses.includes('library')?'媒体库 library':''];
+  const text=[row.name,row.description,row.author?.name,...(c?.tags||[]),...aliases].join(' ').normalize('NFKC').toLowerCase();
+  return q.every(token=>text.includes(token))&&(!req.query.orientation||req.query.orientation==='all'||orientation(row)===req.query.orientation)
+   &&(!req.query.artwork||req.query.artwork==='all'||c?.artworkType===req.query.artwork)
+   &&(!req.query.use||req.query.use==='all'||c?.recommendedUses.includes(req.query.use))
+   &&(req.query.status==='installed'?!!row.previousTemplateId:req.query.status==='not-installed'?!row.previousTemplateId:req.query.status==='updates'?row.updateAvailable:true);
+ });
+ rows.sort((a,b)=>req.query.sort==='popular'?b.downloadCount-a.downloadCount||a.name.localeCompare(b.name,'zh-CN'):a.name.localeCompare(b.name,'zh-CN'));
+ const pageSize=[12,24,48,96].includes(Number(req.query.pageSize))?Number(req.query.pageSize):24;
+ const totalPages=Math.max(1,Math.ceil(rows.length/pageSize)),page=Math.min(totalPages,Math.max(1,Number(req.query.page)||1));
+ res.json({repositoryUrl:'https://github.com/HappyQuQu/library-cover-store',generatedAt:now,stale:false,setupRequired:false,pendingCount:0,
+  catalogTotal:storeRows.length,facets,total:rows.length,page,pageSize,totalPages,templates:rows.slice((page-1)*pageSize,page*pageSize).map(({previewPath,...row})=>row)});
+});
+app.get('/api/template-store/:id/preview',(req,res)=>{const row=storeRows.find(row=>row.id===req.params.id);if(row?.previewPath)return res.sendFile(row.previewPath);image(req,res);});
 app.post(['/api/template-store/:id/install','/api/template-store/:id/update'],(req,res)=>res.json({id:'template-fixture',action:req.path.endsWith('update')?'updated':'installed',alreadyInstalled:false,backupId:req.body.strategy==='backup'?'backup':undefined,fonts:[{action:'installed'}]}));
 
 const settingsState={'rendering.outputFormat':'PNG','rendering.outputQuality':'90','rendering.concurrency':'3','history.maxRuns':'50','history.maxDays':'30','storage.savePosters':'false','storage.saveCovers':'false','ai.systemPrompt':'保留的系统提示词 · do not translate'};

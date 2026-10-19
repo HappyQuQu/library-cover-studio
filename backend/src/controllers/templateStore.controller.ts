@@ -12,6 +12,7 @@ import { saveTemplateVersion } from '../services/templateHistory.service.js';
 import { recordStoreDownload, storeDownloadBaseline, storeDownloadCounts } from '../services/templateStoreCounts.service.js';
 import { withTemplateFonts, type ImportedFont } from '../services/templateFonts.service.js';
 import { storePreview } from '../services/templateStorePreview.service.js';
+import { normalizeStoreSearch, storeOrientation, storeSearchScore } from '../services/templateStoreSearch.service.js';
 
 export const storeUpdateSchema = z.object({ templateId: z.string().uuid(), revision: z.string().regex(/^[a-f0-9]{64}$/), strategy: z.enum(['replace', 'backup', 'copy']).optional() });
 type Strategy = 'replace' | 'backup' | 'copy';
@@ -38,36 +39,69 @@ function updateMode(item: Installed) {
 export async function listStore(req: Request, res: Response, next: NextFunction) {
   try {
     const catalog = await getStoreCatalog();
-    const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 200).trim().toLocaleLowerCase() : '';
-    const sort = req.query.sort === 'popular' ? 'popular' : 'name';
-    const matches = catalog.data.templates.filter(entry => `${entry.name} ${entry.description} ${entry.folder} ${entry.author?.name || ''}`.toLocaleLowerCase().includes(query))
-      .sort((a, b) => sort === 'popular' ? b.downloadCount - a.downloadCount || a.name.localeCompare(b.name, 'zh-CN') : a.name.localeCompare(b.name, 'zh-CN'));
+    const query = typeof req.query.q === 'string' ? normalizeStoreSearch(req.query.q.slice(0, 200)) : '';
+    const tokens = query.split(/\s+/).filter(Boolean);
+    const sort = req.query.sort === 'popular' || req.query.sort === 'name' || req.query.sort === 'relevance'
+      ? req.query.sort : tokens.length ? 'relevance' : 'name';
+    const installs = getInstalls(req.user!.userId);
+    const locals = localTemplates(req.user!.userId);
+    const byStore = new Map<string, Installed[]>();
+    for (const record of installs) {
+      const records = byStore.get(record.install.storeId) || [];
+      records.push(record); byStore.set(record.install.storeId, records);
+    }
+    const ownByName = new Map<string, typeof locals[number]>();
+    const localByName = new Map<string, typeof locals[number]>();
+    for (const local of locals) {
+      if (!localByName.has(local.name)) localByName.set(local.name, local);
+      if (local.userId === req.user!.userId && !ownByName.has(local.name)) ownByName.set(local.name, local);
+    }
+    const entries = catalog.data.templates.map(({ packageUrl: _url, packageSha256: _hash, downloadSources: _sources, ...entry }) => {
+      const records = byStore.get(entry.id) || [];
+      const exact = records.find(item => item.install.revision === entry.revision);
+      const previous = exact || records[0];
+      const local = previous?.template || ownByName.get(entry.name) || localByName.get(entry.name);
+      const state = previous ? updateMode(previous) : local ? { mode: local.isLocked ? 'copy' : 'replace', reason: '模板库已有同名模板，下载前请确认更新方式' } : null;
+      return { ...entry, installedTemplateId: exact?.template.id || null,
+        previousTemplateId: local?.id || null,
+        installedVersion: local ? readTemplateMetadata(local.metadataJson).version : null,
+        localMatch: !previous && !!local, localLocked: !!local && (!!local.isLocked || local.userId !== req.user!.userId),
+        localModified: !!previous && state?.mode === 'copy' && !local?.isLocked,
+        updateAvailable: !exact && !!local, updateMode: state?.mode || null, updateReason: state?.reason || '',
+        compatible: supportsTemplateVersion(APP_VERSION, entry.minAppVersion) };
+    });
+    const facets = {
+      orientations: { landscape: 0, portrait: 0, square: 0 },
+      artwork: { poster: 0, backdrop: 0, mixed: 0, none: 0 },
+      uses: { library: 0, collection: 0 }
+    };
+    for (const entry of entries) {
+      facets.orientations[storeOrientation(entry)]++;
+      if (entry.classification) {
+        facets.artwork[entry.classification.artworkType]++;
+        for (const use of entry.classification.recommendedUses) facets.uses[use]++;
+      }
+    }
+    const matches = entries.map(entry => ({ entry, score: storeSearchScore(entry, tokens) }))
+      .filter(({ entry, score }) => score !== null
+        && (!['landscape', 'portrait', 'square'].includes(String(req.query.orientation)) || storeOrientation(entry) === req.query.orientation)
+        && (!['poster', 'backdrop', 'mixed', 'none'].includes(String(req.query.artwork)) || entry.classification?.artworkType === req.query.artwork)
+        && (!['library', 'collection'].includes(String(req.query.use)) || entry.classification?.recommendedUses.includes(req.query.use as 'library' | 'collection'))
+        && (req.query.status === 'installed' ? !!entry.previousTemplateId : req.query.status === 'not-installed' ? !entry.previousTemplateId
+          : req.query.status === 'updates' ? entry.updateAvailable && !entry.localMatch : true))
+      .sort((a, b) => (sort === 'relevance' ? (b.score || 0) - (a.score || 0) : sort === 'popular' ? b.entry.downloadCount - a.entry.downloadCount : 0)
+        || a.entry.name.localeCompare(b.entry.name, 'zh-CN'));
     const requestedSize = Number(req.query.pageSize);
     const pageSize = [12, 24, 48, 96].includes(requestedSize) ? requestedSize : 24;
     const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
     const requestedPage = Number(req.query.page);
     const page = Math.min(totalPages, Math.max(1, Number.isSafeInteger(requestedPage) ? requestedPage : 1));
-    const installs = getInstalls(req.user!.userId);
-    const locals = localTemplates(req.user!.userId);
-    const visible = matches.slice((page - 1) * pageSize, page * pageSize);
-    const counts = await storeDownloadCounts(visible);
+    const visible = matches.slice((page - 1) * pageSize, page * pageSize).map(item => item.entry);
+    const counts = await storeDownloadCounts(catalog.data.templates.filter(entry => visible.some(item => item.id === entry.id)));
     res.json({ repositoryUrl: STORE_URL, generatedAt: catalog.setupRequired ? null : catalog.data.generatedAt,
       appVersion: APP_VERSION, stale: catalog.stale, setupRequired: catalog.setupRequired, pendingCount: catalog.data.pendingCount,
-      total: matches.length, page, pageSize, totalPages,
-      templates: visible.map(({ packageUrl: _url, packageSha256: _hash, downloadSources: _sources, ...entry }) => {
-        const records = installs.filter(item => item.install.storeId === entry.id);
-        const exact = records.find(item => item.install.revision === entry.revision);
-        const previous = exact || records[0];
-        const local = previous?.template || locals.find(item => item.name === entry.name && item.userId === req.user!.userId) || locals.find(item => item.name === entry.name);
-        const state = previous ? updateMode(previous) : local ? { mode: local.isLocked ? 'copy' : 'replace', reason: '模板库已有同名模板，下载前请确认更新方式' } : null;
-        return { ...entry, ...counts.get(entry.id), installedTemplateId: exact?.template.id || null,
-          previousTemplateId: local?.id || null,
-          installedVersion: local ? readTemplateMetadata(local.metadataJson).version : null,
-          localMatch: !previous && !!local, localLocked: !!local && (!!local.isLocked || local.userId !== req.user!.userId),
-          localModified: !!previous && state?.mode === 'copy' && !local?.isLocked,
-          updateAvailable: !exact && !!local, updateMode: state?.mode || null, updateReason: state?.reason || '',
-          compatible: supportsTemplateVersion(APP_VERSION, entry.minAppVersion) };
-      }) });
+      catalogTotal: entries.length, facets, total: matches.length, page, pageSize, totalPages,
+      templates: visible.map(entry => ({ ...entry, ...counts.get(entry.id) })) });
   } catch (error) { next(error); }
 }
 
