@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { getSamplePosterUrl } from '@/lib/posters';
+import { ArtworkSlotButton } from './ArtworkSlotButton';
 
 interface PropertyPanelProps {
   selectedObject: any;
@@ -414,33 +415,9 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                   const imgUrl = getSamplePosterUrl(i + 1, selectedObject.canvas);
 
                   return (
-                    <button
-                      key={varName}
-                      onClick={() => onPropertyChange('posterVar', varName)}
-                      className={cn(
-                        'relative rounded-lg border overflow-hidden transition-all group',
-                        selectedObject.canvas?.posterSource === 'backdrop' ? 'aspect-video' : 'aspect-[2/3]',
-                        isActive
-                          ? "ring-2 ring-(--primary) border-transparent"
-                          : "border-(--border-color) hover:border-(--primary) hover:shadow-sm"
-                      )}
-                      title={t('designer.switchPoster', { number: i + 1 })}
-                    >
-                      <img
-                        src={imgUrl}
-                        alt={t('designer.posterNumber', { number: i + 1 })}
-                        className="w-full h-full object-cover"
-                        loading="lazy"
-                      />
-                      <div className={cn(
-                        "absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity",
-                        isActive ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                      )}>
-                        <span className="text-[10px] font-mono text-white font-bold bg-black/50 px-1.5 py-0.5 rounded backdrop-blur-sm">
-                          {`{{${varName}}}`}
-                        </span>
-                      </div>
-                    </button>
+                    <ArtworkSlotButton key={varName} number={i + 1} src={imgUrl}
+                      landscape={selectedObject.canvas?.posterSource === 'backdrop'} action="bind" active={isActive}
+                      onClick={() => onPropertyChange('posterVar', varName)} />
                   );
                 })}
               </div>

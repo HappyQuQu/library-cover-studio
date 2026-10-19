@@ -878,13 +878,15 @@ export function EditorPage() {
           // Load poster from URL
           try {
             const imgEl = document.createElement('img');
-            imgEl.src = payload;
             imgEl.crossOrigin = 'anonymous';
+            imgEl.src = typeof payload === 'string' ? payload : payload.src;
 
             await new Promise((resolve, reject) => {
               imgEl.onload = resolve;
               imgEl.onerror = reject;
             });
+
+            if (readOnlyRef.current || useCanvasStore.getState().isRestoring || useCanvasStore.getState().canvas !== canvas) return;
 
             const fabricImg = new fabric.FabricImage(imgEl, {
               left: centerX, top: centerY,
@@ -898,6 +900,10 @@ export function EditorPage() {
 
             (fabricImg as any).id = id;
             (fabricImg as any).isPoster = true;
+            if (typeof payload === 'object' && /^post[1-9]$/.test(payload.posterVar)) {
+              (fabricImg as any).posterVar = payload.posterVar;
+              (fabricImg as any).name = t('designer.artworkSlotNumber', { number: Number(payload.posterVar.slice(4)) });
+            }
             // Apply rounded corners via clipPath
             fabricImg.set('clipPath', new fabric.Rect({
               width: fabricImg.width,

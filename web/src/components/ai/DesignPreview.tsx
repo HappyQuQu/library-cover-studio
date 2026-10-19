@@ -12,7 +12,7 @@ import { applyPosterBackground } from '@/lib/posterBackground';
 export function normalizeDesignAssets(json: CanvasJSON): CanvasJSON {
   return JSON.parse(JSON.stringify(json, (key, value) => {
     if (key === 'src' && typeof value === 'string') {
-      const poster = value.match(/(?:https?:\/\/[^/]+)?\/api\/templates\/posters\/(\d+\.jpg)$/);
+      const poster = value.match(/(?:https?:\/\/[^/]+)?\/api\/templates\/posters\/((?:backdrops\/)?\d+\.jpg)$/);
       if (poster) return `${apiClient.defaults.baseURL}/templates/posters/${poster[1]}`;
     }
     return value;

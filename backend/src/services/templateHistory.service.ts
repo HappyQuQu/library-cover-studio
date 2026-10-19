@@ -47,11 +47,11 @@ async function previewBuffer(template: Template, thumbnail?: string) {
     buffers[0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
   }
   if (canvas.posterSource === 'backdrop') {
-    const fallback = await fs.readFile(path.join(postersDirectory, 'backdrop.jpg'));
     for (let index = 0; index < buffers.length; index++) {
       const sample = canvas.objects?.find((object: any) => object.posterVar === `post${index + 1}`)?.src;
       const embedded = typeof sample === 'string' && sample.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=\s]+)$/);
-      buffers[index] = embedded ? Buffer.from(embedded[1], 'base64') : fallback;
+      buffers[index] = embedded ? Buffer.from(embedded[1], 'base64')
+        : await fs.readFile(path.join(postersDirectory, 'backdrops', `${index + 1}.jpg`));
     }
   }
   const title = (variable: string, fallback: string) => canvas.objects?.find((object: any) => object.textVar === variable)?.text || fallback;

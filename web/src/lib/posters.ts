@@ -1,16 +1,10 @@
 import { apiClient } from '@/api/client';
 
-/** Share the configured API address across poster thumbnails and canvas loading. */
-export function getSamplePosterUrl(index: number | string, canvas?: { posterSource?: string; getObjects?: () => any[] } | null): string {
+type PosterCanvas = { posterSource?: string; getObjects?: () => unknown[] } | null;
+
+/** Both artwork sources have nine distinct bundled examples, matching their slot number. */
+export function getSamplePosterUrl(index: number | string, canvas?: PosterCanvas): string {
   const baseUrl = (apiClient.defaults.baseURL || '/api').replace(/\/+$/, '');
-  if (canvas?.posterSource === 'backdrop') {
-    const sample = canvas.getObjects?.().find(object => {
-      const element = object.getElement?.();
-      const width = element?.naturalWidth ?? object.width;
-      const height = element?.naturalHeight ?? object.height;
-      return object.posterVar === `post${index}` && typeof object.getSrc === 'function' && width > height;
-    });
-    return sample?.getSrc() || `${baseUrl}/templates/posters/backdrop.jpg`;
-  }
-  return `${baseUrl}/templates/posters/${index}.jpg`;
+  const directory = canvas?.posterSource === 'backdrop' ? 'backdrops/' : '';
+  return `${baseUrl}/templates/posters/${directory}${index}.jpg`;
 }
