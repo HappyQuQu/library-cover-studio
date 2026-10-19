@@ -33,12 +33,19 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
     const revision = hash(`revision-${index}`);
     const zip = new AdmZip();
     const metadata = index === 49 ? {} : { version: '1.0.0', author: { name: 'HappyQuQu', url: 'https://github.com/HappyQuQu' }, changelog: '首次发布' };
-    zip.addFile('template.json', Buffer.from(JSON.stringify({ ...metadata, name, description: null, width: 900, height: 600, canvasJson: '{"objects":[]}', isPublic: true })));
+    const width = index < 20 ? 900 : 600;
+    const height = index < 20 || index >= 40 ? 600 : 900;
+    zip.addFile('template.json', Buffer.from(JSON.stringify({ ...metadata, name, description: null, width, height, canvasJson: '{"objects":[]}', isPublic: true })));
     zip.addFile('preview.jpg', image);
     const buffer = zip.toBuffer();
     const packageUrl = `${STORE_URL}/releases/download/store-00001/${id}--${revision}.zip`;
     packages.set(packageUrl, buffer);
-    return { ...metadata, id, revision, name, description: '', width: 900, height: 600, folder: `folder-${index}`,
+    return { ...metadata, id, revision, name, description: '', width, height, folder: `folder-${index}`,
+      ...(index === 49 ? {} : { classification: {
+        recommendedUses: index < 20 ? ['library'] : ['collection'],
+        artworkType: index === 1 ? 'none' : index === 2 ? 'mixed' : index < 30 ? 'poster' : 'backdrop',
+        artworkCount: index === 1 ? 0 : 3, tags: ['电影', 'cinema']
+      } }),
       previewUrl: `https://raw.githubusercontent.com/HappyQuQu/library-cover-store/${'a'.repeat(40)}/folder-${index}/preview.jpg`,
       packageUrl, packageSha256: hash(buffer), downloadCount: 100 - index };
   });
@@ -97,6 +104,9 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   assert.equal(firstPage.templates.length, 24); assert.equal(firstPage.total, 50); assert.equal(firstPage.totalPages, 3);
   assert.equal(firstPage.templates[0].id, entries[0].id);
   assert.equal(firstPage.pageSize, 24);
+  assert.deepEqual(firstPage.facets.orientations, { landscape: 20, portrait: 20, square: 10 });
+  assert.deepEqual(firstPage.facets.artwork, { poster: 28, mixed: 1, none: 1, backdrop: 19 });
+  assert.equal(firstPage.catalogTotal, 50);
   const smallPage = await get('/template-store?pageSize=12&page=2');
   assert.equal(smallPage.templates.length, 12); assert.equal(smallPage.pageSize, 12); assert.equal(smallPage.page, 2); assert.equal(smallPage.totalPages, 5);
   const largePage = await get('/template-store?pageSize=48&page=999');
@@ -107,6 +117,31 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   assert.equal((await get('/template-store?page=999')).page, 3);
   assert.equal((await get('/template-store?page=999')).templates.length, 2);
   assert.equal((await get('/template-store?q=' + encodeURIComponent('社区模板 25'))).total, 1);
+  // Orientation filters the full catalog before sorting, totals and pagination.
+  for (const [orientation, expected] of [['landscape', entries.slice(0, 20)], ['portrait', entries.slice(20, 40)], ['square', entries.slice(40)]] as const) {
+    const filtered = await get(`/template-store?orientation=${orientation}&sort=popular&pageSize=12&page=999`);
+    assert.equal(filtered.total, expected.length);
+    assert.equal(filtered.totalPages, Math.ceil(expected.length / 12));
+    assert.equal(filtered.page, filtered.totalPages);
+    assert.deepEqual(filtered.templates.map((item: any) => item.id), expected.slice((filtered.page - 1) * 12).map(item => item.id));
+  }
+  const portraitSearch = await get('/template-store?orientation=portrait&q=' + encodeURIComponent('社区模板 25'));
+  assert.equal(portraitSearch.total, 1); assert.equal(portraitSearch.templates[0].id, entries[25].id);
+  const noMatches = await get('/template-store?orientation=landscape&page=5&q=' + encodeURIComponent('社区模板 25'));
+  assert.equal(noMatches.total, 0); assert.equal(noMatches.page, 1); assert.equal(noMatches.totalPages, 1); assert.deepEqual(noMatches.templates, []);
+  const byName = await get('/template-store?orientation=portrait&sort=name');
+  assert.deepEqual(byName.templates.map((item: any) => item.name), entries.slice(20, 40).map(item => item.name).sort((a, b) => a.localeCompare(b, 'zh-CN')));
+  for (const orientation of ['all', 'invalid', '']) assert.equal((await get(`/template-store?orientation=${orientation}`)).total, 50);
+  const combined = await get('/template-store?q=' + encodeURIComponent('合集 横图 竖版'));
+  assert.equal(combined.total, 10);
+  assert.deepEqual(combined.templates.map((entry: any) => entry.id), entries.slice(30, 40).map(entry => entry.id));
+  assert.equal((await get('/template-store?q=' + encodeURIComponent('ＨＡＰＰＹＱＵＱＵ 25'))).total, 1);
+  assert.equal((await get('/template-store?q=' + encodeURIComponent('cinema collection portrait'))).total, 20);
+  assert.equal((await get('/template-store?artwork=backdrop&use=collection&orientation=portrait')).total, 10);
+  assert.equal((await get('/template-store?artwork=none')).total, 1);
+  assert.equal((await get('/template-store?artwork=mixed')).templates[0].id, entries[2].id);
+  assert.equal((await get('/template-store?q=' + encodeURIComponent(entries[49].name))).templates[0].classification, undefined);
+  assert.equal((await get('/template-store?status=installed')).total, 0);
   assert.equal(catalogReads, 2, 'Pagination reuses the CDN catalog cache');
   const results = await Promise.all([install(entries[0].id), install(entries[0].id)]);
   assert.deepEqual(results.map(response => response.status), [201, 200]);
@@ -122,6 +157,9 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   assert.equal((await get('/template-store?sort=popular')).templates[0].version, '1.0.0');
   assert.equal((await get('/templates')).some((item: any) => item.id === added.id), true);
   assert.equal((await get('/template-store?sort=popular')).templates[0].installedTemplateId, added.id);
+  assert.equal((await get('/template-store?status=installed')).total, 1);
+  assert.equal((await get('/template-store?status=not-installed')).total, 49);
+  assert.equal((await get('/template-store?status=updates')).total, 0);
   const repeat = await install(entries[0].id); assert.equal(repeat.status, 200); assert.equal(downloads, 1);
   assert.equal((await repeat.json()).alreadyInstalled, true);
   const other = await install(entries[0].id, 'other'); assert.equal(other.status, 201); assert.equal(downloads, 2);
@@ -130,6 +168,7 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   // New store revisions create a separate editable template rather than overwriting an edited design.
   sqlite.prepare('UPDATE templates SET name = ? WHERE id = ?').run('My edited template', added.id);
   revise(0, '1.1.0');
+  assert.equal((await get('/template-store?status=updates')).templates[0].id, entries[0].id);
   assert.equal((await get('/template-store?sort=popular')).templates[0].installedTemplateId, null);
   assert.equal((await get('/template-store?sort=popular')).templates[0].updateMode, 'copy');
   const nextVersion = await update(0, added.id); assert.equal(nextVersion.status, 201);

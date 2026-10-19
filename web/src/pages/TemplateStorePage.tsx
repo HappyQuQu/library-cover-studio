@@ -2,17 +2,19 @@ import { getLocalizedApiError } from '@/lib/apiError';
 import { formatDisplayDate, formatDisplayNumber } from '@/lib/displayFormat';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, ExternalLink, Loader2, Palette, RefreshCw, Search, Store, Check, ArrowRight } from 'lucide-react';
+import { Download, ExternalLink, Loader2, Palette, RefreshCw, Search, Store, Check, ArrowRight, SlidersHorizontal, X } from 'lucide-react';
 import { apiClient } from '@/api';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { useAuthStore } from '@/stores/authStore';
+import { artworkOptions, orientationOptions, useOptions, statusOptions, storePageSizes as pageSizes, readStoreFilters, coverRatio } from '@/lib/templateStore';
 
 interface StoreTemplate {
+  classification?: { recommendedUses: ('library' | 'collection')[]; artworkType: 'poster' | 'backdrop' | 'mixed' | 'none'; artworkCount: number; tags: string[] };
   id: string; revision: string; name: string; description: string; width: number; height: number;
   previewUrl: string; downloadCount: number; installedTemplateId: string | null;
   version: string; author?: { name: string; url?: string }; changelog: string; minAppVersion?: string;
@@ -22,9 +24,9 @@ interface StoreTemplate {
 }
 interface CatalogPage {
   repositoryUrl: string; generatedAt: string | null; stale: boolean; setupRequired: boolean;
+  catalogTotal?: number; facets?: { orientations: Record<string, number>; artwork: Record<string, number>; uses: Record<string, number> };
   pendingCount: number; total: number; page: number; pageSize: number; totalPages: number; templates: StoreTemplate[];
 }
-const pageSizes = [12, 24, 48, 96];
 const pageSizeKey = 'template-store-page-size';
 
 
@@ -49,26 +51,59 @@ function Preview({ template }: { template: StoreTemplate }) {
 export function TemplateStorePage() {
   const { t, i18n } = useTranslation();
   const isAdmin = useAuthStore(state => state.user?.role === 'admin');
-  const [query, setQuery] = useState('');
-  const [sort, setSort] = useState('popular');
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => {
-    try { const saved = Number(localStorage.getItem(pageSizeKey)); return pageSizes.includes(saved) ? saved : 24; }
-    catch { return 24; }
+  const [params, setParams] = useSearchParams();
+  const [savedPageSize] = useState(() => {
+    try { return Number(localStorage.getItem(pageSizeKey)); } catch { return 24; }
   });
+  const filters = readStoreFilters(params, savedPageSize);
+  const { q: query, orientation, artwork, use, status, sort, page, pageSize } = filters;
+  const [searchQuery, setSearchQuery] = useState(query);
+  const [moreOpen, setMoreOpen] = useState(use !== 'all' || status !== 'all');
+  const composing = useRef(false);
+  const [isComposing, setIsComposing] = useState(false);
+  useEffect(() => {
+    if (isComposing) return;
+    const timer = window.setTimeout(() => setSearchQuery(query), 250);
+    return () => window.clearTimeout(timer);
+  }, [query, isComposing]);
+
+  function changeFilters(patch: Partial<typeof filters>, replace = false) {
+    setParams(current => {
+      const next = new URLSearchParams(current);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === 'all' || value === '' || (key === 'page' && value === 1)) next.delete(key);
+        else next.set(key, String(value));
+      }
+      return next;
+    }, { replace });
+  }
+  const setPage = (value: number) => changeFilters({ page: value });
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmTemplate, setConfirmTemplate] = useState<StoreTemplate | null>(null);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitMethod, setSubmitMethod] = useState<'export' | 'ai'>('export');
   const client = useQueryClient();
-  const catalog = useQuery<CatalogPage>({ queryKey: ['template-store', query, sort, page, pageSize],
-    queryFn: ({ signal }) => apiClient.get<CatalogPage>('/template-store', { params: { q: query, sort, page, pageSize }, signal }).then(response => response.data),
+  const catalog = useQuery<CatalogPage>({ queryKey: ['template-store', searchQuery, orientation, artwork, use, status, sort, page, pageSize],
+    queryFn: ({ signal }) => apiClient.get<CatalogPage>('/template-store', { params: { q: searchQuery, orientation, artwork, use, status, sort, page, pageSize }, signal }).then(response => response.data),
+    enabled: searchQuery === query && !isComposing,
     placeholderData: keepPreviousData, staleTime: 60000, retry: false });
   const data = catalog.data;
+  const activeFilters = [
+    ...(query ? [{ key: 'q' as const, label: t('templateStore.keyword'), value: query }] : []),
+    ...orientationOptions.filter(option => option.value === orientation).map(option => ({ key: 'orientation' as const, label: t('templateStore.orientation'), value: t(option.label) })),
+    ...artworkOptions.filter(option => option.value === artwork).map(option => ({ key: 'artwork' as const, label: t('templateStore.artwork'), value: t(option.label) })),
+    ...useOptions.filter(option => option.value === use).map(option => ({ key: 'use' as const, label: t('templateStore.recommendedUse'), value: t(option.label) })),
+    ...statusOptions.filter(option => option.value === status).map(option => ({ key: 'status' as const, label: t('templateStore.addedStatus'), value: t(option.label) }))
+  ];
+  const hasFilters = activeFilters.length > 0;
+
+  function clearFilters() {
+    setSearchQuery(''); changeFilters({ q: '', orientation: 'all', artwork: 'all', use: 'all', status: 'all', page: 1 });
+  }
 
   function changePageSize(size: number) {
-    setPageSize(size); setPage(1);
-    try { localStorage.setItem(pageSizeKey, String(size)); } catch { /* The selected size still works without persistence. */ }
+    changeFilters({ pageSize: size, page: 1 });
+    try { localStorage.setItem(pageSizeKey, String(size)); } catch { /* Works without persistence. */ }
   }
 
   async function install(template: StoreTemplate, strategy?: 'backup' | 'replace' | 'copy') {
@@ -101,22 +136,38 @@ export function TemplateStorePage() {
       </div>
     </div>
 
-    <div className="template-store-toolbar">
-      <label className="template-store-search"><Search size={17} /><input type="search" aria-label={t('templateStore.search')} placeholder={t('templateStore.searchPlaceholder')} value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} /></label>
-      <label className="template-store-filter"><span>{t('templateStore.sort')}</span><select aria-label={t('templateStore.sortLabel')} value={sort} onChange={event => { setSort(event.target.value); setPage(1); }}><option value="popular">{t('templateStore.popular')}</option><option value="name">{t('templateStore.name')}</option></select></label>
-      <label className="template-store-filter"><span>{t('templateStore.perPage')}</span><select aria-label={t('templateStore.pageSize')} value={pageSize} onChange={event => changePageSize(Number(event.target.value))}>{pageSizes.map(size => <option key={size} value={size}>{t('templateStore.pageSizeOption', { count: size })}</option>)}</select></label>
-      <Button className="btn btn-secondary" onClick={() => catalog.refetch()} disabled={catalog.isFetching} aria-label={t('templateStore.refreshCatalog')}><RefreshCw size={16} className={catalog.isFetching ? 'animate-spin' : ''} />{t('common.refresh')}</Button>
+    <div className="template-store-controls">
+      <form className="template-store-toolbar" onSubmit={event => { event.preventDefault(); if (!composing.current) setSearchQuery(query); }}>
+        <label className="template-store-search"><Search size={17} /><input type="search" maxLength={200} aria-label={t('templateStore.search')} placeholder={t('templateStore.searchPlaceholder')} value={query}
+          onCompositionStart={() => { composing.current = true; setIsComposing(true); }} onCompositionEnd={() => { composing.current = false; setIsComposing(false); }}
+          onChange={event => changeFilters({ q: event.target.value, page: 1 }, true)} /></label>
+        <label className="template-store-filter"><span>{t('templateStore.sort')}</span><select aria-label={t('templateStore.sortLabel')} value={sort} onChange={event => changeFilters({ sort: event.target.value, page: 1 })}>{query.trim() && <option value="relevance">{t('templateStore.relevance')}</option>}<option value="popular">{t('templateStore.popular')}</option><option value="name">{t('templateStore.name')}</option></select></label>
+        <Button type="button" className="btn btn-secondary template-store-refresh" title={t('templateStore.refreshCatalog')} onClick={() => catalog.refetch()} disabled={catalog.isFetching || query !== searchQuery || isComposing} aria-label={t('templateStore.refreshCatalog')}><RefreshCw size={16} className={catalog.isFetching ? 'animate-spin' : ''} /></Button>
+      </form>
+      <div className="template-store-toolbar" role="group" aria-label={t('templateStore.filters')}>
+        <label className="template-store-filter"><span>{t('templateStore.orientation')}</span><select aria-label={t('templateStore.orientationLabel')} value={orientation} onChange={event => changeFilters({ orientation: event.target.value, page: 1 })}><option value="all">{t('templateStore.allOrientations')}</option>{orientationOptions.filter(option => (data?.facets?.orientations[option.value] || 0) > 0 || option.value === orientation || (!data?.facets && option.value !== 'square')).map(option => <option key={option.value} value={option.value}>{t('templateStore.filterOption', { label: t(option.label), count: data?.facets?.orientations[option.value] || 0 })}</option>)}</select></label>
+        <label className="template-store-filter"><span>{t('templateStore.artwork')}</span><select aria-label={t('templateStore.artworkLabel')} value={artwork} onChange={event => changeFilters({ artwork: event.target.value, page: 1 })}><option value="all">{t('templateStore.allOrientations')}</option>{artworkOptions.filter(option => (data?.facets?.artwork[option.value] || 0) > 0 || option.value === artwork).map(option => <option key={option.value} value={option.value}>{t('templateStore.filterOption', { label: t(option.label), count: data?.facets?.artwork[option.value] || 0 })}</option>)}</select></label>
+        <Button className="btn btn-secondary" onClick={() => setMoreOpen(!moreOpen)} aria-expanded={moreOpen} aria-controls="store-more-filters"><SlidersHorizontal size={16} />{t('templateStore.moreFilters')}</Button>
+        {hasFilters && <Button className="btn btn-secondary" onClick={clearFilters}>{t('templateStore.clearFilters')}</Button>}
+      </div>
+      {moreOpen && <div id="store-more-filters" className="template-store-more-filters">
+        <label className="template-store-filter"><span>{t('templateStore.recommendedUse')}</span><select aria-label={t('templateStore.useLabel')} value={use} onChange={event => changeFilters({ use: event.target.value, page: 1 })}><option value="all">{t('templateStore.allOrientations')}</option>{useOptions.filter(option => (data?.facets?.uses[option.value] || 0) > 0 || option.value === use).map(option => <option key={option.value} value={option.value}>{t('templateStore.filterOption', { label: t(option.label), count: data?.facets?.uses[option.value] || 0 })}</option>)}</select></label>
+        <label className="template-store-filter"><span>{t('templateStore.addedStatus')}</span><select aria-label={t('templateStore.statusLabel')} value={status} onChange={event => changeFilters({ status: event.target.value, page: 1 })}><option value="all">{t('templateStore.allOrientations')}</option>{statusOptions.map(option => <option key={option.value} value={option.value}>{t(option.label)}</option>)}</select></label>
+        <p>{t('templateStore.useHint')}</p>
+      </div>}
+      {hasFilters && <div className="template-store-active-filters" aria-label={t('templateStore.activeFilters')}>{activeFilters.map(filter => <button key={filter.key} className="template-store-filter-chip" aria-label={t('templateStore.removeFilter', { label: filter.label, value: filter.value })} onClick={() => { if (filter.key === 'q') setSearchQuery(''); changeFilters({ [filter.key]: filter.key === 'q' ? '' : 'all', page: 1 }); }}>{t('templateStore.activeFilter', { label: filter.label, value: filter.value })}<X size={13} /></button>)}</div>}
     </div>
 
-    {data && <div className="template-store-meta"><span role="status">{t('templateStore.total', { count: data.total })}{data.total > 0 ? t('templateStore.range', { start: formatDisplayNumber((data.page - 1) * data.pageSize + 1, i18n.language), end: formatDisplayNumber(Math.min(data.page * data.pageSize, data.total), i18n.language) }) : ''}{catalog.isFetching ? t('templateStore.updating') : ''}</span><span>{data.templates.some(item => item.countLive) ? t('templateStore.liveStats') : data.generatedAt ? t('templateStore.statsSnapshot', { time: formatDisplayDate(data.generatedAt, i18n.language, { dateStyle: 'medium', timeStyle: 'short' }) || t('common.unknownTime') }) : t('templateStore.source')}{data.stale ? t('templateStore.cached') : ''}</span></div>}
+    {data && <div className="template-store-meta"><span role="status" aria-live="polite" aria-atomic="true">{t('templateStore.total', { count: data.total })}{data.total > 0 ? t('templateStore.range', { start: formatDisplayNumber((data.page - 1) * data.pageSize + 1, i18n.language), end: formatDisplayNumber(Math.min(data.page * data.pageSize, data.total), i18n.language) }) : ''}{catalog.isFetching || query !== searchQuery ? t('templateStore.updating') : ''}</span><span>{data.templates.some(item => item.countLive) ? t('templateStore.liveStats') : data.generatedAt ? t('templateStore.statsSnapshot', { time: formatDisplayDate(data.generatedAt, i18n.language, { dateStyle: 'medium', timeStyle: 'short' }) || t('common.unknownTime') }) : t('templateStore.source')}{data.stale ? t('templateStore.cached') : ''}</span></div>}
     {data && data.pendingCount > 0 && <p className="template-store-notice">{t('templateStore.pending', { count: data.pendingCount })}</p>}
 
     {catalog.isPending ? <div className="template-store-loading" role="status"><Loader2 size={28} className="animate-spin" /><span>{t('templateStore.loading')}</span></div>
       : catalog.isError ? <div className="card empty-state" role="alert"><Store size={32} /><div className="empty-state-title">{t('templateStore.loadFailed')}</div><p>{isAdmin ? t('templateStore.adminNetworkHint') : t('templateStore.networkHint')}</p><div className="template-store-header-actions">{isAdmin && <Link to="/settings?tab=network" className="btn btn-secondary">{t('templateStore.networkSettings')}</Link>}<Button className="btn btn-primary" onClick={() => catalog.refetch()}>{t('templateStore.reload')}</Button></div></div>
-      : !data?.templates.length ? <div className="card empty-state"><Store size={36} /><div className="empty-state-title">{data?.setupRequired ? t('templateStore.setupTitle') : query ? t('templateStore.noMatches') : t('templateStore.empty')}</div><p className="empty-state-description">{data?.setupRequired ? t('templateStore.setupHint') : query ? t('templateStore.noMatchesHint') : t('templateStore.emptyHint')}</p><a href="https://github.com/HappyQuQu/library-cover-store" target="_blank" rel="noreferrer" className="template-store-source">{t('templateStore.viewRepository')}<ExternalLink size={14} /></a></div>
+      : !data?.templates.length ? <div className="card empty-state"><Store size={36} /><div className="empty-state-title">{data?.setupRequired ? t('templateStore.setupTitle') : hasFilters ? t('templateStore.noMatches') : t('templateStore.empty')}</div><p className="empty-state-description">{data?.setupRequired ? t('templateStore.setupHint') : hasFilters ? t('templateStore.noMatchesHint') : t('templateStore.emptyHint')}</p>{hasFilters && !data?.setupRequired && <Button className="btn btn-secondary" onClick={clearFilters}>{t('templateStore.clearFilters')}</Button>}<a href="https://github.com/HappyQuQu/library-cover-store" target="_blank" rel="noreferrer" className="template-store-source">{t('templateStore.viewRepository')}<ExternalLink size={14} /></a></div>
       : <div className="template-library-grid">{data.templates.map(template => <article className="template-library-card" key={`${template.id}:${template.revision}`}>
         <Preview template={template} />
         <div className="template-store-card-content"><h2>{template.name}</h2>
+          <div className="template-store-tags"><span>{t('templateStore.coverFormat', { orientation: t(template.width > template.height ? 'templateStore.landscape' : template.width < template.height ? 'templateStore.portrait' : 'templateStore.square'), ratio: coverRatio(template.width, template.height) })}</span>{template.classification && <><span>{t(artworkOptions.find(option => option.value === template.classification!.artworkType)!.label)}</span>{template.classification.artworkCount > 0 && <span title={t('templateStore.artworkCountHint')}>{t('templateStore.artworkCount', { count: template.classification.artworkCount })}</span>}{template.classification.recommendedUses.map(value => <span key={value}>{t(useOptions.find(option => option.value === value)!.label)}</span>)}</>}</div>
           <div className="template-store-author"><span>{template.author?.url ? <a href={template.author.url} target="_blank" rel="noreferrer">{template.author.name}</a> : template.author?.name || t('templateStore.unknownAuthor')}</span><span>v{template.version}</span></div><p>{template.description || t('templateStore.fallbackDescription')}</p>
           {template.changelog && <details className="template-store-changelog"><summary>{t('templateStore.changelog')}</summary>{template.changelog}</details>}
           {template.updateAvailable && <div className="template-store-update">{template.localMatch ? t('templateStore.localMatch') : t('templateStore.versionChange', { installed: template.installedVersion || '1.0.0', version: template.version })}<br />{template.localLocked ? t('templateStore.lockedUpdateHint') : t('templateStore.updateHint')}</div>}
@@ -127,7 +178,7 @@ export function TemplateStorePage() {
           : <Button className="btn btn-primary" onClick={() => template.previousTemplateId ? setConfirmTemplate(template) : void install(template)} disabled={!!busyId || !template.compatible}>{busyId === template.id ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}{busyId === template.id ? t('templateStore.processing') : !template.compatible ? t('templateStore.upgrade') : template.localMatch ? t('templateStore.downloadSync') : template.updateAvailable ? t('templateStore.update') : t('templateStore.downloadAdd')}</Button>}</div>
       </article>)}</div>}
 
-    {data && data.total > 0 && <nav className="template-store-pagination" aria-label={t('templateStore.pagination')}><div className="template-store-page-summary">{t('templateStore.pageSummary', { size: data.pageSize, count: data.total })}</div><div className="template-store-page-buttons"><Button className="btn btn-secondary" disabled={data.page <= 1 || catalog.isFetching} onClick={() => setPage(1)}>{t('templateStore.firstPage')}</Button><Button className="btn btn-secondary" disabled={data.page <= 1 || catalog.isFetching} onClick={() => setPage(data.page - 1)}>{t('templateStore.previousPage')}</Button><span>{t('templateStore.pageNumber', { page: data.page, total: data.totalPages })}</span><Button className="btn btn-secondary" disabled={data.page >= data.totalPages || catalog.isFetching} onClick={() => setPage(data.page + 1)}>{t('templateStore.nextPage')}</Button><Button className="btn btn-secondary" disabled={data.page >= data.totalPages || catalog.isFetching} onClick={() => setPage(data.totalPages)}>{t('templateStore.lastPage')}</Button></div></nav>}
+    {data && data.total > 0 && <nav className="template-store-pagination" aria-label={t('templateStore.pagination')}><div className="template-store-page-summary"><span>{t('templateStore.pageSummary', { size: data.pageSize, count: data.total })}</span><label className="template-store-filter"><span>{t('templateStore.perPage')}</span><select aria-label={t('templateStore.pageSize')} value={pageSize} onChange={event => changePageSize(Number(event.target.value))}>{pageSizes.map(size => <option key={size} value={size}>{t('templateStore.pageSizeOption', { count: size })}</option>)}</select></label></div><div className="template-store-page-buttons"><Button className="btn btn-secondary" disabled={data.page <= 1 || catalog.isFetching} onClick={() => setPage(1)}>{t('templateStore.firstPage')}</Button><Button className="btn btn-secondary" disabled={data.page <= 1 || catalog.isFetching} onClick={() => setPage(data.page - 1)}>{t('templateStore.previousPage')}</Button><span>{t('templateStore.pageNumber', { page: data.page, total: data.totalPages })}</span><Button className="btn btn-secondary" disabled={data.page >= data.totalPages || catalog.isFetching} onClick={() => setPage(data.page + 1)}>{t('templateStore.nextPage')}</Button><Button className="btn btn-secondary" disabled={data.page >= data.totalPages || catalog.isFetching} onClick={() => setPage(data.totalPages)}>{t('templateStore.lastPage')}</Button></div></nav>}
     <p className="template-store-footer">{t('templateStore.footer')}</p>
     <Dialog open={!!confirmTemplate} onOpenChange={open => { if (!open && !busyId) setConfirmTemplate(null); }}>
       <DialogContent style={{ maxWidth: 560, width: 'calc(100vw - 32px)' }}>
