@@ -120,6 +120,7 @@ export const SYSTEM_PROMPT = `你是一个专业的 Fabric.js 画布设计助手
   }
 }
 src 固定为 posters/N.jpg（N=1~9），posterVar 对应 "post1"~"post9"
+每个 Image 可设置 artworkSource 为 "poster" 或 "backdrop"，不设置则跟随画布的 posterSource。混排时分别设置，例如左图 "backdrop"、右图 "poster"；横图示例 src 使用 /api/templates/posters/backdrops/N.jpg，相同 posterVar 对应同一部影片。
 圆角推荐值：rx/ry = 图片原始宽度 × 0.10~0.15
 
 ---

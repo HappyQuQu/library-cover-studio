@@ -3,7 +3,7 @@ import { tasks, mediaServers, templates, taskLogs, taskLogCovers, systemSettings
 import { eq, inArray } from 'drizzle-orm';
 import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
-import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground, getPosterSource } from './libraryCover.service.js';
+import { fetchLibraryPosters, requiredPosterCount, usesBackdropBackground, getPosterSource, requiredArtworkSources } from './libraryCover.service.js';
 import { decrypt } from '../utils/crypto.js';
 import { logger } from '../utils/logger.js';
 import { getLocalISOString, getLocalTimestampForFile } from '../utils/time.js';
@@ -149,12 +149,12 @@ export async function runTask(taskId: string, logId?: string) {
         if (!templateDetail) throw new Error('模板不存在，无法生成封面');
 
         const requiredCount = requiredPosterCount(templateDetail.canvasJson);
-        const { posters: posterBuffers, backdrop } = requiredCount ? await fetchLibraryPosters(
+        const { posters: posterBuffers, backdrop, artworkBuffers } = requiredCount ? await fetchLibraryPosters(
           serverDetail, apiKey, config.libraryId, config.sortBy || 'DateCreated',
           Number.POSITIVE_INFINITY, savePosters ? async (poster, name, imageType) => {
             await saveFile('posters', `${libraryName}_${name}_${imageType}_${getLocalTimestampForFile()}.jpg`, poster);
-          } : undefined, config.libraryType, requiredCount, usesBackdropBackground(templateDetail.canvasJson), getPosterSource(templateDetail.canvasJson)
-        ) : { posters: [], backdrop: undefined };
+          } : undefined, config.libraryType, requiredCount, usesBackdropBackground(templateDetail.canvasJson), getPosterSource(templateDetail.canvasJson), requiredArtworkSources(templateDetail.canvasJson)
+        ) : { posters: [], backdrop: undefined, artworkBuffers: undefined };
         if (requiredCount && !posterBuffers.length) {
           throw new Error('媒体库没有可用海报，无法生成封面');
         }
@@ -192,7 +192,7 @@ export async function runTask(taskId: string, logId?: string) {
           canvasJson,
           metadata,
           posterBuffers.filter((p): p is Buffer => p !== null),
-          { width: templateDetail.width || 1920, height: templateDetail.height || 1080, ...renderSettings, backdropBuffer: backdrop }
+          { width: templateDetail.width || 1920, height: templateDetail.height || 1080, ...renderSettings, backdropBuffer: backdrop, artworkBuffers }
         );
 
         if (coverId) {

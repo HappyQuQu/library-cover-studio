@@ -50,6 +50,9 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
   }
 
   const isText = selectedObject.type === 'i-text' || selectedObject.type === 'textbox';
+  const hasArtworkOverride = ['poster', 'backdrop'].includes(selectedObject.artworkSource);
+  const artworkSource = hasArtworkOverride
+    ? selectedObject.artworkSource : selectedObject.canvas?.posterSource;
 
   return (
     <div className="p-5 flex flex-col gap-6 animate-fade-in pb-20">
@@ -408,15 +411,27 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                   {t('designer.posterVariable')}
                 </span>
               </div>
+              <label className="block space-y-2 text-xs text-(--text-secondary)">
+                <span>{t('designer.slotArtworkSource')}</span>
+                <select value={hasArtworkOverride ? selectedObject.artworkSource : 'inherit'}
+                  onChange={event => onPropertyChange('artworkSource', event.target.value)}
+                  aria-describedby="artwork-source-hint"
+                  className="w-full rounded-lg border border-(--border-color) bg-(--bg-primary) p-2 text-(--text-primary)">
+                  <option value="inherit">{t('designer.inheritArtworkSource')}</option>
+                  <option value="poster">{t('designer.posterSourcePortrait')}</option>
+                  <option value="backdrop">{t('designer.posterSourceLandscape')}</option>
+                </select>
+              </label>
+              <p id="artwork-source-hint" className="text-[11px] leading-relaxed text-(--text-tertiary)">{t('designer.slotArtworkSourceHint')}</p>
               <div className="grid grid-cols-3 gap-1.5">
                 {Array.from({ length: 9 }).map((_, i) => {
                   const varName = `post${i + 1}`;
                   const isActive = selectedObject.posterVar === varName;
-                  const imgUrl = getSamplePosterUrl(i + 1, selectedObject.canvas);
+                  const imgUrl = getSamplePosterUrl(i + 1, selectedObject.canvas, selectedObject.artworkSource);
 
                   return (
                     <ArtworkSlotButton key={varName} number={i + 1} src={imgUrl}
-                      landscape={selectedObject.canvas?.posterSource === 'backdrop'} action="bind" active={isActive}
+                      landscape={artworkSource === 'backdrop'} action="bind" active={isActive}
                       onClick={() => onPropertyChange('posterVar', varName)} />
                   );
                 })}

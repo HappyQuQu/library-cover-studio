@@ -153,6 +153,28 @@ test('collection cover APIs read existing artwork, preview safely and update onl
     assert.equal(scheduledLog.items_processed, 1);
     assert.ok(uploads.length >= 2);
     assert.ok(uploads.every(upload => upload.id === 'sci-fi'), 'never replace member posters or library roots');
+    assert.equal(memberPrimaryRequests, 0, 'manual and scheduled runs retain the landscape source');
+    // One movie can supply a landscape on the left and its portrait on the right.
+    const mixedId = randomUUID();
+    const mixedCanvas = JSON.stringify({ width: 320, height: 180, posterSource: 'backdrop', objects: [
+      { type: 'Image', posterVar: 'post1', left: 0, top: 0, width: 160, height: 180 },
+      { type: 'Image', posterVar: 'post1', artworkSource: 'poster', left: 160, top: 0, width: 160, height: 180 }
+    ] });
+    sqlite.prepare('INSERT INTO templates (id,name,canvas_json,width,height,user_id) VALUES (?,?,?,?,?,?)')
+      .run(mixedId, '左横右竖', mixedCanvas, 320, 180, userId);
+    const mixedPreview = await request('/tasks/preview-cover', { ...previewBody, templateId: mixedId });
+    const mixedImage = Buffer.from(mixedPreview.image.split(',')[1], 'base64');
+    const sharp = require('sharp');
+    const left = await sharp(mixedImage).extract({ left: 0, top: 0, width: 160, height: 180 }).raw().toBuffer();
+    const right = await sharp(mixedImage).extract({ left: 160, top: 0, width: 160, height: 180 }).raw().toBuffer();
+    assert.notDeepEqual(left, right, 'preview must render the two artwork sources independently');
+    assert.equal(mixedPreview.posterCount, 1, 'two sources still represent one movie');
+    const mixedTask = await request('/tasks', { name: '混合图位', type: 'manual', serverId,
+      libraryConfigs: JSON.stringify([{ ...config, templateId: mixedId }]) });
+    await request(`/tasks/${mixedTask.id}/run`, {});
+    assert.equal((await untilFinished(mixedTask.id)).status, 'completed');
+    assert.deepEqual(uploads.at(-1)!.buffer, mixedImage, 'task generation uses the same mixed sources as the preview');
+    assert.equal(memberPrimaryRequests, 2, 'preview and task each fetch the same member’s portrait once');
     failUploads = true;
     const failed = await request('/tasks', { name: '合集上传失败', type: 'manual', serverId, libraryConfigs: JSON.stringify([config]) });
     await request(`/tasks/${failed.id}/run`, {});
@@ -160,6 +182,5 @@ test('collection cover APIs read existing artwork, preview safely and update onl
     const failedHistory = await request(`/tasks/${failed.id}/logs`);
     assert.equal(failedHistory[0].covers[0].status, 'failed');
     assert.match(failedHistory[0].covers[0].errorMessage, /权限不足/);
-    assert.equal(memberPrimaryRequests, 0, 'manual and scheduled runs retain the landscape source');
   });
 });

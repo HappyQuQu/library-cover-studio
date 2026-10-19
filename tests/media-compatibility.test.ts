@@ -40,6 +40,26 @@ const info = { Version: '12.2.0', ServerName: 'Local fixture', ProductName: 'Jel
 const empty = { Items: [], TotalRecordCount: 0 };
 const isInfo = (req: Request) => req.url.pathname.endsWith('/System/Info');
 
+for (const type of ['jellyfin', 'emby']) test(`${type} mixed sources preserve movie order and fall back within the same movie`, async t => {
+  const wide = readFileSync(new URL('../backend/src/template/poster/backdrops/1.jpg', import.meta.url));
+  const secondPoster = readFileSync(new URL('../backend/src/template/poster/2.jpg', import.meta.url));
+  const fixture = await mock(t, req => {
+    if (isInfo(req)) return { body: info };
+    if (req.url.pathname.endsWith('/Items')) return { body: { Items: [
+      { Id: 'first', ImageTags: { Primary: 'p1' }, BackdropImageTags: ['b1'] },
+      { Id: 'second', ImageTags: { Primary: 'p2' }, BackdropImageTags: ['b2'] }
+    ], TotalRecordCount: 2 } };
+    if (req.url.pathname.includes('/Backdrop/')) return req.url.pathname.includes('/first/') ? { status: 404 } : { image: wide };
+    return { image: req.url.pathname.includes('/second/') ? secondPoster : poster };
+  });
+  const result = await fetchLibraryPosters({ type, url: fixture.url }, key, 'lib', 'DateCreated', 1, undefined, 'movies', 5, false, 'poster', ['poster', 'backdrop']);
+  assert.equal(result.uniqueCount, 2);
+  assert.deepEqual(result.artworkBuffers.poster, [poster, secondPoster, poster, secondPoster, poster]);
+  assert.deepEqual(result.artworkBuffers.backdrop, [poster, wide, poster, wide, poster]);
+  const firstPrimary = fixture.requests.filter(req => req.url.pathname.endsWith('/first/Images/Primary'));
+  assert.equal(firstPrimary.length, 1, 'fallback reuses the already downloaded first movie poster');
+});
+
 for (const type of ['emby', 'jellyfin']) test(`${type} discovers paginated collections separately from the boxsets library`, async t => {
   const collections = Array.from({ length: 205 }, (_, index) => ({ Id: `set-${index}`, Name: `Collection ${index}`, Type: 'BoxSet', ChildCount: index }));
   const fixture = await mock(t, req => {

@@ -105,6 +105,19 @@ test('template saves keep immutable previews, restore safely, enforce locks and 
     landscapePreviews.push(Buffer.from(await (await request(`/${saved.id}/thumbnail`)).arrayBuffer()));
   }
   assert.notDeepEqual(landscapePreviews[0], landscapePreviews[1], 'different slots must not all render the old shared backdrop');
+  const portraitSample = await sharp({ create: { width: 120, height: 180, channels: 3, background: '#ff0000' } }).png().toBuffer();
+  const mixedCanvas = JSON.stringify({ width: 320, height: 180, posterSource: 'backdrop', objects: [
+    { type: 'Image', posterVar: 'post1', left: 0, top: 0, width: 160, height: 180, src: `data:image/png;base64,${wideSample.toString('base64')}` },
+    { type: 'Image', posterVar: 'post1', artworkSource: 'poster', left: 160, top: 0, width: 160, height: 180, src: `data:image/png;base64,${portraitSample.toString('base64')}` }
+  ] });
+  const mixedResponse = await request('', 'POST', { name: '横竖混排', width: 320, height: 180, canvasJson: mixedCanvas });
+  assert.equal(mixedResponse.status, 201);
+  const mixed = await mixedResponse.json() as any;
+  const mixedImage = Buffer.from(await (await request(`/${mixed.id}/thumbnail`)).arrayBuffer());
+  const mixedPixel = async (left: number) => sharp(mixedImage).extract({ left, top: 100, width: 1, height: 1 }).raw().toBuffer();
+  const leftPixel = await mixedPixel(50), rightPixel = await mixedPixel(350);
+  assert.ok(leftPixel[1] > 230 && leftPixel[0] < 25);
+  assert.ok(rightPixel[0] > 230 && rightPixel[1] < 25, 'history keeps the independent portrait source for the same slot number');
   for (let i=0; i<51; i++) assert.equal((await request(`/${id}`,'PUT',{name:`保存 ${i}`})).status,200);
   const recent = await revisions(); assert.equal(recent.length,50); assert.equal(recent[0].name,'保存 50'); assert.equal(recent[49].name,'保存 1');
   assert.equal((await request(`/${id}/history/${initial.id}/thumbnail`)).status,404);
