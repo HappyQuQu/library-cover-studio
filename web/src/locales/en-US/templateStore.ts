@@ -27,6 +27,8 @@ export default {
   "filterOption_one": "{{label}} ({{count}})",
   "filterOption_other": "{{label}} ({{count}})",
   "relevance": "Most relevant",
+  "newest": "Newest first",
+  "oldest": "Oldest first",
   "coverFormat": "{{orientation}} {{ratio}}",
   "artworkCount_one": "{{count}} image",
   "artworkCount_other": "{{count}} images",

@@ -42,6 +42,7 @@ export async function listStore(req: Request, res: Response, next: NextFunction)
     const query = typeof req.query.q === 'string' ? normalizeStoreSearch(req.query.q.slice(0, 200)) : '';
     const tokens = query.split(/\s+/).filter(Boolean);
     const sort = req.query.sort === 'popular' || req.query.sort === 'name' || req.query.sort === 'relevance'
+      || req.query.sort === 'newest' || req.query.sort === 'oldest'
       ? req.query.sort : tokens.length ? 'relevance' : 'name';
     const installs = getInstalls(req.user!.userId);
     const locals = localTemplates(req.user!.userId);
@@ -89,8 +90,18 @@ export async function listStore(req: Request, res: Response, next: NextFunction)
         && (!['library', 'collection'].includes(String(req.query.use)) || entry.classification?.recommendedUses.includes(req.query.use as 'library' | 'collection'))
         && (req.query.status === 'installed' ? !!entry.previousTemplateId : req.query.status === 'not-installed' ? !entry.previousTemplateId
           : req.query.status === 'updates' ? entry.updateAvailable && !entry.localMatch : true))
-      .sort((a, b) => (sort === 'relevance' ? (b.score || 0) - (a.score || 0) : sort === 'popular' ? b.entry.downloadCount - a.entry.downloadCount : 0)
-        || a.entry.name.localeCompare(b.entry.name, 'zh-CN'));
+      .sort((a, b) => {
+        if (sort === 'newest' || sort === 'oldest') {
+          const first = a.entry.publishedAt ? Date.parse(a.entry.publishedAt) : NaN;
+          const second = b.entry.publishedAt ? Date.parse(b.entry.publishedAt) : NaN;
+          const firstKnown = Number.isFinite(first), secondKnown = Number.isFinite(second);
+          // Unknown dates always follow dated templates, including oldest-first ordering.
+          if (firstKnown !== secondKnown) return firstKnown ? -1 : 1;
+          if (firstKnown && first !== second) return sort === 'newest' ? second - first : first - second;
+        }
+        return (sort === 'relevance' ? (b.score || 0) - (a.score || 0) : sort === 'popular' ? b.entry.downloadCount - a.entry.downloadCount : 0)
+          || a.entry.name.localeCompare(b.entry.name, 'zh-CN') || a.entry.id.localeCompare(b.entry.id);
+      });
     const requestedSize = Number(req.query.pageSize);
     const pageSize = [12, 24, 48, 96].includes(requestedSize) ? requestedSize : 24;
     const totalPages = Math.max(1, Math.ceil(matches.length / pageSize));
