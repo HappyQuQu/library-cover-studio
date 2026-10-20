@@ -78,7 +78,7 @@ const storeRows=(localStoreCatalog||Array.from({length:13},(_,index)=>({
  width:index<8?1920:1200,height:index<8?1080:index<12?1800:1200,downloadCount:index+1,
  version:'2.0.0',author:{name:'作者原名'},changelog:'社区更新记录原文',
  classification:{recommendedUses:index<8?['library']:['collection'],artworkType:index<8?'poster':'backdrop',artworkCount:3,tags:['电影']}
-}))).map((row,index)=>({...row,installedTemplateId:null,compatible:!row.minAppVersion||row.minAppVersion.split('.').map(Number).reduce((result,part,index)=>result||([1,10,0][index]-part),0)>=0,
+}))).map((row,index)=>({...row,publishedAt:new Date(Date.UTC(2026,9,1,0,index)).toISOString(),installedTemplateId:null,compatible:!row.minAppVersion||row.minAppVersion.split('.').map(Number).reduce((result,part,index)=>result||([1,10,0][index]-part),0)>=0,
  updateAvailable:index===0,previousTemplateId:index===0?'template-fixture':null,installedVersion:'1.0.0',updateMode:'replace',
  localMatch:false,localLocked:false,localModified:true,countPending:false,countLive:true}));
 const orientation=row=>row.width>row.height?'landscape':row.width<row.height?'portrait':'square';
@@ -97,7 +97,7 @@ app.get('/api/template-store',(req,res)=>{
    &&(!req.query.use||req.query.use==='all'||c?.recommendedUses.includes(req.query.use))
    &&(req.query.status==='installed'?!!row.previousTemplateId:req.query.status==='not-installed'?!row.previousTemplateId:req.query.status==='updates'?row.updateAvailable:true);
  });
- rows.sort((a,b)=>req.query.sort==='popular'?b.downloadCount-a.downloadCount||a.name.localeCompare(b.name,'zh-CN'):a.name.localeCompare(b.name,'zh-CN'));
+ rows.sort((a,b)=>(req.query.sort==='newest'?Date.parse(b.publishedAt)-Date.parse(a.publishedAt):req.query.sort==='oldest'?Date.parse(a.publishedAt)-Date.parse(b.publishedAt):req.query.sort==='popular'?b.downloadCount-a.downloadCount:0)||a.name.localeCompare(b.name,'zh-CN'));
  const pageSize=[12,24,48,96].includes(Number(req.query.pageSize))?Number(req.query.pageSize):24;
  const totalPages=Math.max(1,Math.ceil(rows.length/pageSize)),page=Math.min(totalPages,Math.max(1,Number(req.query.page)||1));
  res.json({repositoryUrl:'https://github.com/HappyQuQu/library-cover-store',generatedAt:now,stale:false,setupRequired:false,pendingCount:0,

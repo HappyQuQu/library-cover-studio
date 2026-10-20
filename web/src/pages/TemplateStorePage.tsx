@@ -14,6 +14,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { artworkOptions, orientationOptions, useOptions, statusOptions, storePageSizes as pageSizes, readStoreFilters, coverRatio } from '@/lib/templateStore';
 
 interface StoreTemplate {
+  publishedAt?: string;
   classification?: { recommendedUses: ('library' | 'collection')[]; artworkType: 'poster' | 'backdrop' | 'mixed' | 'none'; artworkCount: number; tags: string[] };
   id: string; revision: string; name: string; description: string; width: number; height: number;
   previewUrl: string; downloadCount: number; installedTemplateId: string | null;
@@ -141,7 +142,7 @@ export function TemplateStorePage() {
         <label className="template-store-search"><Search size={17} /><input type="search" maxLength={200} aria-label={t('templateStore.search')} placeholder={t('templateStore.searchPlaceholder')} value={query}
           onCompositionStart={() => { composing.current = true; setIsComposing(true); }} onCompositionEnd={() => { composing.current = false; setIsComposing(false); }}
           onChange={event => changeFilters({ q: event.target.value, page: 1 }, true)} /></label>
-        <label className="template-store-filter"><span>{t('templateStore.sort')}</span><select aria-label={t('templateStore.sortLabel')} value={sort} onChange={event => changeFilters({ sort: event.target.value, page: 1 })}>{query.trim() && <option value="relevance">{t('templateStore.relevance')}</option>}<option value="popular">{t('templateStore.popular')}</option><option value="name">{t('templateStore.name')}</option></select></label>
+        <label className="template-store-filter"><span>{t('templateStore.sort')}</span><select aria-label={t('templateStore.sortLabel')} value={sort} onChange={event => changeFilters({ sort: event.target.value, page: 1 })}>{query.trim() && <option value="relevance">{t('templateStore.relevance')}</option>}<option value="newest">{t('templateStore.newest')}</option><option value="oldest">{t('templateStore.oldest')}</option><option value="popular">{t('templateStore.popular')}</option><option value="name">{t('templateStore.name')}</option></select></label>
         <Button type="button" className="btn btn-secondary template-store-refresh" title={t('templateStore.refreshCatalog')} onClick={() => catalog.refetch()} disabled={catalog.isFetching || query !== searchQuery || isComposing} aria-label={t('templateStore.refreshCatalog')}><RefreshCw size={16} className={catalog.isFetching ? 'animate-spin' : ''} /></Button>
       </form>
       <div className="template-store-toolbar" role="group" aria-label={t('templateStore.filters')}>

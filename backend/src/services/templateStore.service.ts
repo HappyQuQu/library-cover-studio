@@ -27,6 +27,7 @@ const storeEntrySchema = z.object({
   folder: z.string().min(1).max(200),
   // Catalog-only data: old packages and saved local templates retain their revisions.
   classification: classificationSchema.optional(),
+  publishedAt: z.string().datetime().optional(),
   downloadSources: z.array(z.object({ releaseId: z.number().int().positive(), downloadCount: z.number().int().nonnegative() })).optional()
 }).merge(templateMetadataSchema);
 const catalogSchema = z.object({

@@ -24,6 +24,8 @@ export default {
   "filterOption_one": "{{label}}（{{count}}）",
   "filterOption_other": "{{label}}（{{count}}）",
   "relevance": "最相关",
+  "newest": "最新上架",
+  "oldest": "最早上架",
   "coverFormat": "{{orientation}} {{ratio}}",
   "artworkCount_one": "{{count}} 张素材",
   "artworkCount_other": "{{count}} 张素材",

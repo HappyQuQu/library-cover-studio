@@ -23,6 +23,10 @@ test('store URLs restore independent filters and validate pagination and legacy 
   assert.equal(readStoreFilters(new URLSearchParams('page=Infinity&pageSize=999&orientation=bad&artwork=bad&use=bad&status=bad'), 0).pageSize, 24);
   assert.equal(readStoreFilters(new URLSearchParams('page=-2')).page, 1);
   assert.equal(readStoreFilters(new URLSearchParams('sort=relevance')).sort, 'popular');
+  for (const sort of ['newest', 'oldest']) {
+    assert.equal(readStoreFilters(new URLSearchParams(`sort=${sort}&page=2`)).sort, sort);
+    assert.equal(readStoreFilters(new URLSearchParams(`q=票根&sort=${sort}`)).sort, sort);
+  }
   assert.equal(coverRatio(1920, 1080), '16:9');
   assert.equal(coverRatio(1200, 1800), '2:3');
 });

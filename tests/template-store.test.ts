@@ -47,7 +47,8 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
         artworkCount: index === 1 ? 0 : 3, tags: ['电影', 'cinema']
       } }),
       previewUrl: `https://raw.githubusercontent.com/HappyQuQu/library-cover-store/${'a'.repeat(40)}/folder-${index}/preview.jpg`,
-      packageUrl, packageSha256: hash(buffer), downloadCount: 100 - index };
+      packageUrl, packageSha256: hash(buffer), downloadCount: 100 - index,
+      ...(index === 49 ? {} : { publishedAt: new Date(Date.UTC(2026, 0, Math.min(index, 47) + 1)).toISOString() }) };
   });
   const fixture = { version: 1, repository: 'HappyQuQu/library-cover-store', generatedAt: new Date().toISOString(), pendingCount: 0, templates: entries };
   const originalAdapter = axios.defaults.adapter;
@@ -131,6 +132,17 @@ test('store paginates catalogs, imports counted ZIPs privately, deduplicates and
   assert.equal(noMatches.total, 0); assert.equal(noMatches.page, 1); assert.equal(noMatches.totalPages, 1); assert.deepEqual(noMatches.templates, []);
   const byName = await get('/template-store?orientation=portrait&sort=name');
   assert.deepEqual(byName.templates.map((item: any) => item.name), entries.slice(20, 40).map(item => item.name).sort((a, b) => a.localeCompare(b, 'zh-CN')));
+  const newest = await get('/template-store?sort=newest&pageSize=96');
+  assert.deepEqual(newest.templates.slice(0, 3).map((item: any) => item.id), [entries[47].id, entries[48].id, entries[46].id]);
+  assert.equal(newest.templates.at(-1).id, entries[49].id, 'Missing dates stay last in newest-first order');
+  const oldest = await get('/template-store?sort=oldest&pageSize=96');
+  assert.deepEqual(oldest.templates.slice(0, 3).map((item: any) => item.id), entries.slice(0, 3).map(item => item.id));
+  assert.equal(oldest.templates.at(-1).id, entries[49].id, 'Missing dates stay last in oldest-first order');
+  assert.equal(oldest.templates[0].publishedAt, entries[0].publishedAt);
+  const datedPage = await get('/template-store?sort=newest&pageSize=12&page=2');
+  assert.deepEqual(datedPage.templates.map((item: any) => item.id), newest.templates.slice(12, 24).map((item: any) => item.id));
+  const datedSearch = await get('/template-store?orientation=portrait&q=' + encodeURIComponent('社区模板') + '&sort=newest');
+  assert.deepEqual(datedSearch.templates.map((item: any) => item.id), entries.slice(20, 40).reverse().map(item => item.id));
   for (const orientation of ['all', 'invalid', '']) assert.equal((await get(`/template-store?orientation=${orientation}`)).total, 50);
   const combined = await get('/template-store?q=' + encodeURIComponent('合集 横图 竖版'));
   assert.equal(combined.total, 10);

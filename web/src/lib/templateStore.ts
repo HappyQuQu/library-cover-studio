@@ -31,7 +31,7 @@ export function readStoreFilters(params: URLSearchParams, defaultSize = 24) {
     artwork: choice('artwork', artworkOptions.map(option => option.value)),
     use: choice('use', useOptions.map(option => option.value)),
     status: choice('status', statusOptions.map(option => option.value)),
-    sort: sort && ['popular', 'name', ...(q.trim() ? ['relevance'] : [])].includes(sort) ? sort : q.trim() ? 'relevance' : 'popular',
+    sort: sort && ['popular', 'name', 'newest', 'oldest', ...(q.trim() ? ['relevance'] : [])].includes(sort) ? sort : q.trim() ? 'relevance' : 'popular',
     page: Number.isSafeInteger(page) && page > 0 ? page : 1,
     pageSize: storePageSizes.includes(size) ? size : storePageSizes.includes(defaultSize) ? defaultSize : 24
   };
