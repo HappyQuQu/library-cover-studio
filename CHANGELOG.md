@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.14.0...v1.15.0) (2026-10-20)
+
+
+### ✨ 新功能
+
+* 模板商店支持按上架时间新旧排序 ([#29](https://github.com/HappyQuQu/library-cover-studio/issues/29)) ([10a1851](https://github.com/HappyQuQu/library-cover-studio/commit/10a1851cf94b504838811a0d0d0a3d7a787a7545))
+
 ## [1.14.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.13.1...v1.14.0) (2026-10-19)
 
 
