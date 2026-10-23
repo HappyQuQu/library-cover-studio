@@ -15,7 +15,7 @@
 - **可视化设计**：拖拽海报、文字和形状，调整图层、背景、圆角及旋转。
 - **七套内置模板**：1920 × 1080，首次启动即可使用，新增横幅背景海报列，使用首个影片的横向背景图搭配底部五张海报。支持复制、解锁编辑和模板历史回退，管理员可在设置中一键还原默认模板。
 - **Jellyfin / Emby**：通过 API 读取媒体库海报，无需挂载电影文件目录。
-- **自动化更新**：每个媒体库可单独选择模板和标题，按天、周、月或 Cron 执行。
+- **自动化更新**：每个媒体库或合集可单独选择固定模板或随机模板池、配置标题，按天、周、月或 Cron 执行；随机模式支持避免连续重复。
 - **真实样张与执行历史**：上传前预览，执行后查看当次封面、逐库结果并下载原图。
 - **可选 AI 助手**：接入自己的 AI 服务生成可编辑设计，基础功能无需 AI。
 - **中英文界面**：首次访问默认中文，可随时切换英文，保留未保存设计、任务配置与 AI 对话。
@@ -161,7 +161,7 @@ docker compose logs --tail=100 library-cover-studio
 - **Visual designer:** arrange posters, text and shapes; adjust layers, backgrounds, rounded corners and rotation.
 - **Seven built-in templates:** ready-to-use 1920 × 1080 designs, including a banner backdrop with five posters below. Duplicate or unlock templates to edit them, restore revisions, or reset defaults as an administrator.
 - **Jellyfin / Emby integration:** read artwork through the media server API without mounting your movie directories.
-- **Scheduled updates:** choose a template and titles per library, then run daily, weekly, monthly or with a custom Cron expression.
+- **Scheduled updates:** choose a fixed template or a random template pool and titles per library or collection, then run daily, weekly, monthly or with a custom Cron expression.
 - **Real previews and run history:** preview before uploading, inspect each library's result and download the original generated image from a run.
 - **Optional AI assistant:** connect your own provider to generate editable designs. Core features work without AI.
 - **Chinese and English interfaces:** Chinese is the first-visit default. Switch to English while keeping unsaved designs, task configuration and AI conversations.

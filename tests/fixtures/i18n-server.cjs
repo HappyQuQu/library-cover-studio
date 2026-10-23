@@ -49,6 +49,7 @@ const root=process.cwd();
 const design=JSON.parse(fs.readFileSync(path.join(root,'backend/src/template/defaults/tilted-wall.json'),'utf8'));
 const previewPath=path.join(root,'backend/src/template/defaults',design.previewFile);
 Object.assign(templates[0],{name:design.name+' · 测试设计',canvasJson:JSON.stringify(design.canvas),isLocked:false,isDefault:false,isPublic:false,width:1920,height:1080,thumbnailPath:'preview.jpg',author:{name:'原始作者'},changelog:'保留原始更新说明'});
+if(process.env.LCS_RANDOM_TEMPLATE_FIXTURE==='1')templates.push({...templates[0],id:'template-second',name:'柔彩扇形 · 随机候选'});
 Object.assign(tasks[0],{type:'scheduled',cronExpression:'7 4 * * 1',timezone:'Asia/Shanghai',nextRunAt:'2026-10-18T20:07:00.000Z',libraryConfigs:JSON.stringify([{libraryId:'movies',libraryName:'电影库 · Demo',libraryType:'movies',templateId:templates[0].id,primaryTitle:'电影精选',secondaryTitle:'MOVIES',sortBy:'DateCreated',enabled:true}])});
 app.use('/api/templates/posters',express.static(path.join(root,'backend/src/template/poster')));
 const image=(req,res)=>res.type('image/jpeg').sendFile(previewPath);
@@ -64,7 +65,7 @@ app.post('/api/tasks/preview-schedule',(req,res)=>{
   res.json({timezone:'Asia/Shanghai',executions:Array.from({length:3},()=>schedule.next().toISOString())});
  } catch { res.status(400).json({error:'原始 Cron 校验诊断',code:'INVALID_SCHEDULE',timezone:'Asia/Shanghai'}); }
 });
-app.post('/api/tasks/preview-cover',(req,res)=>{if(req.body.primaryTitle==='FAIL')return error(res,'NO_POSTERS','原始错误：媒体库中没有可用海报');res.json({image:'data:image/jpeg;base64,'+fs.readFileSync(previewPath).toString('base64'),posterCount:2,noteCode:'POSTERS_REUSED',noteParams:{count:2},note:'使用 2 张可用海报，重复填充其余位置'});});
+app.post('/api/tasks/preview-cover',(req,res)=>{if(req.body.primaryTitle==='FAIL')return error(res,'NO_POSTERS','原始错误：媒体库中没有可用海报');res.json({templateId:req.body.previewTemplateId||req.body.templateId,templateName:templates.find(t=>t.id===(req.body.previewTemplateId||req.body.templateId))?.name,image:'data:image/jpeg;base64,'+fs.readFileSync(previewPath).toString('base64'),posterCount:2,noteCode:'POSTERS_REUSED',noteParams:{count:2},note:'使用 2 张可用海报，重复填充其余位置'});});
 app.post('/api/tasks',(req,res)=>{const task={...req.body,id:'task-'+Date.now(),timezone:'Asia/Shanghai',nextRunAt:nextRun(req.body.cronExpression)};tasks.push(task);res.status(201).json(task);});
 app.put('/api/tasks/:id',(req,res)=>{const task=tasks.find(t=>t.id===req.params.id);Object.assign(task,req.body,{nextRunAt:nextRun(req.body.cronExpression)});res.json(task);});
 app.post('/api/tasks/:id/run',(req,res)=>res.json({message:'started'}));

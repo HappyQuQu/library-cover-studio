@@ -118,7 +118,7 @@ export function TasksPage() {
                 libCount = configs.length;
                 if (libCount > 0) {
                   const firstLib = configs[0];
-                  const templateName = templates.find(t => t.id === firstLib.templateId)?.name || t('tasks.unknownTemplate');
+                  const templateName = firstLib.templateMode === 'random' ? t('taskWizard.randomSummary', { count: firstLib.templateIds?.length || 0 }) : templates.find(t => t.id === firstLib.templateId)?.name || t('tasks.unknownTemplate');
                   configSummary = configs.length > 1
                     ? t('tasks.librarySummary', { name: firstLib.libraryName, count: libCount })
                     : `${firstLib.libraryName} (${templateName})`;

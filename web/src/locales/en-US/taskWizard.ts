@@ -2,6 +2,19 @@ import type zh from '../zh-CN/taskWizard';
 import type { TranslationShape } from '../types';
 
 export default {
+  "templateMode": "Template selection mode",
+  "fixedTemplate": "Fixed template",
+  "randomTemplates": "Random template pool",
+  "candidateTemplates": "Candidate templates",
+  "poolHint": "Pick favorite templates; each run chooses one independently. Designs match the first candidate’s aspect ratio. Maximum 50 templates.",
+  "poolCount_one": "{{count}} template selected",
+  "poolCount_other": "{{count}} templates selected",
+  "missingCandidate": "Candidate template unavailable: {{id}}",
+  "avoidRepeat": "Avoid the same template twice in a row (repeats allowed if only one is available)",
+  "randomSummary": "Random · {{count}} templates",
+  "randomPreviewHint": "The sample shows the selected template. Changing the sample does not change the automation selection history.",
+  "changePreviewTemplate": "Preview another template",
+  "poolInvalid": "Choose available templates with the same aspect ratio, up to 50.",
   "stepLibraries": "Select libraries or collections",
   "stepCovers": "Configure covers",
   "stepSchedule": "Set schedule",

@@ -91,6 +91,13 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: text('updated_at')
 });
 
+// Last successful upload, independent of history retention and preview requests.
+export const taskTemplateState = sqliteTable('task_template_state', {
+  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  libraryId: text('library_id').notNull(),
+  templateId: text('template_id').notNull()
+}, table => ({ pk: primaryKey({ columns: [table.taskId, table.libraryId] }) }));
+
 // 任务日志表
 export const taskLogs = sqliteTable('task_logs', {
   id: text('id').primaryKey(),
@@ -110,6 +117,9 @@ export const taskLogCovers = sqliteTable('task_log_covers', {
   libraryId: text('library_id').notNull(),
   libraryName: text('library_name').notNull(),
   templateName: text('template_name'),
+  templateId: text('template_id'),
+  templateVersion: text('template_version'),
+  warningMessage: text('warning_message'),
   status: text('status').notNull(), // 'generated' | 'uploaded' | 'failed'
   imageName: text('image_name'),
   thumbnailName: text('thumbnail_name'),

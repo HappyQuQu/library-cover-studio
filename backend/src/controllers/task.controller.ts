@@ -1,8 +1,9 @@
+import { templateSelectionFields, validTemplateSelection, resolveTaskTemplate } from '../services/taskTemplate.service.js';
 import { Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { db } from '../config/database.js';
-import { tasks, taskLogs, taskLogCovers, mediaServers, templates } from '../config/schema.js';
+import { tasks, taskLogs, taskLogCovers, mediaServers } from '../config/schema.js';
 import { eq, sql, inArray, desc } from 'drizzle-orm';
 import fs from 'node:fs';
 import { historyImagePath, removeHistoryImages } from '../services/taskHistory.service.js';
@@ -24,7 +25,7 @@ const cronExpressionSchema = z
 
 const libraryConfigSchema = z.object({
   libraryId: z.string().min(1), libraryName: z.string().min(1), libraryType: z.string().optional(),
-  templateId: z.string(), primaryTitle: z.string().max(200), secondaryTitle: z.string().max(200),
+  ...templateSelectionFields, primaryTitle: z.string().max(200), secondaryTitle: z.string().max(200),
   sortBy: z.enum(['Name', 'SortName', 'Random', 'CommunityRating', 'CriticRating', 'DateCreated', 'DateLastPlayed', 'DatePlayed', 'OfficialRating', 'PlayCount', 'PremiereDate', 'Runtime']),
   enabled: z.boolean()
 });
@@ -32,7 +33,7 @@ const libraryConfigsSchema = z.string().superRefine((value, context) => {
   try {
     const configs = z.array(libraryConfigSchema).parse(JSON.parse(value));
     const selected = configs.filter(config => config.enabled);
-    if (!selected.length || selected.some(config => !config.templateId)) throw new Error();
+    if (!selected.length || selected.some(config => !validTemplateSelection(config))) throw new Error();
     if (new Set(configs.map(config => config.libraryId)).size !== configs.length) throw new Error();
   } catch { context.addIssue({ code: z.ZodIssueCode.custom, message: '请选择至少一个媒体库，并为已选媒体库配置有效模板' }); }
 });
@@ -43,8 +44,7 @@ function checkTaskResources(req: Request, serverId: string, libraryConfigs?: str
   if (libraryConfigs) {
     for (const config of JSON.parse(libraryConfigs).filter((item: any) => item.enabled)) {
       if (server.type === 'emby' && config.sortBy === 'OfficialRating') throw createError('Emby 不支持按家长分级排序，请选择其他排序方式', 400, 'MEDIA_UNSUPPORTED_SORT');
-      const template = db.select().from(templates).where(eq(templates.id, config.templateId)).get();
-      if (!template || (req.user?.role !== 'admin' && !template.isPublic && template.userId !== req.user?.userId)) throw createError('所选模板不存在或无权使用', 400, 'TEMPLATE_UNAVAILABLE');
+      resolveTaskTemplate(config, req.user?.userId, req.user?.role || 'user', { strict: true });
     }
   }
 }
@@ -364,7 +364,7 @@ export async function getLogs(req: Request, res: Response, next: NextFunction) {
       const image = historyImagePath(cover.imageName), thumbnail = historyImagePath(cover.thumbnailName);
       const base = `/tasks/${idStr}/logs/${log.id}/covers/${cover.id}/image`;
       return {
-        id: cover.id, libraryId: cover.libraryId, libraryName: cover.libraryName, templateName: cover.templateName,
+        id: cover.id, libraryId: cover.libraryId, libraryName: cover.libraryName, templateName: cover.templateName, templateId: cover.templateId, templateVersion: cover.templateVersion, warningMessage: cover.warningMessage,
         status: cover.status, width: cover.width, height: cover.height, errorMessage: cover.errorMessage,
         imageUrl: image && fs.existsSync(image) ? base : null,
         thumbnailUrl: thumbnail && fs.existsSync(thumbnail) ? `${base}?size=thumbnail` : null

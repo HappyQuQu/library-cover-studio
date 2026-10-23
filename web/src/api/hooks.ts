@@ -301,6 +301,7 @@ export interface TaskLogCover {
   libraryId: string;
   libraryName: string;
   templateName?: string | null;
+  templateId?: string | null; templateVersion?: string | null; warningMessage?: string | null;
   status: 'generated' | 'uploaded' | 'failed';
   width?: number | null;
   height?: number | null;

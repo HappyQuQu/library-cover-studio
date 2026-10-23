@@ -1,3 +1,4 @@
+import { TaskTemplatePicker, type TemplateSelection } from './TaskTemplatePicker';
 import { displayMessage, type DisplayMessage } from '@/lib/displayMessage';
 import { getLocalizedApiError } from '@/lib/apiError';
 import { formatDisplayDate } from '@/lib/displayFormat';
@@ -13,7 +14,7 @@ import type { Task } from '@/api';
 import { apiClient } from '@/api/client';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
-import { buildSchedule, describeSchedule, parseLibraryConfigs, readSchedule, reconcileLibraries, SORT_OPTIONS, WEEKDAYS } from '@/lib/taskConfig';
+import { buildSchedule, describeSchedule, parseLibraryConfigs, readSchedule, templateCandidateIds, templateSelectionValid, reconcileLibraries, SORT_OPTIONS, WEEKDAYS } from '@/lib/taskConfig';
 import type { LibraryConfig, ScheduleConfig } from '@/lib/taskConfig';
 import { LanguageSelect } from '@/components/LanguageSelect';
 import { ErrorDetails } from '@/components/ErrorDetails';
@@ -34,7 +35,8 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
     try { return parseLibraryConfigs(task?.libraryConfigs); } catch { return []; }
   });
   const [expandedId, setExpandedId] = useState('');
-  const [defaultTemplate, setDefaultTemplate] = useState('');
+  const [batchSelection, setBatchSelection] = useState<TemplateSelection>({ templateId: '', templateMode: 'fixed', templateIds: [], avoidRepeat: true });
+  const defaultTemplate = batchSelection.templateId;
   const [defaultSort, setDefaultSort] = useState('DateCreated');
   const [type, setType] = useState<'manual' | 'scheduled'>(task?.type || 'manual');
   const [enabled, setEnabled] = useState(task ? !!task.isEnabled : true);
@@ -84,7 +86,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   useEffect(() => {
     try { parseLibraryConfigs(task?.libraryConfigs); } catch { setConfigError({ key: 'taskWizard.invalidOriginal' }); }
   }, [task]);
-  useEffect(() => { if (!defaultTemplate && templates[0]) setDefaultTemplate(templates[0].id); }, [templates, defaultTemplate]);
+  useEffect(() => { if (!defaultTemplate && templates[0]) setBatchSelection(previous => ({ ...previous, templateId: templates[0].id })); }, [templates, defaultTemplate]);
   useEffect(() => {
     if (!librariesQuery.data?.length) return;
     setConfigs(previous => reconcileLibraries(previous, librariesQuery.data!, defaultTemplate).map(config => ({
@@ -97,14 +99,17 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   useEffect(() => () => { previewRequest.current?.abort(); }, []);
 
   const previewConfig = selected.find(config => config.libraryId === previewLibrary) || selected[0];
-  const previewTemplate = templates.find(template => template.id === previewConfig?.templateId);
-  const previewKey = JSON.stringify([serverId, previewConfig, previewTemplate?.updatedAt]);
+  const previewCandidates = previewConfig ? templateCandidateIds(previewConfig) : [];
+  const previewKey = JSON.stringify([serverId, previewConfig, previewCandidates.map(id => templates.find(template => template.id === id)?.updatedAt)]);
+  const resolvedPreview = coverPreview?.key === previewKey ? coverPreview : null;
+  const previewTemplate = templates.find(template => template.id === resolvedPreview?.templateId) || templates.find(template => previewCandidates.includes(template.id));
+  const templateSummary = (config: LibraryConfig) => config.templateMode === 'random' ? t('taskWizard.randomSummary', { count: templateCandidateIds(config).length }) : templates.find(template => template.id === config.templateId)?.name || t('taskWizard.pleaseSelectTemplate');
   const previewImage = coverPreview?.key === previewKey ? coverPreview.image : null;
   useEffect(() => { previewRequest.current?.abort(); setPreviewLoading(false); setPreviewError(null); }, [previewKey]);
   const previewNote = coverPreview?.key === previewKey ? getPreviewNote(coverPreview) : '';
   const missingLibraries = selected.some(config => !librariesQuery.data?.some(library => library.id === config.libraryId));
   const libraryValid = !!name.trim() && !!serverId && selected.length > 0 && !librariesQuery.isFetching && !librariesQuery.isError && !missingLibraries;
-  const templatesValid = selected.every(config => templates.some(template => template.id === config.templateId));
+  const templatesValid = selected.every(config => templateSelectionValid(config, templates));
   const errors = useMemo<DisplayMessage | null>(() => {
     if (!name.trim()) return { key: 'taskWizard.nameRequired' };
     if (!serverId) return { key: 'taskWizard.serverRequired' };
@@ -113,18 +118,21 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
     if (!selected.length) return { key: 'taskWizard.libraryRequired' };
     if (missingLibraries) return { key: 'taskWizard.librariesMissing' };
     if (step > 0 && !sortsValid) return { key: 'taskWizard.sortInvalid' };
-    if (step > 0 && !templatesValid) return { key: 'taskWizard.templateRequired' };
+    if (step > 0 && !templatesValid) return { key: selected.some(config => config.templateMode === 'random') ? 'taskWizard.poolInvalid' : 'taskWizard.templateRequired' };
     if (step > 1 && !scheduleValid) return { key: 'taskWizard.schedulePending' };
     return null;
-  }, [name, serverId, librariesQuery.isFetching, librariesQuery.isError, selected.length, missingLibraries, templatesValid, sortsValid, step, scheduleValid]);
+  }, [name, serverId, librariesQuery.isFetching, librariesQuery.isError, selected, missingLibraries, templatesValid, sortsValid, step, scheduleValid]);
   const updateConfig = (id: string, updates: Partial<LibraryConfig>) => setConfigs(previous => previous.map(config => config.libraryId === id ? { ...config, ...updates } : config));
 
-  const generatePreview = async () => {
+  const generatePreview = async (changeTemplate = false) => {
     if (!previewConfig || !previewTemplate) return;
     const controller = new AbortController(); previewRequest.current?.abort(); previewRequest.current = controller;
     setPreviewError(null); setPreviewLoading(true);
     try {
-      const response = await apiClient.post<CoverPreview>('/tasks/preview-cover', { serverId, ...previewConfig }, { signal: controller.signal });
+      const candidates = templates.filter(template => previewCandidates.includes(template.id));
+      const choices = changeTemplate && candidates.length > 1 ? candidates.filter(template => template.id !== previewTemplate.id) : candidates;
+      const previewTemplateId = previewConfig.templateMode === 'random' && (!resolvedPreview || changeTemplate) ? choices[Math.floor(Math.random() * choices.length)]?.id : previewTemplate.id;
+      const response = await apiClient.post<CoverPreview>('/tasks/preview-cover', { serverId, ...previewConfig, previewTemplateId }, { signal: controller.signal });
       if (!controller.signal.aborted) setCoverPreview({ key: previewKey, ...response.data });
     } catch (error) { if (!controller.signal.aborted) setPreviewError({ error }); }
     finally { if (previewRequest.current === controller) { setPreviewLoading(false); previewRequest.current = null; } }
@@ -190,19 +198,17 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
           {step === 1 && <>
             <div className="task-section-heading"><Palette size={18} /><div><h3>{t('taskWizard.coversTitle')}</h3><p>{t('taskWizard.coversHint')}</p></div></div>
             <div className="task-batch-settings"><span className="studio-label">{t('taskWizard.batchCount', { count: selected.length })}</span>
-              <div className="studio-field-row"><label className="studio-field">{t('taskWizard.sharedTemplate')}<select className="studio-input" value={defaultTemplate} onChange={event => setDefaultTemplate(event.target.value)}>
-                <option value="">{t('taskWizard.selectTemplate')}</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
-                <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label></div>
-              <button type="button" className="studio-secondary" disabled={!defaultTemplate} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, templateId: defaultTemplate, sortBy: defaultSort } : config))}>{t('taskWizard.applyAll')}<Check size={14} /></button>
+              <TaskTemplatePicker config={batchSelection} templates={templates} onChange={updates => setBatchSelection(previous => ({ ...previous, ...updates }))} />
+              <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+              <button type="button" className="studio-secondary" disabled={!templateSelectionValid(batchSelection, templates)} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, ...batchSelection, sortBy: defaultSort } : config))}>{t('taskWizard.applyAll')}<Check size={14} /></button>
             </div>
             {templatesQuery.isError && <div role="alert">{t('taskWizard.templatesFailed')}<button className="studio-secondary" onClick={() => void templatesQuery.refetch()}>{t('common.retry')}</button></div>}
             {!templates.length && !templatesQuery.isLoading && <Link to="/templates" className="studio-secondary">{t('taskWizard.createTemplate')}<ArrowRight size={14} /></Link>}
             <div className="task-library-list">{selected.map(config => <div key={config.libraryId} className="task-library-config">
               <button type="button" className="task-library-summary" aria-expanded={expandedId === config.libraryId} onClick={() => { setExpandedId(expandedId === config.libraryId ? '' : config.libraryId); setPreviewLibrary(config.libraryId); }}>
-                <Folder size={17} /><span><strong>{config.libraryName}</strong><small>{templates.find(template => template.id === config.templateId)?.name || t('taskWizard.pleaseSelectTemplate')} · {sortLabel(config.sortBy)}</small></span><ChevronDown size={16} /></button>
+                <Folder size={17} /><span><strong>{config.libraryName}</strong><small>{templateSummary(config)} · {sortLabel(config.sortBy)}</small></span><ChevronDown size={16} /></button>
               {expandedId === config.libraryId && <div className="task-library-details">
-                <label className="studio-field">{t('taskWizard.coverTemplate')}<select className="studio-input" value={config.templateId} onChange={event => updateConfig(config.libraryId, { templateId: event.target.value })}>
-                  <option value="">{t('taskWizard.selectTemplate')}</option>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+                <TaskTemplatePicker config={config} templates={templates} onChange={updates => updateConfig(config.libraryId, updates)} />
                 <div className="studio-field-row"><label className="studio-field">{t('taskWizard.primaryTitle')}<input className="studio-input" maxLength={200} value={config.primaryTitle} placeholder={config.libraryName} onChange={event => updateConfig(config.libraryId, { primaryTitle: event.target.value })} /></label>
                   <label className="studio-field">{t('taskWizard.secondaryTitle')}<input className="studio-input" maxLength={200} value={config.secondaryTitle} placeholder={t('taskWizard.secondaryPlaceholder')} onChange={event => updateConfig(config.libraryId, { secondaryTitle: event.target.value })} /></label></div>
                 <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={config.sortBy} onChange={event => updateConfig(config.libraryId, { sortBy: event.target.value })}>{!sortOptions.some(([value]) => value === config.sortBy) && <option value={config.sortBy}>{t('taskWizard.unsupportedSort', { value: config.sortBy })}</option>}{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
@@ -247,7 +253,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
               <div><dt>{t('taskWizard.trigger')}</dt><dd>{type === 'manual' ? t('taskWizard.manual') : `${describeSchedule(effectiveCron)} · ${enabled ? t('taskWizard.enabled') : t('taskWizard.paused')}`}</dd></div>
               {type === 'scheduled' && timezone && <div><dt>{t('taskWizard.timezone')}</dt><dd>{timezone}</dd></div>}
               {type === 'scheduled' && enabled && scheduleQuery.data?.executions[0] && <div><dt>{t('taskWizard.nextRun')}</dt><dd>{formatExecution(scheduleQuery.data.executions[0], scheduleQuery.data.timezone, effectiveCron.split(/\s+/).length === 6)}</dd></div>}</dl></div>
-            <div className="task-library-list">{selected.map(config => <div className="task-review-library" key={config.libraryId}><Folder size={16} /><strong>{config.libraryName}</strong><span>{templates.find(template => template.id === config.templateId)?.name}</span></div>)}</div>
+            <div className="task-library-list">{selected.map(config => <div className="task-review-library" key={config.libraryId}><Folder size={16} /><strong>{config.libraryName}</strong><span>{templateSummary(config)}</span></div>)}</div>
             <div className="task-review-note"><AlertCircle size={16} /><p>{t('taskWizard.replaceHint')}</p></div>
           </>}
         </main>
@@ -262,6 +268,8 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
           {previewImage && coverPreview && getPreviewNoteDetails(coverPreview) && <ErrorDetails error={{ message: getPreviewNoteDetails(coverPreview) }} />}
           <button type="button" className="studio-secondary task-preview-button" disabled={!previewTemplate || !previewConfig || previewLoading || librariesQuery.isFetching || missingLibraries} onClick={() => void generatePreview()}>
             {previewLoading ? <Loader2 size={15} className="animate-spin" /> : <Eye size={15} />}{previewLoading ? t('taskWizard.generating') : previewImage ? t('taskWizard.regenerate') : t('taskWizard.generate')}</button>
+          {previewConfig?.templateMode === 'random' && <><p className="studio-muted">{t('taskWizard.randomPreviewHint')}</p><button type="button" className="studio-secondary task-preview-button" disabled={previewCandidates.length < 2 || previewLoading || !templatesValid || missingLibraries || librariesQuery.isFetching} onClick={() => void generatePreview(true)}>{t('taskWizard.changePreviewTemplate')}</button></>}
+          {resolvedPreview?.warningMessage && <ErrorDetails error={{ message: resolvedPreview.warningMessage }} />}
           {previewError && <div role="alert"><p className="studio-error">{displayMessage(previewError)}</p>{'error' in previewError && <ErrorDetails error={previewError.error} />}</div>}
           <div className="task-preview-meta"><span>{previewTemplate?.name || t('taskWizard.noTemplate')}</span><span>{previewTemplate ? `${previewTemplate.width} × ${previewTemplate.height}` : t('taskWizard.coverSize')}</span></div>
           <p className="task-preview-hint">{t('taskWizard.readOnlyPreviewHint')}</p>

@@ -68,8 +68,9 @@ export function TaskHistoryDialog({ taskId, taskName, onClose }: { taskId: strin
                             {cover.imageUrl && <span className="task-history-enlarge"><Maximize2 size={14} />{t('taskHistory.enlarge')}</span>}
                           </button>
                           <div className="task-history-cover-info"><div className="task-history-cover-title"><strong>{cover.libraryName}</strong>{cover.imageUrl && <button className="btn-icon" title={t('taskHistory.downloadCover', { name: cover.libraryName })} onClick={() => download(cover)} disabled={downloading}><Download size={16} /></button>}</div>
-                            <p>{cover.templateName || t('taskHistory.unknownTemplate')}{cover.width && cover.height ? ` · ${cover.width} × ${cover.height}` : ''}</p>
+                            <p>{cover.templateName || t('taskHistory.unknownTemplate')}{cover.templateVersion ? ` v${cover.templateVersion}` : ''}{cover.width && cover.height ? ` · ${cover.width} × ${cover.height}` : ''}</p>
                             <span className={cover.status === 'failed' ? 'task-history-error' : 'task-history-cover-status'}>{coverStatus(cover)}</span>
+                            {cover.warningMessage && <ErrorDetails error={{ message: cover.warningMessage }} />}
                             {cover.errorMessage && <ErrorDetails error={{ message: cover.errorMessage }} />}
                           </div>
                         </article>)}
