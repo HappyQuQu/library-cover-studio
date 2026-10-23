@@ -48,6 +48,11 @@ jobs:
 
       - name: Install native build and font dependencies
         run: |
+          # The Azure mirror can stall while downloading the large CJK font package.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/apt-mirrors.txt
+          fi
+          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' /etc/apt/sources.list.d/ubuntu.sources
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends \
             python3 make g++ pkg-config libcairo2-dev libpango1.0-dev \
