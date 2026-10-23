@@ -6,7 +6,7 @@ Describe the problem your change solves. UI changes must include Simplified Chin
 
 ## Development and pull requests
 
-Use Node.js 22 and pnpm 10.28.0; follow the [local development instructions](README.en.md#development). Keep secrets, `.env`, databases, user artwork, build outputs and personal test data out of commits.
+Use Node.js 24.22.1 LTS and pnpm 10.28.0; follow the [local development instructions](README.en.md#development). Keep secrets, `.env`, databases, user artwork, build outputs and personal test data out of commits.
 
 Before submitting, run:
 

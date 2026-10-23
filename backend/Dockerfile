@@ -1,4 +1,4 @@
-FROM node:22.22.0-bookworm-slim AS builder
+FROM node:24.22.1-bookworm-slim AS builder
 RUN apt-get update -o Acquire::Retries=3 \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -12,7 +12,7 @@ COPY backend ./backend
 COPY CHANGELOG.md ./CHANGELOG.md
 RUN pnpm --filter ./backend build
 
-FROM node:22.22.0-bookworm-slim
+FROM node:24.22.1-bookworm-slim
 RUN apt-get update -o Acquire::Retries=3 \
     && apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig \
     && fc-cache -fv \

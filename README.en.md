@@ -227,7 +227,8 @@ Preview generated designs before applying them to the canvas for further editing
 
 ## 🧑‍💻 Local Development
 
-Requirements: Node.js 22 and pnpm 10.28.0. The frontend defaults to port `5173`, and the backend to `3000`.
+Requirements: Node.js 24.22.1 LTS and pnpm 10.28.0. The frontend defaults to port `5173`, and the backend to `3000`.
+With nvm, run `nvm install && nvm use` from the repository root to use the version in `.nvmrc`.
 
 ```bash
 corepack enable
@@ -237,6 +238,8 @@ cp .env.example .env
 pnpm db:migrate
 pnpm dev
 ```
+
+When upgrading Node while keeping an existing `node_modules`, run `pnpm -r rebuild better-sqlite3` to rebuild the native SQLite module for the new runtime.
 
 ```bash
 pnpm check:i18n  # Frontend text, resources, interpolation and plural checks

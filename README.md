@@ -223,7 +223,8 @@ NAS 访问、反向代理、备份恢复和旧版迁移见 [Docker 部署教程]
 
 ## 🧑‍💻 本地开发
 
-环境：Node.js 22、pnpm 10.28.0。前端默认 `5173`，后端默认 `3000`。
+环境：Node.js 24.22.1 LTS、pnpm 10.28.0。前端默认 `5173`，后端默认 `3000`。
+使用 nvm 时，在仓库根目录执行 `nvm install && nvm use`，读取 `.nvmrc` 中的版本。
 
 ```bash
 corepack enable
@@ -233,6 +234,8 @@ cp .env.example .env
 pnpm db:migrate
 pnpm dev
 ```
+
+从旧版 Node 升级并保留现有 `node_modules` 时，执行 `pnpm -r rebuild better-sqlite3`，为新版本重新编译 SQLite 原生模块。
 
 ```bash
 pnpm check:i18n  # 全前端文案、词典、插值与复数检查

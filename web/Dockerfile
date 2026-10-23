@@ -1,4 +1,4 @@
-FROM node:22.22.0-bookworm-slim AS builder
+FROM node:24.22.1-bookworm-slim AS builder
 
 WORKDIR /app
 RUN npm install -g pnpm@10.28.0

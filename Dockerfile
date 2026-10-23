@@ -1,4 +1,4 @@
-FROM node:22.22.0-bookworm-slim AS builder
+FROM node:24.22.1-bookworm-slim AS builder
 RUN apt-get update -o Acquire::Retries=3 \
     && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
@@ -13,9 +13,10 @@ COPY web ./web
 COPY CHANGELOG.md ./CHANGELOG.md
 ENV VITE_API_URL=/api
 RUN pnpm build
-RUN pnpm --filter ./backend deploy --prod --legacy /runtime
+# Deploy from the workspace lockfile to preserve native optional dependencies.
+RUN pnpm --config.inject-workspace-packages=true --filter ./backend deploy --prod --offline /runtime
 
-FROM node:22.22.0-bookworm-slim
+FROM node:24.22.1-bookworm-slim
 RUN apt-get update -o Acquire::Retries=3 \
     && apt-get install -y --no-install-recommends fonts-noto-cjk fontconfig \
     && fc-cache -fv \

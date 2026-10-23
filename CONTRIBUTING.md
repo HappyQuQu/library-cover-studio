@@ -6,7 +6,7 @@
 
 ## 开发与提交
 
-使用 Node.js 22 和 pnpm 10.28.0，按 [README](README.md#development) 安装依赖并启动。不要提交 `.env`、密钥、数据库、用户海报、构建产物或个人测试数据。
+使用 Node.js 24.22.1 LTS 和 pnpm 10.28.0，按 [README](README.md#development) 安装依赖并启动。不要提交 `.env`、密钥、数据库、用户海报、构建产物或个人测试数据。
 
 提交前运行：
 

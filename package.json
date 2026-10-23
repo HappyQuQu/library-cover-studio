@@ -26,11 +26,11 @@
     "dev:i18n-fixture": "node tests/fixtures/i18n-server.cjs"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=24.22.1 <25",
     "pnpm": ">=9.0.0"
   },
   "packageManager": "pnpm@10.28.0"

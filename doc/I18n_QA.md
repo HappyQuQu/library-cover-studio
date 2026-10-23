@@ -4,7 +4,7 @@
 
 ## 自动检查
 
-在仓库根目录使用 Node.js 22 和 pnpm 10.28.0：
+在仓库根目录使用 Node.js 24.22.1 LTS 和 pnpm 10.28.0：
 
 ```bash
 pnpm check:i18n
