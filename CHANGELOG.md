@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.16.0...v1.16.1) (2026-10-23)
+
+
+### 🐛 修复
+
+* restore saved template selections when editing tasks ([#37](https://github.com/HappyQuQu/library-cover-studio/issues/37)) ([295f825](https://github.com/HappyQuQu/library-cover-studio/commit/295f825c85ff4c6c08285e8405f833c96025f1be))
+
 ## [1.16.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.15.0...v1.16.0) (2026-10-23)
 
 
