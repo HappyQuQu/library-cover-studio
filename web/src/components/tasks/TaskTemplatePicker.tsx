@@ -1,8 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import type { Template } from '@/api';
-import { templateCandidateIds, sameTemplateAspect, type LibraryConfig } from '@/lib/taskConfig';
-export type TemplateSelection = Pick<LibraryConfig, 'templateId' | 'templateMode' | 'templateIds' | 'avoidRepeat'>;
+import { templateCandidateIds, sameTemplateAspect, type TemplateSelection } from '@/lib/taskConfig';
+export type { TemplateSelection } from '@/lib/taskConfig';
 
 export function TaskTemplatePicker({ config, templates, onChange }: { config: TemplateSelection; templates: Template[]; onChange: (updates: Partial<TemplateSelection>) => void }) {
   const { t } = useTranslation();
