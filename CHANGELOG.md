@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.16.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.15.0...v1.16.0) (2026-10-23)
+
+
+### ✨ 新功能
+
+* 自动化任务支持随机模板池 ([#34](https://github.com/HappyQuQu/library-cover-studio/issues/34)) ([859a435](https://github.com/HappyQuQu/library-cover-studio/commit/859a435bf2484c0c52ad7f287cd6361991a8072b))
+
+
+### 🐛 修复
+
+* 正确识别 GitHub 限流并支持可选 Token ([#33](https://github.com/HappyQuQu/library-cover-studio/issues/33)) ([63a200b](https://github.com/HappyQuQu/library-cover-studio/commit/63a200b9556f178deb445ddb55ef14c2098199fa))
+
 ## [1.15.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.14.0...v1.15.0) (2026-10-20)
 
 
