@@ -1,10 +1,9 @@
-import axios from 'axios';
 import { z } from 'zod';
 import { createHash, randomUUID } from 'node:crypto';
 import { createError } from '../middleware/errorHandler.js';
 import { MAX_TEMPLATE_PACKAGE_BYTES, readTemplatePackage } from './templatePackage.service.js';
 import { templateMetadataSchema } from './templateMetadata.service.js';
-import { githubGet, githubNetworkRevision } from './githubNetwork.service.js';
+import { githubGet, githubNetworkRevision, githubStatus } from './githubNetwork.service.js';
 
 export const STORE_REPOSITORY = 'HappyQuQu/library-cover-store';
 export const STORE_URL = `https://github.com/${STORE_REPOSITORY}`;
@@ -41,6 +40,8 @@ let cached: { data: Catalog; at: number; setupRequired: boolean } | undefined;
 let loading: Promise<typeof cached> | undefined;
 let networkRevision = githubNetworkRevision();
 
+export const parseStoreCatalog = (value: unknown) => catalogSchema.parse(value);
+
 export async function getStoreCatalog() {
   if (networkRevision !== githubNetworkRevision()) { networkRevision = githubNetworkRevision(); cached = undefined; loading = undefined; }
   if (cached && Date.now() - cached.at < CACHE_MS) return { ...cached, stale: false };
@@ -52,11 +53,11 @@ export async function getStoreCatalog() {
         const response = await githubGet(STORE_CATALOG_URL, {
           timeout: 20000, maxContentLength: 16 * 1024 * 1024, responseType: 'json'
         });
-        const data = catalogSchema.parse(response.data);
+        const data = parseStoreCatalog(response.data);
         if (new Set(data.templates.map(entry => entry.id)).size !== data.templates.length) throw new Error('Duplicate store IDs');
         result = { data, at: Date.now(), setupRequired: false };
       } catch (error) {
-        if (axios.isAxiosError(error) && error.response?.status === 404 && !cached) {
+        if (githubStatus(error) === 404 && !cached) {
           result = { data: { version: 1, repository: STORE_REPOSITORY, generatedAt: new Date().toISOString(), pendingCount: 0, templates: [] }, at: Date.now(), setupRequired: true };
         } else throw error;
       }

@@ -17,6 +17,8 @@ test('GitHub proxy settings are private, encrypted and live; CONNECT covers cata
   process.env.JWT_SECRET = 'github-network-test';
   process.env.ENCRYPTION_KEY = 'github-network-encryption-test';
   // The isolated local TLS fixture never connects to public hosts.
+  const previousToken = process.env.GITHUB_TOKEN; delete process.env.GITHUB_TOKEN;
+  t.after(() => { if (previousToken === undefined) delete process.env.GITHUB_TOKEN; else process.env.GITHUB_TOKEN = previousToken; });
   const previousTLS = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   const sockets = new Set<net.Socket>();
@@ -51,9 +53,19 @@ test('GitHub proxy settings are private, encrypted and live; CONNECT covers cata
     previewUrl: `https://raw.githubusercontent.com/HappyQuQu/library-cover-store/${'a'.repeat(40)}/proxy-design/preview.jpg`,
     packageUrl: `https://github.com/HappyQuQu/library-cover-store/releases/download/store-00001/${id}--${revision}.zip`,
     packageSha256: hash(packageBytes), downloadCount: 0, downloadSources: [{ releaseId: 1, downloadCount: 0 }] };
-  let catalogReads = 0, previewFails = false;
+  let catalogReads = 0, previewFails = false, apiMode = 'ok', apiReads = 0, expectedToken = '';
+  const resetAt = Math.floor(Date.now() / 1000) + 3600;
   const upstream = track(https.createServer({ key: readFileSync(join(directory, 'key.pem')), cert: readFileSync(join(directory, 'cert.pem')) }, (req, res) => {
-    assert.equal(req.headers.authorization, undefined, 'Application tokens never leave the backend');
+    const isApi = req.headers.host === 'api.github.com';
+    assert.equal(req.headers.authorization, isApi && expectedToken ? `Bearer ${expectedToken}` : undefined, 'Tokens are restricted to the API origin');
+    if (isApi) {
+      apiReads++;
+      if (req.url === '/redirect-auth') { res.writeHead(302, { Location: 'https://raw.githubusercontent.com/redirect-target' }); res.end(); return; }
+      if (apiMode === 'limit') { res.writeHead(403, { 'x-ratelimit-remaining': '0', 'x-ratelimit-limit': '60', 'x-ratelimit-reset': String(resetAt) }); res.end('{}'); return; }
+      if (apiMode === 'invalid') { res.writeHead(401); res.end('{}'); return; }
+      if (apiMode === 'secondary') { res.writeHead(429, { 'retry-after': '60' }); res.end('{}'); return; }
+      if (apiMode === 'denied') { res.writeHead(403); res.end('{}'); return; }
+    }
     assert.equal(req.headers['proxy-authorization'], undefined, 'Proxy credentials stay on the CONNECT handshake');
     if (req.url?.includes('catalog.json')) { catalogReads++; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ version: 1, repository: 'HappyQuQu/library-cover-store', generatedAt: new Date().toISOString(), templates: [entry] })); }
     else if (req.url?.includes('preview.jpg')) { if (previewFails) { res.writeHead(403); res.end(); } else { res.setHeader('Content-Type', 'image/jpeg'); res.end(image); } }
@@ -124,6 +136,45 @@ test('GitHub proxy settings are private, encrypted and live; CONNECT covers cata
   assert.equal(failedTest.storeReady, false);
   assert.ok(!JSON.stringify(failedTest).includes('draft-secret'));
   assert.deepEqual(await network.readGithubNetworkConfig(), storedBeforeTest, 'Draft connection tests do not alter saved settings');
+  expectedToken = 'settings-fixture-token';
+  const tokenSaved = await (await post('/settings/network', { mode: 'proxy', token: expectedToken })).json();
+  assert.equal(tokenSaved.tokenSource, 'settings'); assert.equal(tokenSaved.hasSavedToken, true);
+  assert.ok(!JSON.stringify(tokenSaved).includes(expectedToken));
+  const storedToken = database.db.$client.prepare("SELECT value FROM system_settings WHERE key='network.github.token'").get() as any;
+  assert.ok(storedToken.value && !storedToken.value.includes(expectedToken));
+  assert.equal((await (await post('/settings/network/test', { mode: 'proxy' })).json()).storeReady, true);
+  await network.githubGet('https://api.github.com/redirect-auth');
+  const exported = await (await fetch(base + '/settings/export', { headers: headers() })).text();
+  assert.ok(!exported.includes(expectedToken) && !exported.includes('network.github.token'));
+  apiMode = 'invalid';
+  const invalid = await (await post('/settings/network/test', { mode: 'proxy' })).json();
+  assert.equal(invalid.storeReady, true); assert.equal(invalid.results.find((r: any) => r.id === 'api').code, 'TOKEN_INVALID');
+  process.env.GITHUB_TOKEN = 'environment-fixture-token'; expectedToken = 'environment-fixture-token';
+  const cleared = await (await post('/settings/network', { mode: 'proxy', clearToken: true })).json();
+  assert.equal(cleared.tokenSource, 'environment'); assert.equal(cleared.hasSavedToken, false);
+  assert.equal(database.db.$client.prepare("SELECT value FROM system_settings WHERE key='network.github.token'").get().value, '');
+  apiMode = 'ok';
+  await post('/settings/network/test', { mode: 'proxy' });
+  delete process.env.GITHUB_TOKEN; expectedToken = ''; apiMode = 'limit';
+  const limited = await (await post('/settings/network/test', { mode: 'proxy' })).json();
+  const rate = limited.results.find((r: any) => r.id === 'api');
+  assert.equal(limited.storeReady, true); assert.equal(limited.versionCheckReady, true); assert.equal(limited.liveCountsReady, false);
+  assert.equal(rate.code, 'RATE_LIMITED'); assert.equal(rate.reachable, true); assert.equal(rate.authenticated, false);
+  assert.equal(rate.retryAt, new Date(resetAt * 1000).toISOString());
+  const readsBeforeCooldown = apiReads;
+  await post('/settings/network/test', { mode: 'proxy' });
+  assert.equal(apiReads, readsBeforeCooldown, 'quota exhaustion pauses API requests across callers');
+  await assert.rejects(network.githubGet('https://api.github.com/another'), error => {
+    assert.ok(error instanceof network.GithubRequestError); assert.ok(!JSON.stringify(error).includes('proxy-secret')); return true;
+  });
+  apiMode = 'secondary'; expectedToken = 'draft-new-token';
+  const secondary = await (await post('/settings/network/test', { mode: 'proxy', token: expectedToken })).json();
+  assert.equal(secondary.results.find((r: any) => r.id === 'api').code, 'SECONDARY_RATE_LIMITED');
+  assert.equal((await network.readGithubNetworkConfig()).tokenSource, 'none', 'draft token tests never persist credentials');
+  apiMode = 'denied'; expectedToken = 'another-draft-token';
+  const denied = await (await post('/settings/network/test', { mode: 'proxy', token: expectedToken })).json();
+  assert.equal(denied.results.find((r: any) => r.id === 'api').code, 'ACCESS_DENIED');
+  apiMode = 'ok'; expectedToken = '';
   previewFails = true; entry.revision = hash('unavailable-preview');
   await post('/settings/network', { mode: 'proxy' });
   const unavailablePreview = await fetch(`${base}/template-store/${id}/preview?revision=${entry.revision}`, { headers: headers('reader') });
