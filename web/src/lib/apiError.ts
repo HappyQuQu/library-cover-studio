@@ -86,6 +86,7 @@ export function getLocalizedApiError(value: unknown, context: ApiErrorContext = 
     case 'INVALID_SCHEDULE':
     case 'SCHEDULE_REQUIRED': return i18n.t('errors.invalidSchedule');
     case 'MEDIA_UNSUPPORTED_SORT': return i18n.t('taskWizard.sortInvalid');
+    case 'TEMPLATE_POOL_INVALID': return i18n.t('taskWizard.poolInvalid');
     case 'TEMPLATE_UNAVAILABLE': return i18n.t('taskWizard.templateRequired');
     case 'TASK_NOT_FOUND': return i18n.t('errors.taskNotFound');
     case 'TASK_RUNNING': return i18n.t('errors.taskRunning');

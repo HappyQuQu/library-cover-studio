@@ -153,6 +153,13 @@ export async function initDatabase() {
   }
 
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS task_template_state (
+      task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+      library_id TEXT NOT NULL,
+      template_id TEXT NOT NULL,
+      PRIMARY KEY (task_id, library_id)
+    );
+
     -- 任务日志表
     CREATE TABLE IF NOT EXISTS task_logs (
       id TEXT PRIMARY KEY,
@@ -233,6 +240,11 @@ export async function initDatabase() {
     CREATE INDEX IF NOT EXISTS idx_ai_conversations_user ON ai_conversations(user_id);
     CREATE INDEX IF NOT EXISTS idx_ai_conversations_provider ON ai_conversations(provider_id);
   `);
+
+  const coverColumns = sqlite.prepare('PRAGMA table_info(task_log_covers)').all() as { name: string }[];
+  for (const column of ['template_id', 'template_version', 'warning_message']) {
+    if (!coverColumns.some(existing => existing.name === column)) sqlite.exec(`ALTER TABLE task_log_covers ADD COLUMN ${column} TEXT;`);
+  }
 
   const providerColumns = sqlite.prepare("PRAGMA table_info(ai_providers)").all() as { name: string }[];
   if (!providerColumns.some(column => column.name === 'model_capabilities')) {

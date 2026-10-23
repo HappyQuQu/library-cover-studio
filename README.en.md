@@ -46,6 +46,7 @@ select three libraries to generate three covers. No media directory mount is req
 | Jellyfin / Emby | Connect media servers and set a template, titles, and artwork order for each library or collection. |
 | Landscape artwork | Landscape templates select each member’s backdrop or thumbnail for landscape or portrait covers, consistently across previews and scheduled runs. |
 | Automated updates | Generate and upload covers manually or on daily, weekly, monthly, or custom Cron schedules. |
+| Random template pools | Pick favorite designs for each library or collection, randomize each run, avoid consecutive repeats and preview individual candidates. |
 | Real previews and history | Preview using actual library posters before uploading, then inspect per-library results and download the generated images. |
 | Optional AI assistant | Connect your own AI service to create editable designs from text or reference images. |
 | Fonts and data management | Use custom fonts, PNG / JPEG / WebP output, history retention, configuration export, and cache cleanup. |

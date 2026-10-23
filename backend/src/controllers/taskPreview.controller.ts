@@ -1,8 +1,10 @@
+import { templateSelectionFields, validTemplateSelection, resolveTaskTemplate } from '../services/taskTemplate.service.js';
+import { readTemplateMetadata } from '../services/templateMetadata.service.js';
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '../config/database.js';
-import { mediaServers, templates } from '../config/schema.js';
+import { mediaServers } from '../config/schema.js';
 import { getSchedulerTimezone } from '../services/scheduler.service.js';
 import { getUpcomingExecutions } from '../utils/schedulePreview.js';
 import { getLibraries, getCollections } from '../services/mediaClient.service.js';
@@ -24,21 +26,22 @@ export function previewSchedule(req: Request, res: Response) {
 }
 
 export const previewCoverSchema = z.object({
-  serverId: z.string().uuid(), libraryId: z.string().min(1), templateId: z.string().min(1),
+  serverId: z.string().uuid(), libraryId: z.string().min(1), ...templateSelectionFields,
+  previewTemplateId: z.string().min(1).optional(),
   primaryTitle: z.string().max(200).default(''), secondaryTitle: z.string().max(200).default(''),
   sortBy: z.enum(['Name', 'SortName', 'Random', 'CommunityRating', 'CriticRating', 'DateCreated', 'DateLastPlayed', 'DatePlayed', 'OfficialRating', 'PlayCount', 'PremiereDate', 'Runtime']).default('DateCreated')
-});
+}).refine(validTemplateSelection, { message: '请选择有效的模板或候选模板池' });
 
 /** Render from real library assets without storing a cover or uploading to the server. */
 export async function previewCover(req: Request, res: Response, next: NextFunction) {
   try {
     const input = req.body as z.infer<typeof previewCoverSchema>;
     const server = db.select().from(mediaServers).where(eq(mediaServers.id, input.serverId)).get();
-    const template = db.select().from(templates).where(eq(templates.id, input.templateId)).get();
-    if (!server || !template) throw createError('服务器或模板不存在', 404, 'PREVIEW_NOT_FOUND');
-    if (req.user?.role !== 'admin' && (server.userId !== req.user?.userId || (!template.isPublic && template.userId !== req.user?.userId))) {
+    if (!server) throw createError('服务器或模板不存在', 404, 'PREVIEW_NOT_FOUND');
+    if (req.user?.role !== 'admin' && server.userId !== req.user?.userId) {
       throw createError('无权使用此服务器或模板', 403, 'PREVIEW_FORBIDDEN');
     }
+    const { template, warningMessage } = resolveTaskTemplate(input, req.user?.userId, req.user?.role || 'user', { previewTemplateId: input.previewTemplateId });
     const apiKey = decrypt(server.apiKeyEncrypted);
     const libraries = await getLibraries(server.type, server.url, apiKey);
     const library = libraries.find(item => item.id === input.libraryId)
@@ -54,7 +57,7 @@ export async function previewCover(req: Request, res: Response, next: NextFuncti
       title: library.name, primaryTitle: input.primaryTitle || library.name, secondaryTitle: input.secondaryTitle
     }, posters, { width: template.width || 1920, height: template.height || 1080, ...settings, backdropBuffer: backdrop, artworkBuffers });
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ image: `data:image/${settings.format};base64,${buffer.toString('base64')}`, posterCount: uniqueCount,
+    res.json({ image: `data:image/${settings.format};base64,${buffer.toString('base64')}`, posterCount: uniqueCount, templateId: template.id, templateName: template.name, templateVersion: readTemplateMetadata(template.metadataJson).version, warningMessage,
       noteCode: !requiredCount ? 'NO_POSTERS_REQUIRED' : uniqueCount < requiredCount ? 'POSTERS_REUSED' : 'LIBRARY_POSTERS',
       noteParams: { count: uniqueCount },
       note: !requiredCount ? '纯文字模板，无需海报素材' : uniqueCount < requiredCount ? `使用 ${uniqueCount} 张可用海报，重复填充其余位置` : '使用媒体库中的真实海报' });

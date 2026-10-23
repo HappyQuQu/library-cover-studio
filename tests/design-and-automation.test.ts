@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { constrainDesign, summarizeCanvas, describeChanges, CANVAS_PROPERTIES } from '../web/src/lib/aiDesign.ts';
 import { readSSE } from '../web/src/lib/sse.ts';
-import { reconcileLibraries, buildSchedule, readSchedule } from '../web/src/lib/taskConfig.ts';
+import { reconcileLibraries, buildSchedule, readSchedule, templateCandidateIds, templateSelectionValid } from '../web/src/lib/taskConfig.ts';
 import { getUpcomingExecutions } from '../backend/src/utils/schedulePreview.ts';
 
 const baseline = { background: '#111', objects: [
@@ -105,4 +105,15 @@ test('custom day, step and range previews match node-cron scheduling semantics',
     const dates = getUpcomingExecutions(expression, 'Asia/Shanghai', 3, new Date('2026-10-08T00:00:00Z'));
     dates.forEach(date => assert.ok(matcher.match(new Date(date)), `${expression}: ${date}`));
   }
+});
+
+test('template pool configuration preserves fixed tasks and rejects incompatible or missing candidates', () => {
+  const a = { id: 'a', width: 320, height: 180 }, b = { id: 'b', width: 640, height: 360 }, vertical = { id: 'v', width: 180, height: 320 };
+  const templates = [a, b, vertical] as any;
+  assert.deepEqual(templateCandidateIds({ templateId: 'a' }), ['a']);
+  assert.ok(templateSelectionValid({ templateId: 'a' }, templates));
+  assert.ok(templateSelectionValid({ templateId: '', templateMode: 'random', templateIds: ['a', 'b'] }, templates));
+  assert.equal(templateSelectionValid({ templateId: 'a', templateMode: 'random', templateIds: ['a', 'v'] }, templates), false);
+  assert.equal(templateSelectionValid({ templateId: 'a', templateMode: 'random', templateIds: ['missing'] }, templates), false);
+  assert.equal(templateSelectionValid({ templateId: 'a', templateMode: 'random', templateIds: [] }, templates), false);
 });

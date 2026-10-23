@@ -2,6 +2,7 @@ import i18n from './i18n';
 
 export interface CoverPreview {
   image: string;
+  templateId?: string; templateName?: string; templateVersion?: string; warningMessage?: string | null;
   posterCount?: number;
   noteCode?: 'NO_POSTERS_REQUIRED' | 'POSTERS_REUSED' | 'LIBRARY_POSTERS';
   noteParams?: { count?: number };

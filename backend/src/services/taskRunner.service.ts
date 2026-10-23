@@ -1,5 +1,7 @@
+import { resolveTaskTemplate, rememberTaskTemplate } from './taskTemplate.service.js';
+import { readTemplateMetadata } from './templateMetadata.service.js';
 import { db } from '../config/database.js';
-import { tasks, mediaServers, templates, taskLogs, taskLogCovers, systemSettings } from '../config/schema.js';
+import { tasks, mediaServers, users, taskLogs, taskLogCovers, systemSettings } from '../config/schema.js';
 import { eq, inArray } from 'drizzle-orm';
 import * as mediaClient from './mediaClient.service.js';
 import * as renderer from './renderer.service.js';
@@ -118,26 +120,18 @@ export async function runTask(taskId: string, logId?: string) {
       return;
     }
 
-    // Cache templates to avoid repeated DB lookups
-    const templateCache = new Map<string, any>();
-    const getTemplate = (id: string) => {
-      if (templateCache.has(id)) return templateCache.get(id);
-      const t = db.select().from(templates).where(eq(templates.id, id)).get();
-      templateCache.set(id, t);
-      return t;
-    };
+    const ownerRole = task.userId ? db.select().from(users).where(eq(users.id, task.userId)).get()?.role || 'user' : 'admin';
 
     progress.total = configs.length;
 
     // 2. 每个媒体库生成一张封面
     for (const config of configs) {
       const coverId = logId ? uuidv4() : undefined;
-      const templateDetail = getTemplate(config.templateId);
+
       if (coverId && logId) {
         db.insert(taskLogCovers).values({
           id: coverId, logId, libraryId: config.libraryId,
           libraryName: config.libraryName || config.libraryId,
-          templateName: templateDetail?.name || null,
           status: 'generated', createdAt: getLocalISOString()
         }).run();
       }
@@ -146,7 +140,10 @@ export async function runTask(taskId: string, logId?: string) {
         const libraryName = config.libraryName || config.libraryId;
         logger.info(`📂 Processing Library [${progress.current}/${progress.total}]: ${libraryName}`);
 
-        if (!templateDetail) throw new Error('模板不存在，无法生成封面');
+        const { template: templateDetail, warningMessage } = resolveTaskTemplate(config, task.userId, ownerRole, { taskId, libraryId: config.libraryId });
+        if (warningMessage) logger.warn(warningMessage);
+        if (coverId) db.update(taskLogCovers).set({ templateName: templateDetail.name, templateId: templateDetail.id,
+          templateVersion: readTemplateMetadata(templateDetail.metadataJson).version, warningMessage }).where(eq(taskLogCovers.id, coverId)).run();
 
         const requiredCount = requiredPosterCount(templateDetail.canvasJson);
         const { posters: posterBuffers, backdrop, artworkBuffers } = requiredCount ? await fetchLibraryPosters(
@@ -225,6 +222,7 @@ export async function runTask(taskId: string, logId?: string) {
         if (success) {
           logger.info(`  ✅ Successfully updated cover for ${libraryName}`);
           progress.success++;
+          rememberTaskTemplate(taskId, config.libraryId, templateDetail.id);
           if (coverId) db.update(taskLogCovers).set({ status: 'uploaded' }).where(eq(taskLogCovers.id, coverId)).run();
         } else {
           throw new Error('封面已生成，但上传到媒体服务器失败');

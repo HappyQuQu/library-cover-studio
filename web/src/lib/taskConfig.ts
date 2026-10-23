@@ -1,10 +1,19 @@
 import i18n from './i18n';
 import { CodedError } from './codedError';
-import type { MediaLibrary } from '@/api';
+import type { MediaLibrary, Template } from '@/api';
 
 export interface LibraryConfig {
   libraryId: string; libraryName: string; libraryType: string; templateId: string;
+  templateMode?: 'fixed' | 'random'; templateIds?: string[]; avoidRepeat?: boolean;
   primaryTitle: string; secondaryTitle: string; sortBy: string; maxItems?: string; enabled: boolean;
+}
+export function templateCandidateIds(config: Pick<LibraryConfig, 'templateId' | 'templateMode' | 'templateIds'>): string[] {
+  return config.templateMode === 'random' ? [...new Set(config.templateIds || [])] : config.templateId ? [config.templateId] : [];
+}
+export function sameTemplateAspect(a: Pick<Template, 'width' | 'height'>, b: Pick<Template, 'width' | 'height'>) { return a.width * b.height === b.width * a.height; }
+export function templateSelectionValid(config: Pick<LibraryConfig, 'templateId' | 'templateMode' | 'templateIds'>, templates: Template[]) {
+  const ids = templateCandidateIds(config), pool = ids.map(id => templates.find(template => template.id === id));
+  return ids.length > 0 && ids.length <= 50 && pool.every(template => !!template && sameTemplateAspect(template, pool[0]!));
 }
 export const SORT_OPTIONS = [
   ['DateCreated', 'schedule.sortDateCreated'],
