@@ -1,7 +1,6 @@
 import { readFileSync } from 'node:fs';
-import axios from 'axios';
 import { APP_VERSION } from '../config/version.js';
-import { githubGet as networkGet, githubNetworkRevision } from './githubNetwork.service.js';
+import { githubGet as networkGet, githubNetworkRevision, githubStatus } from './githubNetwork.service.js';
 
 export const PROJECT_URL = 'https://github.com/HappyQuQu/library-cover-studio';
 export const AUTHOR_URL = 'https://github.com/HappyQuQu';
@@ -70,7 +69,7 @@ async function githubGet(url: string): Promise<unknown> {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'LibraryCoverStudio', 'X-GitHub-Api-Version': '2022-11-28' } });
     return url === RELEASES_PAGE ? { releaseUrl: response.request?.res?.responseUrl } : response.data;
   } catch (error) {
-    if (url.endsWith('/latest') && axios.isAxiosError(error) && error.response?.status === 404) return null;
+    if (url.endsWith('/latest') && githubStatus(error) === 404) return null;
     throw error;
   }
 }
@@ -88,7 +87,7 @@ export function parseReleaseRedirect(value: unknown): { version: string; tag: st
 }
 
 function checkFailure(error: unknown) {
-  if (axios.isAxiosError(error) && [403, 429].includes(error.response?.status ?? 0)) return 'GitHub API 访问受限或已达到访问频率上限';
+  if ([403, 429].includes(githubStatus(error) ?? 0)) return 'GitHub API 访问受限或已达到访问频率上限';
   return '无法连接 GitHub API 或版本响应无效';
 }
 

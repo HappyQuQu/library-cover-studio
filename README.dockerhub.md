@@ -143,7 +143,7 @@ docker compose logs --tail=100 library-cover-studio
 | NAS 其他设备无法访问 | 使用 NAS 的局域网地址访问，检查端口映射和 NAS 防火墙。 |
 | 连接服务器失败 | 检查容器网络可达性、API 密钥权限和地址，避免误用 `localhost`。 |
 | CORS 错误 | 直接访问无需配置；HTTPS 反向代理时设置 `FRONTEND_URL` 为浏览器实际来源。 |
-| 模板商店或版本检查无法连接 GitHub | 管理员在「设置 → 网络」配置 HTTP / HTTPS / SOCKS5 代理，测试后保存。使用容器可访问的局域网地址，Docker Desktop 可用 `host.docker.internal`；容器内的 `127.0.0.1` 指向容器自身。 |
+| 模板商店或版本检查无法连接 GitHub | 管理员在「设置 → 网络」配置 HTTP / HTTPS / SOCKS5 代理，测试后保存；可选 Token 提高 GitHub API 可用额度，限流与网络故障分别提示。使用容器可访问的局域网地址，Docker Desktop 可用 `host.docker.internal`；容器内的 `127.0.0.1` 指向容器自身。 |
 | 定时任务不执行 | 检查后端是否健康、任务是否启用、调度时区和下次运行时间。 |
 | 升级后密钥无法解密 | 核对原 `ENCRYPTION_KEY` 和 `data` 中的加密盐是否保留。 |
 
@@ -273,7 +273,7 @@ docker compose logs --tail=100 library-cover-studio
 | Other devices cannot access the NAS | Use the NAS LAN address; check the host port mapping and NAS firewall. |
 | Media server connection fails | Check container network access, API permissions and the base URL. Avoid using `localhost` for another device. |
 | CORS error | Direct access needs no extra setting. For an HTTPS reverse proxy, set `FRONTEND_URL` to the browser's actual origin. |
-| Template store or version checks cannot reach GitHub | As an administrator, configure and test an HTTP / HTTPS / SOCKS5 proxy under **Settings → Network**, then save. Use a proxy address reachable from the container. Docker Desktop can use `host.docker.internal`; `127.0.0.1` inside the container refers to the container itself. |
+| Template store or version checks cannot reach GitHub | As an administrator, configure and test an HTTP / HTTPS / SOCKS5 proxy under **Settings → Network**, then save. An optional token increases the available GitHub API quota; rate limits and network failures are reported separately. Use a proxy address reachable from the container. Docker Desktop can use `host.docker.internal`; `127.0.0.1` inside the container refers to the container itself. |
 | Scheduled tasks do not run | Check container health, whether the schedule is enabled, the scheduler time zone and the next run time. |
 | Stored keys cannot be decrypted after an upgrade | Check that the original `ENCRYPTION_KEY` and encryption salt in `data` were retained. |
 
