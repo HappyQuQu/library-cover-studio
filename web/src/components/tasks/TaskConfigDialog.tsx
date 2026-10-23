@@ -14,7 +14,7 @@ import type { Task } from '@/api';
 import { apiClient } from '@/api/client';
 import { AuthenticatedImage } from '@/components/AuthenticatedImage';
 import { toast } from '@/components/ui/use-toast';
-import { buildSchedule, describeSchedule, parseLibraryConfigs, readSchedule, templateCandidateIds, templateSelectionValid, reconcileLibraries, SORT_OPTIONS, WEEKDAYS } from '@/lib/taskConfig';
+import { buildSchedule, describeSchedule, parseLibraryConfigs, readBatchSettings, readSchedule, templateCandidateIds, templateSelectionValid, reconcileLibraries, SORT_OPTIONS, WEEKDAYS } from '@/lib/taskConfig';
 import type { LibraryConfig, ScheduleConfig } from '@/lib/taskConfig';
 import { LanguageSelect } from '@/components/LanguageSelect';
 import { ErrorDetails } from '@/components/ErrorDetails';
@@ -35,9 +35,10 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
     try { return parseLibraryConfigs(task?.libraryConfigs); } catch { return []; }
   });
   const [expandedId, setExpandedId] = useState('');
-  const [batchSelection, setBatchSelection] = useState<TemplateSelection>({ templateId: '', templateMode: 'fixed', templateIds: [], avoidRepeat: true });
+  const [initialBatch] = useState(() => readBatchSettings(configs));
+  const [batchSelection, setBatchSelection] = useState<TemplateSelection>(() => initialBatch.selection || { templateId: '', templateMode: 'fixed', templateIds: [], avoidRepeat: true });
   const defaultTemplate = batchSelection.templateId;
-  const [defaultSort, setDefaultSort] = useState('DateCreated');
+  const [defaultSort, setDefaultSort] = useState(() => initialBatch.sortBy ?? (task ? '' : 'DateCreated'));
   const [type, setType] = useState<'manual' | 'scheduled'>(task?.type || 'manual');
   const [enabled, setEnabled] = useState(task ? !!task.isEnabled : true);
   const initialSchedule = readSchedule(task?.cronExpression);
@@ -86,7 +87,7 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
   useEffect(() => {
     try { parseLibraryConfigs(task?.libraryConfigs); } catch { setConfigError({ key: 'taskWizard.invalidOriginal' }); }
   }, [task]);
-  useEffect(() => { if (!defaultTemplate && templates[0]) setBatchSelection(previous => ({ ...previous, templateId: templates[0].id })); }, [templates, defaultTemplate]);
+  useEffect(() => { if (!task && !defaultTemplate && templates[0]) setBatchSelection(previous => ({ ...previous, templateId: templates[0].id })); }, [templates, defaultTemplate, task]);
   useEffect(() => {
     if (!librariesQuery.data?.length) return;
     setConfigs(previous => reconcileLibraries(previous, librariesQuery.data!, defaultTemplate).map(config => ({
@@ -198,9 +199,11 @@ export function TaskConfigDialog({ task, onClose }: { task: Task | null; onClose
           {step === 1 && <>
             <div className="task-section-heading"><Palette size={18} /><div><h3>{t('taskWizard.coversTitle')}</h3><p>{t('taskWizard.coversHint')}</p></div></div>
             <div className="task-batch-settings"><span className="studio-label">{t('taskWizard.batchCount', { count: selected.length })}</span>
+              {task && (!initialBatch.selection || !initialBatch.sortBy) && <p className="studio-muted">{t('taskWizard.mixedSettings')}</p>}
               <TaskTemplatePicker config={batchSelection} templates={templates} onChange={updates => setBatchSelection(previous => ({ ...previous, ...updates }))} />
-              <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-              <button type="button" className="studio-secondary" disabled={!templateSelectionValid(batchSelection, templates)} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, ...batchSelection, sortBy: defaultSort } : config))}>{t('taskWizard.applyAll')}<Check size={14} /></button>
+              <label className="studio-field">{t('taskWizard.sort')}<select className="studio-input" value={defaultSort} onChange={event => setDefaultSort(event.target.value)}>{!defaultSort && <option value="">{t('taskWizard.selectSort')}</option>}{sortOptions.map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+              <p className="studio-muted">{t('taskWizard.batchApplyHint')}</p>
+              <button type="button" className="studio-secondary" disabled={!templateSelectionValid(batchSelection, templates) || !sortOptions.some(([value]) => value === defaultSort)} onClick={() => setConfigs(previous => previous.map(config => config.enabled ? { ...config, ...batchSelection, sortBy: defaultSort } : config))}>{t('taskWizard.applyAll')}<Check size={14} /></button>
             </div>
             {templatesQuery.isError && <div role="alert">{t('taskWizard.templatesFailed')}<button className="studio-secondary" onClick={() => void templatesQuery.refetch()}>{t('common.retry')}</button></div>}
             {!templates.length && !templatesQuery.isLoading && <Link to="/templates" className="studio-secondary">{t('taskWizard.createTemplate')}<ArrowRight size={14} /></Link>}

@@ -7,6 +7,27 @@ export interface LibraryConfig {
   templateMode?: 'fixed' | 'random'; templateIds?: string[]; avoidRepeat?: boolean;
   primaryTitle: string; secondaryTitle: string; sortBy: string; maxItems?: string; enabled: boolean;
 }
+export type TemplateSelection = Pick<LibraryConfig, 'templateId' | 'templateMode' | 'templateIds' | 'avoidRepeat'>;
+
+/** Restore only settings shared by enabled targets; never imply that different overrides are uniform. */
+export function readBatchSettings(configs: LibraryConfig[]): { selection: TemplateSelection | null; sortBy: string | null } {
+  const selected = configs.filter(config => config.enabled);
+  if (!selected.length) return { selection: null, sortBy: null };
+  const normalize = (config: LibraryConfig): TemplateSelection => ({
+    templateId: config.templateId,
+    templateMode: config.templateMode === 'random' ? 'random' : 'fixed',
+    templateIds: config.templateMode === 'random' ? [...(config.templateIds || [])] : [],
+    avoidRepeat: config.avoidRepeat !== false
+  });
+  const selection = normalize(selected[0]);
+  const signature = (config: TemplateSelection) => JSON.stringify(config.templateMode === 'random'
+    ? ['random', [...(config.templateIds || [])].sort(), config.avoidRepeat !== false]
+    : ['fixed', config.templateId]);
+  return {
+    selection: selected.every(config => signature(normalize(config)) === signature(selection)) ? selection : null,
+    sortBy: selected.every(config => config.sortBy === selected[0].sortBy) ? selected[0].sortBy : null
+  };
+}
 export function templateCandidateIds(config: Pick<LibraryConfig, 'templateId' | 'templateMode' | 'templateIds'>): string[] {
   return config.templateMode === 'random' ? [...new Set(config.templateIds || [])] : config.templateId ? [config.templateId] : [];
 }
