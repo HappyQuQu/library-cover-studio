@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.16.1...v1.17.0) (2026-10-26)
+
+
+### ✨ 新功能
+
+* support configuration JSON preview and merge restore ([#41](https://github.com/HappyQuQu/library-cover-studio/issues/41)) ([82e4eff](https://github.com/HappyQuQu/library-cover-studio/commit/82e4eff4d3aebdf6f7f59a395e4df5e85f61ba32))
+
 ## [1.16.1](https://github.com/HappyQuQu/library-cover-studio/compare/v1.16.0...v1.16.1) (2026-10-23)
 
 
