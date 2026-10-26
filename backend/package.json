@@ -1,6 +1,6 @@
 {
   "name": "library-cover-studio-backend",
-  "version": "1.16.1",
+  "version": "1.17.0",
   "description": "LibraryCoverStudio 后端 API 服务",
   "private": true,
   "type": "module",
