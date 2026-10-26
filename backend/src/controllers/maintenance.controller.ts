@@ -3,6 +3,8 @@ import { db } from '../config/database.js';
 import { templates, tasks, mediaServers, aiProviders } from '../config/schema.js';
 import { readRuntimeSettings } from '../services/runtimeSettings.service.js';
 import { cacheCandidates, cleanCache } from '../services/maintenance.service.js';
+import { previewConfiguration, restoreConfiguration } from '../services/configurationRestore.service.js';
+import { createError } from '../middleware/errorHandler.js';
 
 function publicUrl(value: string) {
   try { const url = new URL(value); url.username = ''; url.password = ''; url.search = ''; url.hash = ''; return url.toString(); }
@@ -25,4 +27,21 @@ export async function previewCache(_req: Request, res: Response, next: NextFunct
 }
 export async function clearCache(_req: Request, res: Response, next: NextFunction) {
   try { res.json(await cleanCache()); } catch (error) { next(error); }
+}
+
+function importInput(req: Request) {
+  if (!req.file) throw createError('Select a configuration JSON file', 400, 'CONFIGURATION_INVALID');
+  if (req.body.restoreSettings !== 'true' && req.body.restoreSettings !== 'false') throw createError('Invalid restoreSettings option', 400, 'CONFIGURATION_INVALID');
+  return { bytes: req.file.buffer, restoreSettings: req.body.restoreSettings === 'true' };
+}
+export function previewImport(req: Request, res: Response, next: NextFunction) {
+  try { const { bytes, restoreSettings } = importInput(req); res.json(previewConfiguration(bytes, req.user!.userId, restoreSettings)); }
+  catch (error) { next(error); }
+}
+export function importConfiguration(req: Request, res: Response, next: NextFunction) {
+  try {
+    if (req.body.confirm !== 'true') throw createError('Preview and confirm restoration first', 409, 'CONFIGURATION_PREVIEW_REQUIRED');
+    const { bytes, restoreSettings } = importInput(req);
+    res.status(201).json(restoreConfiguration(bytes, req.user!.userId, restoreSettings, req.body.token));
+  } catch (error) { next(error); }
 }

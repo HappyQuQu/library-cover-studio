@@ -23,6 +23,10 @@ export type ApiErrorContext = 'operation' | 'connection' | 'import' | 'ai' | 'fo
 export function getLocalizedApiError(value: unknown, context: ApiErrorContext = 'operation'): string {
   const { code, status, root } = readError(value);
   switch (code) {
+    case 'CONFIGURATION_INVALID': return i18n.t('settings.restoreInvalid');
+    case 'CONFIGURATION_VERSION': return i18n.t('settings.restoreVersion');
+    case 'CONFIGURATION_TOO_LARGE': return i18n.t('settings.restoreTooLarge');
+    case 'CONFIGURATION_PREVIEW_REQUIRED': return i18n.t('settings.restorePreviewRequired');
     case 'INVALID_SETTINGS': return i18n.t('errors.invalidSettings');
     case 'INVALID_SETTING': return i18n.t('errors.invalidSettings');
     case 'INVALID_NETWORK_SETTINGS': return i18n.t('errors.invalidSettings');
