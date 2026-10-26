@@ -13,6 +13,7 @@ import { useState, useEffect, useRef } from 'react';
 import { resolveApiUrl } from '@/lib/apiUrl';
 import { apiClient } from '@/api/client';
 import { DefaultTemplateSettings } from '@/components/settings/DefaultTemplateSettings';
+import { ConfigurationRestore } from '@/components/settings/ConfigurationRestore';
 import { AIProviderSettings } from '@/components/settings/AIProviderSettings';
 import { AboutPage } from './AboutPage';
 import { ReleasesPage } from './ReleasesPage';
@@ -724,6 +725,7 @@ export function SettingsPage() {
                   {t('common.export')}
                 </Button>
               </div>
+              <ConfigurationRestore disabled={!isAdmin || maintenanceBusy} onRestored={() => { void loadStorageSettings(); void loadRenderingSettings(); }} />
               <div style={{ padding: '20px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h3 style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{t('settings.clearCache')}</h3>

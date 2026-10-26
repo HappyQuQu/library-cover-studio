@@ -1,4 +1,7 @@
-import { exportConfiguration, previewCache, clearCache } from '../controllers/maintenance.controller.js';
+import { exportConfiguration, previewCache, clearCache, previewImport, importConfiguration } from '../controllers/maintenance.controller.js';
+import multer from 'multer';
+import { MAX_CONFIGURATION_BYTES } from '../services/configurationRestore.service.js';
+import { createError } from '../middleware/errorHandler.js';
 import { Router } from 'express';
 import { getSettings, updateSettings, getDefaultPrompt, defaultTemplateStatus, resetDefaultTemplates } from '../controllers/settings.controller.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
@@ -17,6 +20,13 @@ router.post('/network/test', authenticate, requireRole('admin'), testGithubNetwo
 export { router as settingsRouter };
 
 router.get('/export', authenticate, requireRole('admin'), exportConfiguration);
+const importUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_CONFIGURATION_BYTES, files: 1, fields: 3, fieldSize: 4096 } }).single('backup');
+router.post(['/import/preview', '/import'], authenticate, requireRole('admin'), (req, res, next) => {
+  importUpload(req, res, error => next(error ? createError('Invalid configuration upload', error.code === 'LIMIT_FILE_SIZE' ? 413 : 400,
+    error.code === 'LIMIT_FILE_SIZE' ? 'CONFIGURATION_TOO_LARGE' : 'CONFIGURATION_INVALID') : undefined));
+});
+router.post('/import/preview', previewImport);
+router.post('/import', importConfiguration);
 router.get('/cache', authenticate, requireRole('admin'), previewCache);
 router.post('/cache/clear', authenticate, requireRole('admin'), clearCache);
 
