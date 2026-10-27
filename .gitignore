@@ -37,6 +37,9 @@ pnpm-debug.log*
 *.swo
 
 # Testing
+/tests/
+*.test.*
+*.spec.*
 coverage/
 .nyc_output/
 
