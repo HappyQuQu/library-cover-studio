@@ -1,8 +1,0 @@
-分享一个 Jellyfin / Emby 媒体库封面工具：LibraryCoverStudio。
-
-内置 7 套模板，可以直接用，也可以自己制作。做好的模板能导出分享，别人分享的模板也能导入使用。
-
-支持接入自己的 AI 服务辅助设计，还能设置自动化任务，按计划生成并更新媒体库封面。
-
-开源，Docker 部署。欢迎试用和提建议。
-https://github.com/HappyQuQu/library-cover-studio

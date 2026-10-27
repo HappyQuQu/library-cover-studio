@@ -18,7 +18,6 @@ vite.config.d.ts
 # Database
 *.sqlite
 *.sqlite3
-database/data.sqlite
 
 # Uploads & temp files
 uploads/
@@ -36,7 +35,6 @@ pnpm-debug.log*
 .idea/
 *.swp
 *.swo
-.DS_Store
 
 # Testing
 coverage/

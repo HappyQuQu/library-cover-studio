@@ -91,8 +91,6 @@ Store 的分类索引和发布脚本需先更新，商店通过 `classification`
 
 可用 Store 发布脚本的 `scan_templates` 将条目的基本信息、`classification` 和绝对 `previewPath` 写成临时 JSON，再通过 `I18N_STORE_CATALOG=/absolute/path/to/catalog.json pnpm dev:i18n-fixture` 启动隔离界面，查看真实本地预览。此模式会包含未发布模板，只用于本地视觉验证，不代表线上上架或下载成功；接口测试仍使用独立数据库与模拟下载。
 
-2026-10-19 本地验收：使用 Store 的 68 套本地模板与真实预览（含 12 套待发布模板），中英文均检查 390 / 1024 / 1440 像素宽度，未发现整页横向溢出。已检查组合搜索“合集 横图 竖版”与“竖版＋横向剧照”均返回 6 套、更多筛选、无结果、单项取消、清除全部、每页数量、翻页、筛选回到第一页、刷新与返回恢复 URL 条件。中文输入法组词保护由事件逻辑实现，本轮未用真实输入法逐键验收。模拟界面的下载次数和添加状态为演示值，不代表线上统计或已安装状态。应用 158 项回归、Store 18 项测试、前后端构建和 i18n 检查通过；临时截图保存在被忽略的 `temp/store-filters-final/`。
-
 ![模板商店分类与组合搜索（本地真实模板，模拟统计）](images/screenshots/store-filters-zh.png)
 
 ![模板商店英文手机布局（本地真实模板，模拟统计）](images/screenshots/store-filters-en-mobile.png)

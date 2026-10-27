@@ -67,7 +67,7 @@ GitHub 首页使用中文优先的 `README.md` 和独立英文版 `README.en.md`
 | 文件 | 内容 |
 | --- | --- |
 | `editor.jpg` | 设计器与图层 |
-| `templates.jpg` | 六套内置模板 |
+| `templates.jpg` | 七套内置模板 |
 | `servers.jpg` | 媒体源与示例媒体库 |
 | `dashboard.jpg` | 首次上手仪表盘 |
 | `tasks.jpg` | 任务列表 |
