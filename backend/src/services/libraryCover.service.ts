@@ -1,3 +1,4 @@
+import artworkSlots from '../config/artworkSlots.json' with { type: 'json' };
 import * as mediaClient from './mediaClient.service.js';
 import { isBlackImage } from '../utils/imageUtils.js';
 import { artworkSlotNumber, type ArtworkSource, type ArtworkBuffers } from './artworkSource.service.js';
@@ -6,7 +7,7 @@ export { requiredArtworkSources } from './artworkSource.service.js';
 /** Count only library-bound images; text-only layouts do not need artwork. */
 export function requiredPosterCount(canvasJson: string): number {
   const canvas = JSON.parse(canvasJson);
-  return Math.min(9, (canvas.objects || []).reduce((count: number, object: any) => {
+  return Math.min(artworkSlots.maxArtworkSlots, (canvas.objects || []).reduce((count: number, object: any) => {
     if (object.visible === false || object.opacity === 0) return count;
     return Math.max(count, artworkSlotNumber(object));
   }, canvas.posterBackground ? 1 : 0));
@@ -22,7 +23,7 @@ export function getPosterSource(canvasJson: string): 'poster' | 'backdrop' {
 
 /** Shared asset selection keeps preview and task execution consistent. */
 export async function fetchLibraryPosters(server: { type: string; url: string }, apiKey: string, libraryId: string,
-  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = 9, includeBackdrop = false, posterSource: ArtworkSource = 'poster', sources: ArtworkSource[] = [posterSource]) {
+  sortBy = 'DateCreated', maxBatches = Number.POSITIVE_INFINITY, onPoster?: (poster: Buffer, name: string, imageType: string) => Promise<void>, libraryType?: string, requiredCount = artworkSlots.bundledArtworkSamples, includeBackdrop = false, posterSource: ArtworkSource = 'poster', sources: ArtworkSource[] = [posterSource]) {
   const posters: Buffer[] = [];
   sources = [...new Set([posterSource, ...sources])];
   const artworkBuffers: ArtworkBuffers = { [posterSource]: posters };

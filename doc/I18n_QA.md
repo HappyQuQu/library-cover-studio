@@ -102,3 +102,11 @@ Store 的分类索引和发布脚本需先更新，商店通过 `classification`
 ![中文素材来源：横图模板自动选中横版背景图优先](images/screenshots/poster-source-zh.png)
 
 ![英文素材来源：保持模板配置](images/screenshots/poster-source-en.png)
+
+## 扩展图位
+
+在隔离 Studio 中从「更多图位」添加第 24 号图位，在属性中切换编号和素材来源，保存后重新打开模板并核对绑定。桌面截图使用内置素材，手机截图展示英文入口。另用 24 张不同的临时 Jellyfin 海报验证真实样张和自动化上传。
+
+![中文桌面：添加和绑定第 24 号图位](images/screenshots/editor-24-slots-zh.jpg)
+
+![英文手机：扩展图位可滚动查看和添加](images/screenshots/editor-24-slots-en-mobile.jpg)

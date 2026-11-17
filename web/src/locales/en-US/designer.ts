@@ -127,6 +127,7 @@ export default {
   "artworkSlotNumber": "Slot {{number}}",
   "addArtworkSlot": "Add artwork slot {{number}}",
   "bindArtworkSlot": "Use artwork slot {{number}}",
+  "moreArtworkSlots": "More artwork slots ({{first}}–{{last}})",
   "artworkSlotsHint": "Click to add a slot. Each number represents a movie; artwork fills in when generating.",
   "basicElements": "Basic elements",
   "randomGradient": "Random gradient",

@@ -180,7 +180,7 @@ export async function renderTemplate(
   });
 }
 
-// 渲染媒体库封面（支持多个海报占位符 poster1-poster9）
+// 渲染媒体库封面
 export async function renderLibraryCover(
   templateJson: string,
   metadata: MediaMetadata,
@@ -330,7 +330,6 @@ async function renderObjectWithPosters(
       }
 
       if (obj.src) {
-        // 检查是否是海报占位符 {{poster1}} - {{poster9}}
         const placeholderMatch = obj.src.match(/\{\{poster(\d+)\}\}/);
         if (placeholderMatch) {
           const posterIndex = parseInt(placeholderMatch[1]) - 1;

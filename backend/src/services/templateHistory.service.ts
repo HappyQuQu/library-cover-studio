@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { eq, desc, and } from 'drizzle-orm';
@@ -8,6 +7,8 @@ import { db } from '../config/database.js';
 import { templates, templateRevisions } from '../config/schema.js';
 import { THUMBNAILS_DIR } from '../config/paths.js';
 import { createError } from '../middleware/index.js';
+import { artworkSampleFilename, artworkSamplesDirectory } from '../utils/artworkSamples.js';
+import { requiredPosterCount } from './libraryCover.service.js';
 import { renderLibraryCover } from './renderer.service.js';
 import { resolveArtworkSource, type ArtworkBuffers, type ArtworkSource } from './artworkSource.service.js';
 
@@ -16,7 +17,6 @@ type Template = typeof templates.$inferSelect;
 type Revision = typeof templateRevisions.$inferInsert;
 type TemplateTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Kind = 'save' | 'restore' | 'baseline' | 'default-reset' | 'before-default-reset';
-const postersDirectory = fileURLToPath(new URL('../../src/template/poster/', import.meta.url));
 
 export function getTemplateRevisions(templateId: string) {
   return db.select().from(templateRevisions).where(eq(templateRevisions.templateId, templateId))
@@ -41,19 +41,20 @@ async function previewBuffer(template: Template, thumbnail?: string) {
   const canvas = JSON.parse(template.canvasJson);
   // A version preview represents the saved palette, rather than a new randomized generation.
   canvas.randomOnGeneration = false;
+  const count = requiredPosterCount(template.canvasJson);
   const artworkBuffers: ArtworkBuffers = {};
   for (const source of ['poster', 'backdrop'] as ArtworkSource[]) {
-    artworkBuffers[source] = await Promise.all(Array.from({ length: 9 }, async (_, index) => {
+    artworkBuffers[source] = await Promise.all(Array.from({ length: count }, async (_, index) => {
       const sample = canvas.objects?.find((object: any) => object.posterVar === `post${index + 1}` && resolveArtworkSource(object, canvas) === source)?.src;
       const embedded = typeof sample === 'string' && sample.match(/^data:image\/(?:png|jpe?g|webp);base64,([A-Za-z0-9+/=\s]+)$/);
       return embedded ? Buffer.from(embedded[1], 'base64')
-        : fs.readFile(path.join(postersDirectory, ...(source === 'backdrop' ? ['backdrops'] : []), `${index + 1}.jpg`));
+        : fs.readFile(path.join(artworkSamplesDirectory, ...(source === 'backdrop' ? ['backdrops'] : []), artworkSampleFilename(index + 1)));
     }));
   }
   const backdropBuffer = canvas.posterBackground?.source === 'backdrop'
-    ? await fs.readFile(path.join(postersDirectory, 'backdrop.jpg')) : undefined;
+    ? await fs.readFile(path.join(artworkSamplesDirectory, 'backdrop.jpg')) : undefined;
   if (canvas.objects?.some((object: any) => object.posterVar === 'post1' && object.src === '/api/templates/posters/backdrop-poster.jpg')) {
-    artworkBuffers.poster![0] = await fs.readFile(path.join(postersDirectory, 'backdrop-poster.jpg'));
+    artworkBuffers.poster![0] = await fs.readFile(path.join(artworkSamplesDirectory, 'backdrop-poster.jpg'));
   }
   const buffers = artworkBuffers[resolveArtworkSource({}, canvas)]!;
   const title = (variable: string, fallback: string) => canvas.objects?.find((object: any) => object.textVar === variable)?.text || fallback;

@@ -30,6 +30,6 @@
       "@/lib/*": ["./lib/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", "../backend/src/config/artworkSlots.json"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

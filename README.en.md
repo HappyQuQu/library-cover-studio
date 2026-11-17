@@ -199,7 +199,7 @@ See the [automation guide](doc/Automation_Guide.md) for illustrated steps, pausi
 
 ## 🎨 Customize and Share Templates
 
-Use `{{primary_title}}`, `{{secondary_title}}`, and `post1`–`post9` poster placeholders in the designer
+Use `{{primary_title}}`, `{{secondary_title}}`, and `post1`–`post24` poster placeholders in the designer
 to reuse a layout across libraries. Choose a fixed background or enable random backgrounds for task generation.
 Save template changes before running a task.
 
