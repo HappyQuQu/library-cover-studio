@@ -4,8 +4,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
-import { getSamplePosterUrl } from '@/lib/posters';
+import { getArtworkSlotNumber, getSamplePosterUrl } from '@/lib/posters';
 import { ArtworkSlotButton } from './ArtworkSlotButton';
+import { ArtworkSlotGrid } from './ArtworkSlotGrid';
 
 interface PropertyPanelProps {
   selectedObject: any;
@@ -423,19 +424,15 @@ export function PropertyPanel({ selectedObject, onPropertyChange, onDelete, onCl
                 </select>
               </label>
               <p id="artwork-source-hint" className="text-[11px] leading-relaxed text-(--text-tertiary)">{t('designer.slotArtworkSourceHint')}</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {Array.from({ length: 9 }).map((_, i) => {
-                  const varName = `post${i + 1}`;
-                  const isActive = selectedObject.posterVar === varName;
-                  const imgUrl = getSamplePosterUrl(i + 1, selectedObject.canvas, selectedObject.artworkSource);
-
-                  return (
-                    <ArtworkSlotButton key={varName} number={i + 1} src={imgUrl}
-                      landscape={artworkSource === 'backdrop'} action="bind" active={isActive}
-                      onClick={() => onPropertyChange('posterVar', varName)} />
-                  );
-                })}
-              </div>
+              <ArtworkSlotGrid activeSlot={getArtworkSlotNumber(selectedObject.posterVar)} renderSlot={slot => {
+                const variable = `post${slot}`;
+                return (
+                  <ArtworkSlotButton key={slot} number={slot}
+                    src={getSamplePosterUrl(slot, selectedObject.canvas, selectedObject.artworkSource)}
+                    landscape={artworkSource === 'backdrop'} action="bind" active={selectedObject.posterVar === variable}
+                    onClick={() => onPropertyChange('posterVar', variable)} />
+                );
+              }} />
               {selectedObject.posterVar && (
                 <p className="text-[10px] text-(--text-tertiary)">
                   {t('designer.currentBinding', { variable: `{{${selectedObject.posterVar}}}` })}

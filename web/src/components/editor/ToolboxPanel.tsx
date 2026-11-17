@@ -24,6 +24,7 @@ import {
 import { cn } from '@/lib/utils';
 import { getSamplePosterUrl } from '@/lib/posters';
 import { ArtworkSlotButton } from './ArtworkSlotButton';
+import { ArtworkSlotGrid } from './ArtworkSlotGrid';
 import { useCanvasStore } from '@/stores/canvasStore';
 import { DEFAULT_POSTER_BACKGROUND, type PosterBackground } from '@/lib/posterBackground';
 
@@ -253,16 +254,14 @@ const shapes = [
               <p id="poster-source-hint" className="mb-3 text-[11px] text-(--text-tertiary) leading-relaxed">
                 {t(landscapePosters ? 'designer.posterSourceLandscapeHint' : 'designer.posterSourcePortraitHint')}
               </p>
-              <div className="grid grid-cols-3 gap-2">
-                {Array.from({ length: 9 }).map((_, i) => (
-                  <ArtworkSlotButton
-                    key={`poster-${i + 1}`}
-                    number={i + 1} src={getSamplePosterUrl(i + 1, canvas)} landscape={landscapePosters}
+              <ArtworkSlotGrid renderSlot={slot => {
+                const src = getSamplePosterUrl(slot, canvas);
+                return (
+                  <ArtworkSlotButton key={slot} number={slot} src={src} landscape={landscapePosters}
                     action="add" disabled={!canvas || isRestoring}
-                    onClick={() => onAddShape('poster', { src: getSamplePosterUrl(i + 1, canvas), posterVar: `post${i + 1}` })}
-                  />
-                ))}
-              </div>
+                    onClick={() => onAddShape('poster', { src, posterVar: `post${slot}` })} />
+                );
+              }} />
               <p className="mt-2 text-[11px] leading-relaxed text-(--text-tertiary)">{t('designer.artworkSlotsHint')}</p>
             </div>
 

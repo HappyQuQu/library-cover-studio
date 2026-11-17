@@ -124,6 +124,7 @@ export default {
   "artworkSlotNumber": "图位 {{number}}",
   "addArtworkSlot": "添加图位 {{number}}",
   "bindArtworkSlot": "使用图位 {{number}}",
+  "moreArtworkSlots": "更多图位（{{first}}–{{last}}）",
   "artworkSlotsHint": "点击添加图位，编号对应影片，生成时自动取图。",
   "basicElements": "基础元素",
   "randomGradient": "随机渐变",

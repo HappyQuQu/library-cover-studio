@@ -1,6 +1,6 @@
 // ============================================================
 // AI 提示词 - 与编辑器功能完全对齐
-// PropertyPanel: 位置/旋转/填充颜色/透明度/圆角/阴影/字体/文字对齐/变量绑定（主副标题/海报1-9）
+// PropertyPanel: 位置/旋转/填充颜色/透明度/圆角/阴影/字体/文字对齐/变量绑定（主副标题/海报1–24）
 // ToolboxPanel: 形状(rect/circle/triangle/line/star/arrow) / 文字 / 海报图片 / 背景(纯色/渐变/随机/图案) / 叠加(暗角/噪点)
 // ============================================================
 
@@ -119,7 +119,7 @@ export const SYSTEM_PROMPT = `你是一个专业的 Fabric.js 画布设计助手
     "absolutePositioned": false, "inverted": false
   }
 }
-src 固定为 posters/N.jpg（N=1~9），posterVar 对应 "post1"~"post9"
+src 固定为 posters/N.jpg（N=1~24），posterVar 对应 "post1"~"post24"
 每个 Image 可设置 artworkSource 为 "poster" 或 "backdrop"，不设置则跟随画布的 posterSource。混排时分别设置，例如左图 "backdrop"、右图 "poster"；横图示例 src 使用 /api/templates/posters/backdrops/N.jpg，相同 posterVar 对应同一部影片。
 圆角推荐值：rx/ry = 图片原始宽度 × 0.10~0.15
 
@@ -349,8 +349,8 @@ ${JSON.stringify(context.currentCanvas, null, 2)}
 5. 每个对象 id 必须唯一（8位随机字母数字）
 6. 所有对象必须有 originX/originY/scaleX/scaleY/visible/fill/stroke/shadow 字段
 7. 文本变量只用 {{primary_title}} 和 {{secondary_title}}
-8. 图片 src 格式：/api/templates/posters/N.jpg（N 为 1-9）
-9. Image 对象必须同时包含 posterVar 字段（值为 "post1"~"post9"）
+8. 图片 src 格式：/api/templates/posters/N.jpg（N 为 1–24）
+9. Image 对象必须同时包含 posterVar 字段（值为 "post1"~"post24"）
 10. Image 带圆角时在 clipPath 中设置 rx/ry，不要直接设置 Image 的 rx/ry
 11. 画布尺寸 width:${width}, height:${height}；新背景使用 background 纯色或 Fabric 渐变对象，不生成 SVG data URL`;
 

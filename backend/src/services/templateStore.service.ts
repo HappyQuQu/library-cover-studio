@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import artworkSlots from '../config/artworkSlots.json' with { type: 'json' };
 import { createHash, randomUUID } from 'node:crypto';
 import { createError } from '../middleware/errorHandler.js';
 import { MAX_TEMPLATE_PACKAGE_BYTES, readTemplatePackage } from './templatePackage.service.js';
@@ -14,9 +15,13 @@ const hex = z.string().regex(/^[a-f0-9]{64}$/);
 const classificationSchema = z.object({
   recommendedUses: z.array(z.enum(['library', 'collection'])).min(1).max(2),
   artworkType: z.enum(['poster', 'backdrop', 'mixed', 'none']),
-  artworkCount: z.number().int().min(0).max(9),
+  artworkCount: z.number().int().min(0).max(artworkSlots.maxArtworkSlots),
+  extendedArtworkCount: z.number().int().min(artworkSlots.bundledArtworkSamples + 1).max(artworkSlots.maxArtworkSlots).optional(),
   tags: z.array(z.string().trim().min(1).max(40)).max(12)
-});
+}).transform(({ extendedArtworkCount, ...classification }) => ({
+  ...classification,
+  artworkCount: extendedArtworkCount ?? classification.artworkCount
+}));
 const storeEntrySchema = z.object({
   id: hex, revision: hex, name: z.string().min(1).max(100), description: z.string().max(10000).default(''),
   width: z.number().int().min(100).max(4000), height: z.number().int().min(100).max(6000),

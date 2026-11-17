@@ -15,6 +15,8 @@ import { consumeStreamTicket } from './utils/streamTicket.js';
 import { ensureDataDirs, UPLOADS_DIR } from './config/paths.js';
 import { APP_VERSION } from './config/version.js';
 import { createCorsMiddleware, mountWebApp } from './middleware/webHosting.js';
+import artworkSlots from './config/artworkSlots.json' with { type: 'json' };
+import { artworkSampleFilename, artworkSamplesDirectory } from './utils/artworkSamples.js';
 
 // 启动时校验必需的环境变量
 const REQUIRED_ENV_VARS = ['JWT_SECRET', 'ENCRYPTION_KEY'];
@@ -56,7 +58,13 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/uploads', express.static(UPLOADS_DIR));
 
 // 模板图片 (源代码内置，公开)
-app.use('/api/templates/posters', express.static('src/template/poster'));
+app.get(/^\/api\/templates\/posters\/(backdrops\/)?([1-9]\d)\.jpg$/, (req, res, next) => {
+  const slot = Number(req.params[1]);
+  if (slot > artworkSlots.maxArtworkSlots) return next();
+  // Keep the slot in saved URLs while reusing the bundled images for editor previews.
+  res.sendFile((req.params[0] || '') + artworkSampleFilename(slot), { root: artworkSamplesDirectory });
+});
+app.use('/api/templates/posters', express.static(artworkSamplesDirectory));
 
 
 // 日志流端点 (SSE) — 需要短期 ticket（前端先 POST /api/auth/stream-ticket 取得）

@@ -24,7 +24,7 @@ import { TemplateHistory } from '@/components/editor/TemplateHistory';
 import { calculateFitZoom } from '@/lib/editorLayout';
 import { useEditorDraft } from '@/hooks/useEditorDraft';
 import { resolveApiUrl } from '@/lib/apiUrl';
-import { getSamplePosterUrl } from '@/lib/posters';
+import { getArtworkSlotNumber, getSamplePosterUrl } from '@/lib/posters';
 import { applyPosterBackground, type PosterBackground } from '@/lib/posterBackground';
 
 // ── Background generation helpers ──────────────────────────────────────────
@@ -902,9 +902,12 @@ export function EditorPage() {
 
             (fabricImg as any).id = id;
             (fabricImg as any).isPoster = true;
-            if (typeof payload === 'object' && /^post[1-9]$/.test(payload.posterVar)) {
-              (fabricImg as any).posterVar = payload.posterVar;
-              (fabricImg as any).name = t('designer.artworkSlotNumber', { number: Number(payload.posterVar.slice(4)) });
+            if (typeof payload === 'object') {
+              const number = getArtworkSlotNumber(payload.posterVar);
+              if (number !== undefined) {
+                (fabricImg as any).posterVar = payload.posterVar;
+                (fabricImg as any).name = t('designer.artworkSlotNumber', { number });
+              }
             }
             // Apply rounded corners via clipPath
             fabricImg.set('clipPath', new fabric.Rect({
@@ -1568,10 +1571,9 @@ export function EditorPage() {
                   // val format: "postN" (e.g. "post1", "post5")
                   const nextVar = prop === 'posterVar' ? val : (selectedObject as any).posterVar || 'post1';
                   const nextSource = prop === 'artworkSource' ? (val === 'inherit' ? undefined : val) : (selectedObject as any).artworkSource;
-                  const match = nextVar.match(/^post([1-9])$/);
-                  if (match) {
+                  const posterIndex = getArtworkSlotNumber(nextVar);
+                  if (posterIndex !== undefined) {
                     const request = ++artworkRequestRef.current;
-                    const posterIndex = match[1];
                     const sampleUrl = getSamplePosterUrl(posterIndex, canvas, nextSource);
 
                     try {
