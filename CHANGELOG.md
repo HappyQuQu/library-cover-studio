@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.17.0...v1.18.0) (2026-11-17)
+
+
+### ✨ 新功能
+
+* 支持最多 24 个海报图位 ([#43](https://github.com/HappyQuQu/library-cover-studio/issues/43)) ([d6683e0](https://github.com/HappyQuQu/library-cover-studio/commit/d6683e01cd0f55906d51907cbc1058495928cb6e))
+
 ## [1.17.0](https://github.com/HappyQuQu/library-cover-studio/compare/v1.16.1...v1.17.0) (2026-10-26)
 
 
